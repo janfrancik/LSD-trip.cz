@@ -44,6 +44,21 @@ python3 -m http.server 8080
 
 Pak otevřít <http://localhost:8080>.
 
+## Nasazení
+
+Produkce běží na <https://lsd-trip.netlify.app> (Netlify projekt `lsd-trip`).
+
+Continuous deployment je napojené na GitHub: push do větve `main` spustí build
+automaticky. Propojení stojí na read-only deploy klíči v nastavení repozitáře
+a webhooku na `api.netlify.com/hooks/github`.
+
+Build nemá žádný krok — Netlify publikuje kořen repozitáře tak, jak je
+(`publish = "."` v `netlify.toml`). Ruční deploy mimo git:
+
+```bash
+netlify deploy --prod
+```
+
 ## Responzivita
 
 Breakpointy: `1080px` (přepnutí na hamburger menu), `1024px` (rozpad dvousloupcových
