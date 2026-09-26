@@ -1,9 +1,25 @@
-.DS_Store
+# závislosti
 node_modules/
-.netlify/
+
+# proměnné prostředí - nikdy necommitovat skutečné hodnoty
 .env
 .env.*
+!.env.example
+
+# databázová data, dumpy a zálohy - nikdy do gitu, jen schéma v migrations/
+*.sql
+!migrations/*.sql
+*.sql.gz
+backups/
+db_data/
+
+# logy a OS smetí
 *.log
+npm-debug.log*
+.DS_Store
+
+# hosting a lokální smetí projektu
+.netlify/
 _design/
 _logocheck.html
 .claude/settings.local.json

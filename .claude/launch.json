@@ -2,10 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "lsd-static",
-      "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8099"],
-      "port": 8099
+      "name": "lsd-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev"],
+      "port": 3000
     }
   ]
 }

@@ -1,0 +1,16 @@
+# závislosti se instalují v image, nekopírovat z hostitele
+node_modules/
+
+# tajemství nikdy do image - na VPS se .env předává přes env_file
+.env
+.env.*
+!.env.example
+
+# git, hosting a lokální smetí
+.git/
+.github/
+.netlify/
+.claude/
+_design/
+*.log
+.DS_Store
