@@ -1,11 +1,13 @@
 import 'dotenv/config';
 import express from 'express';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import pool from './db.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const publicDir = path.join(__dirname, '..', 'public');
+const rootDir = path.join(__dirname, '..');
+const publicDir = path.join(rootDir, 'public');
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -14,6 +16,41 @@ app.use(express.json());
 
 // Statický web (index.html + assets) - beze změny proti původnímu návrhu.
 app.use(express.static(publicDir));
+
+// Statické návrhy pro majitelku: složka navrh_2/ se servíruje na /navrh-2/.
+// Další návrh stačí přidat jako složku navrh_3/ s vlastním index.html,
+// nic se nikde nenastavuje. Z návrhu 1 na rootu na ně nic neodkazuje -
+// dostupné jsou jen přímou adresou.
+function najdiNavrhy() {
+  return fs
+    .readdirSync(rootDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && /^navrh_\d+$/.test(entry.name))
+    .map((entry) => ({
+      dir: path.join(rootDir, entry.name),
+      cesta: '/' + entry.name.replace('_', '-')
+    }))
+    .filter((navrh) => fs.existsSync(path.join(navrh.dir, 'index.html')))
+    .sort((a, b) => a.cesta.localeCompare(b.cesta));
+}
+
+for (const navrh of najdiNavrhy()) {
+  // Bez koncového lomítka by relativní cesty k assets mířily do rootu,
+  // kde leží návrh 1 - proto přesměrování na /navrh-N/. Express matchuje
+  // i variantu s lomítkem, tu musíme pustit dál, jinak vznikne smyčka.
+  app.get(navrh.cesta, (req, res, next) => {
+    if (req.path.endsWith('/')) return next();
+    res.redirect(navrh.cesta + '/');
+  });
+
+  app.use(navrh.cesta, express.static(navrh.dir));
+
+  // Neznámá podcesta vrátí shell daného návrhu, ne návrh 1.
+  app.get(`${navrh.cesta}/*`, (req, res) => {
+    res.sendFile(path.join(navrh.dir, 'index.html'));
+  });
+
+  console.log(`Návrh ${navrh.cesta}/ se servíruje z ${path.basename(navrh.dir)}/`);
+}
 
 function asyncHandler(fn) {
   return (req, res, next) => fn(req, res, next).catch(next);

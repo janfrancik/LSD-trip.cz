@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="" />
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  html, body { margin: 0; padding: 0; background: #F5F7FA; }
+  * { box-sizing: border-box; }
+  a { color: #FF4D1C; text-decoration: none; }
+  a:hover { color: #E63D0F; }
+  img { display: block; }
+  input, select, textarea, button { font-family: inherit; }
+</style>
+</helmet>
+
+<div style="background: #F5F7FA; color: #0F1B2D; font-family: 'Plus Jakarta Sans', Helvetica, sans-serif; min-height: 100vh; overflow-x: hidden">
+
+  <div style="background: #0F1B2D; color: #C5CEDA; font-size: 13px">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 9px 24px; display: flex; gap: 22px; align-items: center; flex-wrap: wrap">
+      <span>+420 777 310 959</span>
+      <span>info@lsd-trip.cz</span>
+      <span data-nav="desktop" style="display: none">Letiště Jihlava — Henčov</span>
+      <div onClick="{{ openLogin }}" style="margin-left: auto; cursor: pointer; color: #fff; font-weight: 600" style-hover="color: #FF4D1C">Členská sekce</div>
+    </div>
+  </div>
+
+  <div style="position: sticky; top: 0; z-index: 60; background: #fff; box-shadow: 0 2px 18px rgba(15,27,45,0.06)">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 14px 24px; display: flex; align-items: center; gap: 24px">
+      <div onClick="{{ goHome }}" style="display: flex; align-items: center; gap: 12px; cursor: pointer; flex: 0 0 auto">
+        <div style="width: 44px; height: 44px; border-radius: 12px; background: #FF4D1C; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px; letter-spacing: 0.02em">LSD</div>
+        <div style="line-height: 1.15">
+          <div style="font-weight: 800; font-size: 16px">Dobrodruh</div>
+          <div style="font-size: 11px; color: #5B6778">Letecká společnost dobrodruhů</div>
+        </div>
+      </div>
+      <div data-nav="desktop" style="flex: 1 1 auto; display: none; gap: 2px; justify-content: center; align-items: center">
+        <sc-for list="{{ nav }}" as="item" hint-placeholder-count="8">
+          <div onClick="{{ item.go }}" style="position: relative; padding: 10px 12px; cursor: pointer; font-size: 15px; font-weight: 600; color: #0F1B2D; white-space: nowrap" style-hover="color: #FF4D1C">
+            {{ item.label }}
+            <sc-if value="{{ item.active }}">
+              <div style="position: absolute; left: 12px; right: 12px; bottom: 2px; height: 3px; border-radius: 3px; background: #FF4D1C"></div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-left: auto; display: flex; align-items: center; gap: 10px">
+        <div onClick="{{ goKalendar }}" style="padding: 13px 22px; border-radius: 999px; background: #FF4D1C; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 8px 20px rgba(255,77,28,0.28)" style-hover="background: #E63D0F">Rezervovat</div>
+        <div onClick="{{ toggleMenu }}" data-nav="mobile" style="width: 44px; height: 44px; border-radius: 12px; background: #F5F7FA; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 20px">≡</div>
+      </div>
+    </div>
+    <sc-if value="{{ menuOpen }}">
+      <div style="border-top: 1px solid #E3E8EF; padding: 8px 24px 18px; display: grid">
+        <sc-for list="{{ nav }}" as="item" hint-placeholder-count="8">
+          <div onClick="{{ item.go }}" style="padding: 13px 0; border-bottom: 1px solid #EEF1F5; font-weight: 600; font-size: 16px; cursor: pointer">{{ item.label }}</div>
+        </sc-for>
+        <div onClick="{{ goPoukaz }}" style="padding: 13px 0; font-weight: 700; font-size: 16px; cursor: pointer; color: #FF4D1C">Dárkový poukaz</div>
+      </div>
+    </sc-if>
+  </div>
+
+  <!-- ============ HOME ============ -->
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <div>
+      <div style="background: linear-gradient(180deg, #fff 0%, #F5F7FA 100%)">
+        <div style="max-width: 1240px; margin: 0 auto; padding: 72px 24px 80px; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 56px; align-items: center">
+          <div>
+            <div style="display: inline-block; padding: 8px 16px; border-radius: 999px; background: #FFF1EC; color: #D6360A; font-weight: 700; font-size: 13px; margin-bottom: 22px">Tandemy · Kurzy · Expedice · od roku 2009</div>
+            <h1 style="font-weight: 800; font-size: clamp(38px, 5.4vw, 66px); line-height: 1.05; letter-spacing: -0.025em; margin: 0 0 20px; text-wrap: balance">Skoč. Zbytek už je jen vzduch.</h1>
+            <p style="font-size: 18px; line-height: 1.65; color: #5B6778; margin: 0 0 32px; max-width: 52ch">Tandemové seskoky z 4 000 metrů, kurzy pro vlastní licenci, expedice a helitour. Vedeme lidi přes strach už sedmnáct let — a všechny jsme přivedli zpátky na zem.</p>
+            <div style="display: flex; flex-wrap: wrap; gap: 12px">
+              <div onClick="{{ goKalendar }}" style="padding: 17px 30px; border-radius: 999px; background: #FF4D1C; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer; box-shadow: 0 10px 24px rgba(255,77,28,0.3)" style-hover="background: #E63D0F">Vybrat termín</div>
+              <div onClick="{{ goTandem }}" style="padding: 17px 30px; border-radius: 999px; background: #fff; border: 1px solid #D5DCE6; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="border-color: #0F1B2D">Jak tandem probíhá</div>
+            </div>
+          </div>
+          <div style="position: relative; padding: 0 0 40px 30px">
+            <div style="position: absolute; right: -40px; top: -30px; width: 240px; height: 240px; border-radius: 50%; background: #FFE3D9"></div>
+            <img src="https://www.lsd-trip.cz/image/eshop/1512969318_image_gopr3595_00_00_49_00_49.jpg" alt="Tandemový seskok" style="position: relative; width: 100%; aspect-ratio: 5 / 4; object-fit: cover; border-radius: 24px; box-shadow: 0 24px 60px rgba(15,27,45,0.18)" />
+            <div style="position: absolute; left: 0; bottom: 0; background: #fff; border-radius: 18px; padding: 18px 22px; box-shadow: 0 16px 40px rgba(15,27,45,0.14); display: flex; gap: 14px; align-items: center">
+              <div style="width: 48px; height: 48px; border-radius: 14px; background: #FF4D1C; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 18px">{{ freeSpotsTotal }}</div>
+              <div style="line-height: 1.3">
+                <div style="font-weight: 700; font-size: 15px">volných míst v září</div>
+                <div style="font-size: 13px; color: #5B6778">Jihlava — Henčov</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="max-width: 1240px; margin: 0 auto; padding: 80px 24px 0">
+        <div style="text-align: center; max-width: 640px; margin: 0 auto 44px">
+          <div style="color: #FF4D1C; font-weight: 700; font-size: 14px; margin-bottom: 10px">Naše zážitky</div>
+          <h2 style="font-weight: 800; font-size: clamp(30px, 3.6vw, 44px); letter-spacing: -0.02em; margin: 0 0 14px">Vyber si, jak vysoko chceš jít</h2>
+          <p style="margin: 0; color: #5B6778; font-size: 17px; line-height: 1.6">Od prvního tandemu po vlastní licenci. Každý zážitek si rezervuješ online s aktuální obsazeností.</p>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 24px">
+          <sc-for list="{{ products }}" as="p" hint-placeholder-count="4">
+            <div onClick="{{ p.go }}" style="background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 28px rgba(15,27,45,0.07); cursor: pointer; display: flex; flex-direction: column" style-hover="box-shadow: 0 18px 44px rgba(15,27,45,0.14); transform: translateY(-4px)">
+              <div style="position: relative; aspect-ratio: 4 / 3; background-color: #E3E8EF; background-size: cover; background-position: center; background-image: url({{ p.img }})">
+                <div style="position: absolute; top: 14px; left: 14px; background: #fff; color: #0F1B2D; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700">{{ p.tag }}</div>
+              </div>
+              <div style="padding: 22px; display: flex; flex-direction: column; gap: 10px; flex: 1">
+                <h3 style="font-weight: 800; font-size: 19px; margin: 0">{{ p.title }}</h3>
+                <p style="margin: 0; color: #5B6778; font-size: 14px; line-height: 1.6; flex: 1">{{ p.short }}</p>
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 6px">
+                  <span style="font-weight: 800; font-size: 18px; color: #FF4D1C">{{ p.price }}</span>
+                  <span style="width: 38px; height: 38px; border-radius: 50%; background: #F5F7FA; display: flex; align-items: center; justify-content: center; font-weight: 700">→</span>
+                </div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="max-width: 1240px; margin: 0 auto; padding: 100px 24px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 64px; align-items: center">
+        <div>
+          <div style="color: #FF4D1C; font-weight: 700; font-size: 14px; margin-bottom: 10px">Tandemový seskok</div>
+          <h2 style="font-weight: 800; font-size: clamp(28px, 3.4vw, 42px); letter-spacing: -0.02em; margin: 0 0 18px; line-height: 1.15">Bez tréninku. Bez zkušeností. Jen ty a 4 000 metrů.</h2>
+          <p style="color: #5B6778; font-size: 16px; line-height: 1.7; margin: 0 0 14px">Připoutaný k instruktorovi prožiješ padesát sekund volného pádu rychlostí 200 km/h a pak pět minut ticha pod padákem nad Vysočinou.</p>
+          <p style="color: #5B6778; font-size: 16px; line-height: 1.7; margin: 0 0 28px">Na letišti jsi dvě až tři hodiny včetně instruktáže a předání videa.</p>
+          <div style="display: flex; gap: 12px; flex-wrap: wrap">
+            <div onClick="{{ goTandem }}" style="padding: 15px 26px; border-radius: 999px; background: #0F1B2D; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="background: #22324A">Více o tandemu</div>
+            <div onClick="{{ goPoukaz }}" style="padding: 15px 26px; border-radius: 999px; border: 1px solid #D5DCE6; font-weight: 700; font-size: 15px; cursor: pointer; background: #fff" style-hover="border-color: #0F1B2D">Koupit jako dárek</div>
+          </div>
+        </div>
+        <div style="position: relative; min-height: 440px">
+          <img src="https://www.lsd-trip.cz/image/news/1787649526_1_image_srpen1.jpg" alt="Seskok" style="position: absolute; right: 0; top: 0; width: 70%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 20px; box-shadow: 0 18px 44px rgba(15,27,45,0.16)" />
+          <img src="https://www.lsd-trip.cz/image/gallery/1696490816_image_vlcsnap-2023-09-23-16h46m51s665.png" alt="Volný pád" style="position: absolute; left: 0; top: 30%; width: 56%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 20px; border: 6px solid #fff; box-shadow: 0 18px 44px rgba(15,27,45,0.18)" />
+          <img src="https://www.lsd-trip.cz/image/gallery/1696490745_image_vlcsnap-2023-09-23-16h31m16s031.png" alt="Přistání" style="position: absolute; right: 8%; bottom: 0; width: 46%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 20px; border: 6px solid #fff; box-shadow: 0 18px 44px rgba(15,27,45,0.18)" />
+        </div>
+      </div>
+
+      <div style="max-width: 1240px; margin: 0 auto; padding: 100px 24px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 64px; align-items: center">
+        <div style="position: relative; min-height: 440px">
+          <img src="https://www.lsd-trip.cz/image/eshop/1512986228_image_vlcsnap-2017-04-02-20h56m57s323.png" alt="Výcvik" style="position: absolute; left: 0; top: 0; width: 72%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 20px; box-shadow: 0 18px 44px rgba(15,27,45,0.16)" />
+          <img src="https://www.lsd-trip.cz/image/carousel/1512896173_1_image_zv2.jpg" alt="Kurz" style="position: absolute; right: 0; bottom: 0; width: 62%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 20px; border: 6px solid #fff; box-shadow: 0 18px 44px rgba(15,27,45,0.18)" />
+        </div>
+        <div>
+          <div style="color: #FF4D1C; font-weight: 700; font-size: 14px; margin-bottom: 10px">Kurzy a výcvik</div>
+          <h2 style="font-weight: 800; font-size: clamp(28px, 3.4vw, 42px); letter-spacing: -0.02em; margin: 0 0 18px; line-height: 1.15">Chceš skákat sám? Udělej si licenci.</h2>
+          <p style="color: #5B6778; font-size: 16px; line-height: 1.7; margin: 0 0 24px">Základní kurz trvá 48 hodin a obsahuje výuku podle osnov Úřadu pro civilní letectví, rozšířenou o praxi navíc.</p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px 20px; margin-bottom: 30px">
+            <sc-for list="{{ kurzChecks }}" as="c" hint-placeholder-count="6">
+              <div style="display: flex; gap: 10px; align-items: center; font-weight: 600; font-size: 15px">
+                <span style="width: 24px; height: 24px; border-radius: 50%; background: #FFF1EC; color: #FF4D1C; display: flex; align-items: center; justify-content: center; font-size: 13px; flex: 0 0 auto">✓</span>
+                {{ c }}
+              </div>
+            </sc-for>
+          </div>
+          <div onClick="{{ goKurzy }}" style="display: inline-flex; padding: 15px 26px; border-radius: 999px; background: #0F1B2D; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="background: #22324A">Zobrazit kurzy</div>
+        </div>
+      </div>
+
+      <div style="max-width: 1240px; margin: 0 auto; padding: 100px 24px 0">
+        <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; margin-bottom: 30px">
+          <div>
+            <div style="color: #FF4D1C; font-weight: 700; font-size: 14px; margin-bottom: 10px">Kalendář</div>
+            <h2 style="font-weight: 800; font-size: clamp(28px, 3.4vw, 42px); letter-spacing: -0.02em; margin: 0">Nejbližší termíny</h2>
+          </div>
+          <div onClick="{{ goKalendar }}" style="font-weight: 700; color: #FF4D1C; cursor: pointer">Celý kalendář →</div>
+        </div>
+        <div style="display: grid; gap: 12px">
+          <sc-for list="{{ soonTerminy }}" as="t" hint-placeholder-count="5">
+            <div onClick="{{ t.open }}" style="background: #fff; border-radius: 16px; padding: 18px 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 24px; box-shadow: 0 6px 20px rgba(15,27,45,0.05); cursor: pointer" style-hover="box-shadow: 0 14px 34px rgba(15,27,45,0.12)">
+              <div style="padding: 10px 14px; border-radius: 12px; background: #FFF1EC; color: #D6360A; font-weight: 800; font-size: 15px; min-width: 110px; text-align: center">{{ t.date }}</div>
+              <div style="flex: 1 1 200px">
+                <div style="font-weight: 800; font-size: 17px">{{ t.type }}</div>
+                <div style="font-size: 13px; color: #5B6778; margin-top: 2px">{{ t.place }} · {{ t.time }}</div>
+              </div>
+              <div style="font-size: 14px; color: #5B6778; font-weight: 600">{{ t.spots }}</div>
+              <div style="padding: 11px 20px; border-radius: 999px; background: #0F1B2D; color: #fff; font-weight: 700; font-size: 14px">{{ t.cta }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="max-width: 1240px; margin: 0 auto; padding: 100px 24px 0">
+        <div style="text-align: center; max-width: 640px; margin: 0 auto 40px">
+          <div style="color: #FF4D1C; font-weight: 700; font-size: 14px; margin-bottom: 10px">Proč s námi</div>
+          <h2 style="font-weight: 800; font-size: clamp(30px, 3.6vw, 44px); letter-spacing: -0.02em; margin: 0">Důvody, proč nám lidé svěřují život</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 24px">
+          <div style="background: #0F1B2D; color: #fff; border-radius: 20px; padding: 28px">
+            <div style="font-weight: 800; font-size: 40px; color: #FF4D1C">17 let</div>
+            <div style="color: #C5CEDA; font-size: 15px; margin-top: 4px">provozu bez vážné nehody</div>
+          </div>
+          <div style="background: #0F1B2D; color: #fff; border-radius: 20px; padding: 28px">
+            <div style="font-weight: 800; font-size: 40px; color: #FF4D1C">4 000 m</div>
+            <div style="color: #C5CEDA; font-size: 15px; margin-top: 4px">výška výskoku</div>
+          </div>
+          <div style="background: #0F1B2D; color: #fff; border-radius: 20px; padding: 28px">
+            <div style="font-weight: 800; font-size: 40px; color: #FF4D1C">1 200+</div>
+            <div style="color: #C5CEDA; font-size: 15px; margin-top: 4px">seskoků na instruktora</div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px">
+          <sc-for list="{{ reasons }}" as="r" hint-placeholder-count="6">
+            <div style="background: #fff; border-radius: 20px; padding: 28px; box-shadow: 0 8px 28px rgba(15,27,45,0.06)">
+              <div style="width: 52px; height: 52px; border-radius: 14px; background: #FFF1EC; color: #FF4D1C; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 17px; margin-bottom: 18px">{{ r.n }}</div>
+              <h4 style="font-weight: 800; font-size: 18px; margin: 0 0 8px">{{ r.title }}</h4>
+              <p style="margin: 0; color: #5B6778; font-size: 15px; line-height: 1.6">{{ r.text }}</p>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="max-width: 1240px; margin: 0 auto; padding: 100px 24px 0">
+        <div style="text-align: center; max-width: 640px; margin: 0 auto 40px">
+          <div style="color: #FF4D1C; font-weight: 700; font-size: 14px; margin-bottom: 10px">Aktuality</div>
+          <h2 style="font-weight: 800; font-size: clamp(30px, 3.6vw, 44px); letter-spacing: -0.02em; margin: 0">Z provozu letiště</h2>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px">
+          <sc-for list="{{ news }}" as="n" hint-placeholder-count="3">
+            <div style="background: #fff; border-radius: 20px; overflow: hidden; box-shadow: 0 8px 28px rgba(15,27,45,0.07)">
+              <div style="aspect-ratio: 16 / 10; background-color: #E3E8EF; background-size: cover; background-position: center; background-image: url({{ n.img }})"></div>
+              <div style="padding: 22px">
+                <div style="font-weight: 800; font-size: 18px; margin-bottom: 8px">{{ n.title }}</div>
+                <p style="margin: 0; color: #5B6778; font-size: 14px; line-height: 1.65">{{ n.text }}</p>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+
+      <div style="max-width: 1240px; margin: 0 auto; padding: 100px 24px 0">
+        <div style="background: #FF4D1C; border-radius: 28px; padding: clamp(32px, 5vw, 64px); display: flex; align-items: center; justify-content: space-between; gap: 28px; flex-wrap: wrap; color: #fff; position: relative; overflow: hidden">
+          <div style="position: absolute; right: -60px; top: -60px; width: 240px; height: 240px; border-radius: 50%; background: rgba(255,255,255,0.12)"></div>
+          <div style="position: relative">
+            <h2 style="font-weight: 800; font-size: clamp(28px, 3.8vw, 46px); letter-spacing: -0.02em; margin: 0 0 10px; max-width: 22ch">Dárek, který si nikdo nezapomene</h2>
+            <p style="margin: 0; font-size: 17px; max-width: 46ch; color: #fff">Poukaz na tandem s platností 12 měsíců. Termín si obdarovaný vybere sám.</p>
+          </div>
+          <div onClick="{{ goPoukaz }}" style="position: relative; padding: 18px 32px; border-radius: 999px; background: #fff; color: #0F1B2D; font-weight: 800; font-size: 15px; cursor: pointer; white-space: nowrap" style-hover="background: #0F1B2D; color: #fff">Koupit poukaz</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ INNER PAGE HEADER ============ -->
+  <sc-if value="{{ showPageHead }}">
+    <div style="background: #fff; border-bottom: 1px solid #E3E8EF">
+      <div style="max-width: 1240px; margin: 0 auto; padding: 48px 24px 44px">
+        <div style="font-size: 14px; color: #5B6778; margin-bottom: 12px; display: flex; gap: 8px">
+          <span onClick="{{ goHome }}" style="cursor: pointer; font-weight: 600" style-hover="color: #FF4D1C">Domů</span>
+          <span>/</span>
+          <span style="color: #FF4D1C; font-weight: 600">{{ pageTitle }}</span>
+        </div>
+        <h1 style="font-weight: 800; font-size: clamp(34px, 4.6vw, 56px); letter-spacing: -0.025em; margin: 0; line-height: 1.08">{{ pageTitle }}</h1>
+        <sc-if value="{{ pageLead }}">
+          <p style="margin: 14px 0 0; color: #5B6778; font-size: 17px; line-height: 1.6; max-width: 66ch">{{ pageLead }}</p>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ TANDEM ============ -->
+  <sc-if value="{{ isTandem }}">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 48px 24px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 40px; align-items: start">
+      <div>
+        <img src="https://www.lsd-trip.cz/image/eshop/1512893393_image_img_5635ab.jpeg" alt="Tandemový seskok" style="width: 100%; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 22px; margin-bottom: 36px" />
+        <h2 style="font-weight: 800; font-size: 30px; letter-spacing: -0.02em; margin: 0 0 22px">Jak to proběhne</h2>
+        <div style="display: grid; gap: 14px">
+          <sc-for list="{{ tandemSteps }}" as="s" hint-placeholder-count="5">
+            <div style="background: #fff; border-radius: 18px; padding: 22px; display: flex; gap: 18px; box-shadow: 0 6px 20px rgba(15,27,45,0.05)">
+              <div style="width: 48px; height: 48px; border-radius: 14px; background: #FF4D1C; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; flex: 0 0 auto">{{ s.n }}</div>
+              <div>
+                <div style="font-weight: 800; font-size: 17px; margin-bottom: 4px">{{ s.title }}</div>
+                <div style="color: #5B6778; font-size: 15px; line-height: 1.6">{{ s.text }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="background: #fff; border-radius: 22px; padding: 30px; box-shadow: 0 14px 40px rgba(15,27,45,0.09); position: sticky; top: 100px">
+        <div style="font-weight: 800; font-size: 20px; margin-bottom: 10px">Varianty a ceny</div>
+        <sc-for list="{{ tandemVariants }}" as="v" hint-placeholder-count="3">
+          <div style="border-top: 1px solid #EEF1F5; padding: 18px 0">
+            <div style="display: flex; justify-content: space-between; gap: 14px; align-items: baseline">
+              <div style="font-weight: 700; font-size: 16px">{{ v.title }}</div>
+              <div style="font-weight: 800; font-size: 17px; color: #FF4D1C; white-space: nowrap">{{ v.price }}</div>
+            </div>
+            <div style="color: #5B6778; font-size: 14px; line-height: 1.55; margin-top: 4px">{{ v.note }}</div>
+          </div>
+        </sc-for>
+        <div onClick="{{ goKalendar }}" style="margin-top: 14px; padding: 17px; border-radius: 999px; background: #FF4D1C; color: #fff; text-align: center; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="background: #E63D0F">Vybrat termín</div>
+        <div onClick="{{ goPoukaz }}" style="margin-top: 10px; padding: 17px; border-radius: 999px; border: 1px solid #D5DCE6; text-align: center; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="border-color: #0F1B2D">Koupit jako dárek</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ KURZY ============ -->
+  <sc-if value="{{ isKurzy }}">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 48px 24px 0">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px">
+        <sc-for list="{{ courses }}" as="c" hint-placeholder-count="3">
+          <div style="background: #fff; border-radius: 22px; overflow: hidden; box-shadow: 0 8px 28px rgba(15,27,45,0.07); display: flex; flex-direction: column">
+            <div style="aspect-ratio: 3 / 2; background-color: #E3E8EF; background-size: cover; background-position: center; background-image: url({{ c.img }})"></div>
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 12px; flex: 1">
+              <div style="display: inline-flex; align-self: flex-start; padding: 5px 12px; border-radius: 999px; background: #FFF1EC; color: #D6360A; font-size: 12px; font-weight: 700">{{ c.tag }}</div>
+              <h3 style="font-weight: 800; font-size: 21px; margin: 0; line-height: 1.25">{{ c.title }}</h3>
+              <p style="margin: 0; color: #5B6778; font-size: 15px; line-height: 1.6; flex: 1">{{ c.text }}</p>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <span style="padding: 6px 12px; border-radius: 999px; background: #F5F7FA; font-size: 13px; font-weight: 600">{{ c.dur }}</span>
+                <span style="padding: 6px 12px; border-radius: 999px; background: #F5F7FA; font-size: 13px; font-weight: 600">{{ c.level }}</span>
+              </div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 14px; border-top: 1px solid #EEF1F5; padding-top: 16px; margin-top: 4px">
+                <div style="font-weight: 800; font-size: 21px">{{ c.price }}</div>
+                <div onClick="{{ c.book }}" style="padding: 12px 22px; border-radius: 999px; background: #FF4D1C; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer" style-hover="background: #E63D0F">Rezervovat</div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top: 32px; background: #0F1B2D; color: #fff; border-radius: 22px; padding: 32px">
+        <h3 style="font-weight: 800; font-size: 22px; margin: 0 0 18px">Co potřebuješ mít s sebou</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; color: #C5CEDA; font-size: 15px; line-height: 1.6">
+          <div>Lékařské potvrzení o způsobilosti (stačí praktický lékař).</div>
+          <div>Sportovní obuv nad kotník a oblečení podle počasí.</div>
+          <div>U osob do 18 let písemný souhlas zákonného zástupce.</div>
+          <div>Odpočaté tělo — teorie je nabitý den.</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ KALENDÁŘ ============ -->
+  <sc-if value="{{ isKalendar }}">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 40px 24px 0">
+      <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 24px">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+          <div onClick="{{ f.set }}" style="padding: 11px 20px; border-radius: 999px; background: {{ f.bg }}; color: {{ f.fg }}; font-weight: 700; font-size: 14px; cursor: pointer; box-shadow: 0 4px 14px rgba(15,27,45,0.06)">{{ f.label }}</div>
+        </sc-for>
+      </div>
+      <div style="display: grid; gap: 12px">
+        <sc-for list="{{ terminy }}" as="t" hint-placeholder-count="8">
+          <div onClick="{{ t.open }}" style="background: #fff; border-radius: 18px; padding: 20px 24px; display: flex; flex-wrap: wrap; align-items: center; gap: 16px 28px; box-shadow: 0 6px 20px rgba(15,27,45,0.05); cursor: pointer" style-hover="box-shadow: 0 14px 34px rgba(15,27,45,0.12)">
+            <div style="padding: 10px 14px; border-radius: 12px; background: #FFF1EC; color: #D6360A; text-align: center; min-width: 116px">
+              <div style="font-weight: 800; font-size: 15px">{{ t.date }}</div>
+              <div style="font-size: 12px; font-weight: 600">{{ t.day }}</div>
+            </div>
+            <div style="flex: 1 1 220px">
+              <div style="font-weight: 800; font-size: 18px">{{ t.type }}</div>
+              <div style="font-size: 14px; color: #5B6778; margin-top: 2px">{{ t.place }} · {{ t.time }}</div>
+            </div>
+            <div style="flex: 0 1 170px; min-width: 140px">
+              <div style="height: 6px; border-radius: 6px; background: #EEF1F5; margin-bottom: 8px; overflow: hidden">
+                <div style="height: 6px; border-radius: 6px; background: #FF4D1C; width: {{ t.pct }}"></div>
+              </div>
+              <div style="font-size: 13px; color: #5B6778; font-weight: 600">{{ t.spots }}</div>
+            </div>
+            <div style="font-weight: 800; font-size: 18px; min-width: 100px">{{ t.price }}</div>
+            <div style="padding: 12px 22px; border-radius: 999px; background: #0F1B2D; color: #fff; font-weight: 700; font-size: 14px">{{ t.cta }}</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top: 18px; font-size: 14px; color: #5B6778">Provoz závisí na počasí. O startech informujeme den předem SMS.</div>
+    </div>
+  </sc-if>
+
+  <!-- ============ DETAIL TERMÍNU ============ -->
+  <sc-if value="{{ isTermin }}">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 36px 24px 0">
+      <div onClick="{{ goKalendar }}" style="font-weight: 700; font-size: 14px; color: #5B6778; cursor: pointer; margin-bottom: 22px" style-hover="color: #FF4D1C">← Zpět na kalendář</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 40px; align-items: start">
+        <div>
+          <div style="display: inline-block; padding: 7px 14px; border-radius: 999px; background: #FFF1EC; color: #D6360A; font-weight: 700; font-size: 13px; margin-bottom: 14px">{{ sel.date }} · {{ sel.time }}</div>
+          <h1 style="font-weight: 800; font-size: clamp(32px, 4.4vw, 52px); letter-spacing: -0.025em; margin: 0 0 24px; line-height: 1.1">{{ sel.type }}</h1>
+          <div style="width: 100%; aspect-ratio: 16 / 9; border-radius: 22px; margin-bottom: 24px; background-color: #E3E8EF; background-size: cover; background-position: center; background-image: url({{ sel.img }})"></div>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 24px">
+            <div style="background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 6px 20px rgba(15,27,45,0.05)">
+              <div style="font-size: 13px; color: #5B6778; margin-bottom: 4px">Místo</div>
+              <div style="font-weight: 800; font-size: 16px">{{ sel.place }}</div>
+            </div>
+            <div style="background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 6px 20px rgba(15,27,45,0.05)">
+              <div style="font-size: 13px; color: #5B6778; margin-bottom: 4px">Volná místa</div>
+              <div style="font-weight: 800; font-size: 16px">{{ sel.free }}</div>
+            </div>
+            <div style="background: #fff; border-radius: 16px; padding: 18px; box-shadow: 0 6px 20px rgba(15,27,45,0.05)">
+              <div style="font-size: 13px; color: #5B6778; margin-bottom: 4px">Cena za osobu</div>
+              <div style="font-weight: 800; font-size: 16px">{{ sel.price }}</div>
+            </div>
+          </div>
+          <p style="color: #5B6778; font-size: 16px; line-height: 1.7; margin: 0">{{ sel.desc }}</p>
+        </div>
+        <div style="background: #fff; border-radius: 22px; padding: 30px; box-shadow: 0 14px 40px rgba(15,27,45,0.09); position: sticky; top: 100px">
+          <div style="font-weight: 800; font-size: 22px; margin-bottom: 4px">Rezervace</div>
+          <div style="font-size: 14px; color: #5B6778; margin-bottom: 22px">{{ sel.date }} · {{ sel.type }}</div>
+          <div style="font-size: 14px; font-weight: 700; margin-bottom: 10px">Počet osob</div>
+          <div style="display: flex; align-items: center; background: #F5F7FA; border-radius: 999px; padding: 6px; margin-bottom: 22px">
+            <div onClick="{{ decPeople }}" style="width: 46px; height: 46px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(15,27,45,0.08)">−</div>
+            <div style="flex: 1; text-align: center; font-weight: 800; font-size: 20px">{{ people }}</div>
+            <div onClick="{{ incPeople }}" style="width: 46px; height: 46px; border-radius: 50%; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 20px; cursor: pointer; box-shadow: 0 2px 8px rgba(15,27,45,0.08)">+</div>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: baseline; border-top: 1px solid #EEF1F5; padding-top: 16px; font-size: 15px; color: #5B6778">
+            <span>{{ people }} × {{ sel.price }}</span>
+            <span style="font-weight: 800; font-size: 22px; color: #0F1B2D">{{ total }}</span>
+          </div>
+          <div onClick="{{ startBooking }}" style="margin-top: 22px; padding: 17px; border-radius: 999px; background: #FF4D1C; color: #fff; text-align: center; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="background: #E63D0F">{{ sel.cta }}</div>
+          <div style="margin-top: 14px; font-size: 13px; line-height: 1.6; color: #5B6778; text-align: center">Zrušení zdarma 48 h před termínem.</div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ REZERVAČNÍ TOK ============ -->
+  <sc-if value="{{ isBooking }}">
+    <div style="max-width: 860px; margin: 0 auto; padding: 44px 24px 0">
+      <div style="background: #fff; border-radius: 24px; padding: clamp(24px, 4vw, 44px); box-shadow: 0 14px 40px rgba(15,27,45,0.08)">
+        <sc-if value="{{ showSteps }}" hint-placeholder-val="{{ true }}">
+          <div style="display: flex; gap: 8px; margin-bottom: 34px; flex-wrap: wrap">
+            <sc-for list="{{ steps }}" as="s" hint-placeholder-count="4">
+              <div style="flex: 1 1 120px; display: flex; align-items: center; gap: 10px">
+                <div style="width: 30px; height: 30px; border-radius: 50%; background: {{ s.bar }}; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; flex: 0 0 auto">{{ s.num }}</div>
+                <div style="font-size: 14px; font-weight: 700; color: {{ s.color }}">{{ s.name }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ step1 }}">
+          <div>
+            <h2 style="font-weight: 800; font-size: clamp(26px, 3.4vw, 36px); letter-spacing: -0.02em; margin: 0 0 6px">Kdo skáče</h2>
+            <p style="color: #5B6778; margin: 0 0 24px; font-size: 15px">Jméno na každého účastníka potřebujeme kvůli pojištění a váhovému limitu.</p>
+            <div style="display: grid; gap: 14px">
+              <sc-for list="{{ pax }}" as="p" hint-placeholder-count="1">
+                <div style="background: #F5F7FA; border-radius: 18px; padding: 20px">
+                  <div style="font-weight: 800; font-size: 14px; color: #FF4D1C; margin-bottom: 14px">Účastník {{ p.n }}</div>
+                  <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px">
+                    <input value="{{ p.name }}" onChange="{{ p.setName }}" placeholder="Jméno a příjmení" style="background: #fff; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 14px 16px; font-size: 15px; outline: none" />
+                    <input value="{{ p.weight }}" onChange="{{ p.setWeight }}" placeholder="Hmotnost (kg)" style="background: #fff; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 14px 16px; font-size: 15px; outline: none" />
+                    <input value="{{ p.age }}" onChange="{{ p.setAge }}" placeholder="Věk" style="background: #fff; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 14px 16px; font-size: 15px; outline: none" />
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ step2 }}">
+          <div>
+            <h2 style="font-weight: 800; font-size: clamp(26px, 3.4vw, 36px); letter-spacing: -0.02em; margin: 0 0 6px">Kontaktní údaje</h2>
+            <p style="color: #5B6778; margin: 0 0 24px; font-size: 15px">Na telefon posíláme potvrzení startu den předem.</p>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px">
+              <input value="{{ form.name }}" onChange="{{ setName }}" placeholder="Jméno a příjmení" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+              <input value="{{ form.email }}" onChange="{{ setEmail }}" placeholder="E-mail" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+              <input value="{{ form.phone }}" onChange="{{ setPhone }}" placeholder="Telefon" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+              <input value="{{ form.city }}" onChange="{{ setCity }}" placeholder="Město" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+            </div>
+            <textarea value="{{ form.note }}" onChange="{{ setNote }}" placeholder="Poznámka (skupina, dárkový poukaz, cokoliv)" style="margin-top: 12px; width: 100%; min-height: 110px; background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none; resize: vertical"></textarea>
+            <div onClick="{{ toggleTerms }}" style="margin-top: 18px; display: flex; gap: 12px; align-items: flex-start; cursor: pointer">
+              <div style="width: 22px; height: 22px; border-radius: 6px; border: 2px solid #FF4D1C; display: flex; align-items: center; justify-content: center; flex: 0 0 auto; font-size: 13px; color: #FF4D1C; font-weight: 800">{{ termsMark }}</div>
+              <div style="color: #5B6778; font-size: 14px; line-height: 1.6">Souhlasím s provozními podmínkami a zpracováním osobních údajů. Potvrzuji, že jsem zdravotně způsobilý k seskoku.</div>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ step3 }}">
+          <div>
+            <h2 style="font-weight: 800; font-size: clamp(26px, 3.4vw, 36px); letter-spacing: -0.02em; margin: 0 0 6px">Platba</h2>
+            <p style="color: #5B6778; margin: 0 0 24px; font-size: 15px">Prototyp — žádná skutečná platba se neodešle.</p>
+            <div style="display: grid; gap: 10px; margin-bottom: 22px">
+              <sc-for list="{{ payMethods }}" as="m" hint-placeholder-count="3">
+                <div onClick="{{ m.set }}" style="border: 2px solid {{ m.border }}; border-radius: 16px; padding: 18px 20px; display: flex; align-items: center; gap: 16px; cursor: pointer; background: #fff">
+                  <div style="width: 22px; height: 22px; border-radius: 50%; border: 2px solid #C5CEDA; display: flex; align-items: center; justify-content: center">
+                    <sc-if value="{{ m.active }}">
+                      <div style="width: 11px; height: 11px; border-radius: 50%; background: #FF4D1C"></div>
+                    </sc-if>
+                  </div>
+                  <div style="flex: 1">
+                    <div style="font-weight: 800; font-size: 16px">{{ m.label }}</div>
+                    <div style="color: #5B6778; font-size: 13px; margin-top: 2px">{{ m.note }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ cardSelected }}">
+              <div style="background: #F5F7FA; border-radius: 18px; padding: 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px">
+                <input placeholder="Číslo karty" style="background: #fff; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 14px 16px; font-size: 15px; outline: none; grid-column: 1 / -1" />
+                <input placeholder="MM / RR" style="background: #fff; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 14px 16px; font-size: 15px; outline: none" />
+                <input placeholder="CVC" style="background: #fff; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 14px 16px; font-size: 15px; outline: none" />
+              </div>
+            </sc-if>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ step4 }}">
+          <div style="text-align: center; padding: 10px 0 0">
+            <div style="width: 84px; height: 84px; border-radius: 50%; background: #FFF1EC; margin: 0 auto 24px; display: flex; align-items: center; justify-content: center; font-size: 36px; color: #FF4D1C; font-weight: 800">✓</div>
+            <h2 style="font-weight: 800; font-size: clamp(30px, 4.4vw, 46px); letter-spacing: -0.025em; margin: 0 0 12px">{{ doneTitle }}</h2>
+            <sc-if value="{{ donePaid }}" hint-placeholder-val="{{ true }}">
+              <p style="color: #5B6778; font-size: 16px; line-height: 1.6; max-width: 50ch; margin: 0 auto 30px">Potvrzení letí na <strong style="color: #0F1B2D">{{ emailOut }}</strong>. Den před termínem ti přijde SMS s časem startu.</p>
+            </sc-if>
+            <sc-if value="{{ doneEnquiry }}">
+              <p style="color: #5B6778; font-size: 16px; line-height: 1.6; max-width: 50ch; margin: 0 auto 30px">Ozveme se na <strong style="color: #0F1B2D">{{ emailOut }}</strong> s cenou a potvrzením termínu do 24 hodin. Nic teď neplatíš.</p>
+            </sc-if>
+            <sc-if value="{{ isVoucherDone }}">
+              <p style="color: #5B6778; font-size: 16px; line-height: 1.6; max-width: 50ch; margin: 0 auto 30px">PDF poukazu posíláme na <strong style="color: #0F1B2D">{{ emailOut }}</strong> do pěti minut. Platí 12 měsíců a termín si obdarovaný vybere sám.</p>
+            </sc-if>
+            <div style="background: #F5F7FA; border-radius: 18px; padding: 24px; text-align: left; max-width: 500px; margin: 0 auto">
+              <div style="font-size: 13px; font-weight: 700; color: #5B6778; margin-bottom: 10px">{{ doneLabel }} {{ code }}</div>
+              <sc-for list="{{ summary }}" as="r" hint-placeholder-count="4">
+                <div style="display: flex; justify-content: space-between; gap: 16px; padding: 11px 0; border-bottom: 1px solid #E3E8EF; font-size: 15px">
+                  <span style="color: #5B6778">{{ r.k }}</span>
+                  <span style="text-align: right; font-weight: 700">{{ r.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div onClick="{{ goHome }}" style="display: inline-flex; margin-top: 28px; padding: 16px 30px; border-radius: 999px; border: 1px solid #D5DCE6; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="border-color: #0F1B2D">Zpátky na web</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ showBookingBar }}" hint-placeholder-val="{{ true }}">
+          <div style="margin-top: 30px; border-top: 1px solid #EEF1F5; padding-top: 22px; display: flex; align-items: center; justify-content: space-between; gap: 18px; flex-wrap: wrap">
+            <div>
+              <div style="font-size: 13px; color: #5B6778">{{ bookingLabel }}</div>
+              <div style="font-weight: 800; font-size: 24px; margin-top: 2px">{{ total }}</div>
+            </div>
+            <div style="display: flex; gap: 10px">
+              <div onClick="{{ back }}" style="padding: 15px 24px; border-radius: 999px; border: 1px solid #D5DCE6; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="border-color: #0F1B2D">Zpět</div>
+              <div onClick="{{ next }}" style="padding: 15px 30px; border-radius: 999px; background: #FF4D1C; color: #fff; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="background: #E63D0F">{{ nextLabel }}</div>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ POUKAZ ============ -->
+  <sc-if value="{{ isPoukaz }}">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 48px 24px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 40px; align-items: start">
+      <div>
+        <div style="position: relative; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 22px; box-shadow: 0 18px 44px rgba(15,27,45,0.16)">
+          <img src="https://www.lsd-trip.cz/image/carousel/1652266303_1_image_28350.jpg" alt="Poukaz" style="width: 100%; height: 100%; object-fit: cover" />
+          <div style="position: absolute; inset: 0; background: linear-gradient(110deg, rgba(15,27,45,0.92), rgba(15,27,45,0.2))"></div>
+          <div style="position: absolute; inset: 0; padding: 26px; display: flex; flex-direction: column; justify-content: space-between; color: #fff">
+            <div style="width: 44px; height: 44px; border-radius: 12px; background: #FF4D1C; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px">LSD</div>
+            <div>
+              <div style="font-size: 13px; font-weight: 600; color: #C5CEDA; margin-bottom: 4px">Dárkový poukaz</div>
+              <div style="font-weight: 800; font-size: clamp(22px, 3vw, 32px); line-height: 1.1">{{ voucherTitle }}</div>
+              <div style="font-size: 14px; color: #C5CEDA; margin-top: 8px">Pro: {{ voucherFor }}</div>
+            </div>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 20px">
+          <div style="background: #fff; border-radius: 16px; padding: 18px; font-size: 14px; color: #5B6778"><strong style="display: block; color: #0F1B2D; font-size: 16px; margin-bottom: 2px">12 měsíců</strong>platnost</div>
+          <div style="background: #fff; border-radius: 16px; padding: 18px; font-size: 14px; color: #5B6778"><strong style="display: block; color: #0F1B2D; font-size: 16px; margin-bottom: 2px">5 minut</strong>doručení PDF</div>
+          <div style="background: #fff; border-radius: 16px; padding: 18px; font-size: 14px; color: #5B6778"><strong style="display: block; color: #0F1B2D; font-size: 16px; margin-bottom: 2px">Kdykoliv</strong>výběr termínu</div>
+        </div>
+      </div>
+      <div style="background: #fff; border-radius: 22px; padding: 30px; box-shadow: 0 14px 40px rgba(15,27,45,0.09)">
+        <div style="font-weight: 800; font-size: 20px; margin-bottom: 16px">Vyber zážitek</div>
+        <div style="display: grid; gap: 10px; margin-bottom: 20px">
+          <sc-for list="{{ vouchers }}" as="v" hint-placeholder-count="3">
+            <div onClick="{{ v.set }}" style="border: 2px solid {{ v.border }}; border-radius: 16px; padding: 16px 18px; cursor: pointer; display: flex; justify-content: space-between; gap: 14px; align-items: center">
+              <div>
+                <div style="font-weight: 800; font-size: 16px">{{ v.title }}</div>
+                <div style="color: #5B6778; font-size: 13px; margin-top: 2px">{{ v.note }}</div>
+              </div>
+              <div style="font-weight: 800; font-size: 17px; color: #FF4D1C; white-space: nowrap">{{ v.price }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: grid; gap: 12px">
+          <input value="{{ voucherForRaw }}" onChange="{{ setVoucherFor }}" placeholder="Pro koho (jméno na poukazu)" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+          <input value="{{ form.email }}" onChange="{{ setEmail }}" placeholder="Tvůj e-mail pro doručení PDF" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+        </div>
+        <div onClick="{{ buyVoucher }}" style="margin-top: 20px; padding: 17px; border-radius: 999px; background: #FF4D1C; color: #fff; text-align: center; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="background: #E63D0F">Koupit za {{ voucherPrice }}</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ EXPEDICE ============ -->
+  <sc-if value="{{ isExpedice }}">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 48px 24px 0">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 24px">
+        <sc-for list="{{ trips }}" as="e" hint-placeholder-count="3">
+          <div style="background: #fff; border-radius: 22px; overflow: hidden; box-shadow: 0 8px 28px rgba(15,27,45,0.07); display: flex; flex-direction: column">
+            <div style="position: relative; aspect-ratio: 4 / 3; background-color: #E3E8EF; background-size: cover; background-position: center; background-image: url({{ e.img }})">
+              <div style="position: absolute; top: 14px; left: 14px; background: #fff; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 700">{{ e.tag }}</div>
+            </div>
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 10px; flex: 1">
+              <h3 style="font-weight: 800; font-size: 21px; margin: 0">{{ e.title }}</h3>
+              <p style="margin: 0; color: #5B6778; font-size: 15px; line-height: 1.6; flex: 1">{{ e.text }}</p>
+              <div style="font-size: 13px; color: #5B6778; font-weight: 600">{{ e.meta }}</div>
+              <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; border-top: 1px solid #EEF1F5; padding-top: 16px; margin-top: 4px">
+                <div style="font-weight: 800; font-size: 19px">{{ e.price }}</div>
+                <div onClick="{{ goKontakt }}" style="padding: 12px 20px; border-radius: 999px; background: #0F1B2D; color: #fff; font-weight: 700; font-size: 14px; cursor: pointer" style-hover="background: #22324A">Mám zájem</div>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ GALERIE ============ -->
+  <sc-if value="{{ isGalerie }}">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 48px 24px 0">
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px">
+        <sc-for list="{{ gallery }}" as="g" hint-placeholder-count="10">
+          <div onClick="{{ g.open }}" style="aspect-ratio: 4 / 3; border-radius: 18px; overflow: hidden; cursor: pointer; background-color: #E3E8EF; background-size: cover; background-position: center; background-image: url({{ g.src }}); box-shadow: 0 6px 20px rgba(15,27,45,0.08)" style-hover="box-shadow: 0 16px 36px rgba(15,27,45,0.18)"></div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ O NÁS ============ -->
+  <sc-if value="{{ isOnas }}">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 48px 24px 0">
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 36px; margin-bottom: 64px; align-items: center">
+        <img src="https://www.lsd-trip.cz/image/carousel/1512896173_1_image_zv2.jpg" alt="Spolek" style="width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 22px" />
+        <div>
+          <div style="color: #FF4D1C; font-weight: 700; font-size: 14px; margin-bottom: 10px">Spolek od roku 2009</div>
+          <p style="font-size: 18px; line-height: 1.7; margin: 0 0 16px; font-weight: 600">Jsme spolek zabývající se adrenalinovými sporty, zejména parašutismem. Sdružujeme všechny, co se rádi baví a nebojí se překonávat strach a překážky.</p>
+          <p style="font-size: 16px; line-height: 1.7; color: #5B6778; margin: 0">Instruktoři jsou ve svém oboru profesionálové a vždy dbají na naprosté bezpečí klientů. Jsme tu pro lidi, kteří rádi poznávají svět — a především sami sebe.</p>
+        </div>
+      </div>
+      <div style="text-align: center; max-width: 640px; margin: 0 auto 36px">
+        <div style="color: #FF4D1C; font-weight: 700; font-size: 14px; margin-bottom: 10px">Náš tým</div>
+        <h2 style="font-weight: 800; font-size: clamp(28px, 3.4vw, 40px); letter-spacing: -0.02em; margin: 0">Lidé, na které se spolehneš</h2>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 24px">
+        <sc-for list="{{ team }}" as="m" hint-placeholder-count="6">
+          <div style="background: #fff; border-radius: 22px; overflow: hidden; box-shadow: 0 8px 28px rgba(15,27,45,0.07); text-align: center">
+            <div style="aspect-ratio: 1; background-color: #E3E8EF; background-size: cover; background-position: center top; background-image: url({{ m.img }})"></div>
+            <div style="padding: 20px">
+              <div style="font-weight: 800; font-size: 18px">{{ m.name }}</div>
+              <div style="font-size: 13px; font-weight: 700; color: #FF4D1C; margin: 4px 0 10px">{{ m.role }}</div>
+              <div style="color: #5B6778; font-size: 14px; line-height: 1.6">{{ m.bio }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ FAQ ============ -->
+  <sc-if value="{{ isFaq }}">
+    <div style="max-width: 860px; margin: 0 auto; padding: 48px 24px 0; display: grid; gap: 12px">
+      <sc-for list="{{ faq }}" as="q" hint-placeholder-count="8">
+        <div style="background: #fff; border-radius: 18px; box-shadow: 0 6px 20px rgba(15,27,45,0.05)">
+          <div onClick="{{ q.toggle }}" style="padding: 22px 24px; display: flex; gap: 18px; align-items: center; cursor: pointer">
+            <div style="font-weight: 800; font-size: 17px; flex: 1; line-height: 1.4">{{ q.q }}</div>
+            <div style="width: 34px; height: 34px; border-radius: 50%; background: #FFF1EC; color: #FF4D1C; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; flex: 0 0 auto">{{ q.mark }}</div>
+          </div>
+          <sc-if value="{{ q.open }}">
+            <div style="padding: 0 24px 24px; color: #5B6778; font-size: 15px; line-height: 1.7">{{ q.a }}</div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <!-- ============ KONTAKT ============ -->
+  <sc-if value="{{ isKontakt }}">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 48px 24px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 32px; align-items: start">
+      <div style="display: grid; gap: 14px">
+        <div style="background: #fff; border-radius: 18px; padding: 22px; box-shadow: 0 6px 20px rgba(15,27,45,0.05)">
+          <div style="font-size: 13px; color: #5B6778; margin-bottom: 4px">Telefon — rezervace tandemů</div>
+          <div style="font-weight: 800; font-size: 22px">+420 777 310 959</div>
+        </div>
+        <div style="background: #fff; border-radius: 18px; padding: 22px; box-shadow: 0 6px 20px rgba(15,27,45,0.05)">
+          <div style="font-size: 13px; color: #5B6778; margin-bottom: 4px">E-mail</div>
+          <div style="font-weight: 800; font-size: 22px">info@lsd-trip.cz</div>
+        </div>
+        <div style="background: #fff; border-radius: 18px; padding: 22px; box-shadow: 0 6px 20px rgba(15,27,45,0.05)">
+          <div style="font-size: 13px; color: #5B6778; margin-bottom: 4px">Sídlo spolku</div>
+          <div style="font-weight: 700; font-size: 16px; line-height: 1.5">Letecká společnost dobrodruhů z.s.<br />Holečkova 49/789, Praha 5, 150 00</div>
+        </div>
+        <div style="background: #fff; border-radius: 18px; padding: 22px; box-shadow: 0 6px 20px rgba(15,27,45,0.05)">
+          <div style="font-size: 13px; color: #5B6778; margin-bottom: 4px">Kde skáčeme</div>
+          <div style="font-weight: 700; font-size: 16px">Letiště Jihlava — Henčov</div>
+        </div>
+      </div>
+      <div style="background: #fff; border-radius: 22px; padding: 30px; box-shadow: 0 14px 40px rgba(15,27,45,0.09)">
+        <div style="font-weight: 800; font-size: 22px; margin-bottom: 18px">Napiš nám</div>
+        <div style="display: grid; gap: 12px">
+          <input value="{{ form.name }}" onChange="{{ setName }}" placeholder="Jméno" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+          <input value="{{ form.email }}" onChange="{{ setEmail }}" placeholder="E-mail" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+          <textarea value="{{ form.note }}" onChange="{{ setNote }}" placeholder="Zpráva" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none; min-height: 130px; resize: vertical"></textarea>
+        </div>
+        <div onClick="{{ sendContact }}" style="margin-top: 16px; padding: 17px; border-radius: 999px; background: #FF4D1C; color: #fff; text-align: center; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="background: #E63D0F">{{ contactLabel }}</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ============ FOOTER ============ -->
+  <div style="margin-top: 100px; background: #0F1B2D; color: #C5CEDA">
+    <div style="max-width: 1240px; margin: 0 auto; padding: 60px 24px 40px; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 36px">
+      <div>
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px">
+          <div style="width: 44px; height: 44px; border-radius: 12px; background: #FF4D1C; color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 15px">LSD</div>
+          <div style="font-weight: 800; font-size: 17px; color: #fff">Dobrodruh</div>
+        </div>
+        <div style="font-size: 14px; line-height: 1.7">Tandemy, kurzy a expedice na letišti Jihlava — Henčov. Letecká společnost dobrodruhů z.s.</div>
+      </div>
+      <div>
+        <div style="font-weight: 800; color: #fff; font-size: 16px; margin-bottom: 14px">Zážitky</div>
+        <div style="display: grid; gap: 10px; font-size: 14px">
+          <div onClick="{{ goTandem }}" style="cursor: pointer" style-hover="color: #FF4D1C">Tandemový seskok</div>
+          <div onClick="{{ goKurzy }}" style="cursor: pointer" style-hover="color: #FF4D1C">Kurzy a výcvik</div>
+          <div onClick="{{ goExpedice }}" style="cursor: pointer" style-hover="color: #FF4D1C">Expedice a helitour</div>
+          <div onClick="{{ goPoukaz }}" style="cursor: pointer" style-hover="color: #FF4D1C">Dárkový poukaz</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-weight: 800; color: #fff; font-size: 16px; margin-bottom: 14px">Informace</div>
+        <div style="display: grid; gap: 10px; font-size: 14px">
+          <div onClick="{{ goKalendar }}" style="cursor: pointer" style-hover="color: #FF4D1C">Kalendář termínů</div>
+          <div onClick="{{ goFaq }}" style="cursor: pointer" style-hover="color: #FF4D1C">Časté otázky</div>
+          <div onClick="{{ goOnas }}" style="cursor: pointer" style-hover="color: #FF4D1C">O nás a tým</div>
+          <div onClick="{{ goKontakt }}" style="cursor: pointer" style-hover="color: #FF4D1C">Kontakt</div>
+        </div>
+      </div>
+      <div>
+        <div style="font-weight: 800; color: #fff; font-size: 16px; margin-bottom: 14px">Kontakt</div>
+        <div style="font-size: 14px; line-height: 1.8">+420 777 310 959<br />info@lsd-trip.cz<br />Holečkova 49/789, Praha 5</div>
+      </div>
+    </div>
+    <div style="border-top: 1px solid rgba(255,255,255,0.1)">
+      <div style="max-width: 1240px; margin: 0 auto; padding: 20px 24px; display: flex; gap: 20px; flex-wrap: wrap; font-size: 13px">
+        <span>© 2012—2026 Letecká společnost dobrodruhů</span>
+        <span style="margin-left: auto">Obchodní podmínky · Ochrana osobních údajů</span>
+      </div>
+    </div>
+  </div>
+
+  <sc-if value="{{ loginOpen }}">
+    <div onClick="{{ closeLogin }}" style="position: fixed; inset: 0; z-index: 95; background: rgba(15,27,45,0.6); display: flex; align-items: center; justify-content: center; padding: 24px">
+      <div onClick="{{ stop }}" style="background: #fff; border-radius: 24px; padding: 34px; width: 100%; max-width: 420px; box-shadow: 0 30px 80px rgba(15,27,45,0.3)">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px">
+          <div style="font-weight: 800; font-size: 24px">Členská sekce</div>
+          <div onClick="{{ closeLogin }}" style="width: 36px; height: 36px; border-radius: 50%; background: #F5F7FA; display: flex; align-items: center; justify-content: center; cursor: pointer">×</div>
+        </div>
+        <div style="display: grid; gap: 12px">
+          <input placeholder="E-mail" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+          <input type="password" placeholder="Heslo" style="background: #F5F7FA; border: 1px solid #DDE3EB; border-radius: 12px; color: #0F1B2D; padding: 15px 16px; font-size: 15px; outline: none" />
+        </div>
+        <div onClick="{{ closeLogin }}" style="margin-top: 18px; padding: 16px; border-radius: 999px; background: #FF4D1C; color: #fff; text-align: center; font-weight: 700; font-size: 15px; cursor: pointer" style-hover="background: #E63D0F">Přihlásit</div>
+        <div style="margin-top: 16px; font-size: 14px; color: #5B6778; text-align: center">Nejsi členem? <span onClick="{{ goKontakt }}" style="color: #FF4D1C; font-weight: 700; cursor: pointer">Ozvi se nám</span></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ lightbox }}">
+    <div onClick="{{ closeLightbox }}" style="position: fixed; inset: 0; z-index: 90; background: rgba(15,27,45,0.92); padding: 40px; cursor: zoom-out">
+      <div style="width: 100%; height: 100%; background-size: contain; background-repeat: no-repeat; background-position: center; background-image: url({{ lightbox }})"></div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const IMG = {
+  tandem: "https://www.lsd-trip.cz/image/eshop/1512893393_image_img_5635ab.jpeg",
+  tandemCam: "https://www.lsd-trip.cz/image/eshop/1512969318_image_gopr3595_00_00_49_00_49.jpg",
+  vycvik: "https://www.lsd-trip.cz/image/eshop/1512986228_image_vlcsnap-2017-04-02-20h56m57s323.png",
+  iaff: "https://www.lsd-trip.cz/image/carousel/1652266303_1_image_28350.jpg",
+  zv: "https://www.lsd-trip.cz/image/carousel/1512896173_1_image_zv2.jpg"
+};
+const GAL = [
+  "1696490824_image_vlcsnap-2023-09-23-16h51m19s209.png",
+  "1696490816_image_vlcsnap-2023-09-23-16h46m51s665.png",
+  "1696490807_image_vlcsnap-2023-09-23-16h35m47s333.png",
+  "1696490793_image_vlcsnap-2023-09-23-16h32m56s778.png",
+  "1696490745_image_vlcsnap-2023-09-23-16h31m16s031.png",
+  "1696490733_image_vlcsnap-2023-09-23-16h28m39s835.png",
+  "1696490725_image_vlcsnap-2023-09-23-16h27m22s452.png",
+  "1696490715_image_vlcsnap-2023-09-23-16h25m54s629.png",
+  "1696490704_image_vlcsnap-2023-09-23-16h23m56s545.png",
+  "1696490696_image_vlcsnap-2023-09-23-16h23m23s758.png"
+].map(function (f) { return "https://www.lsd-trip.cz/image/gallery/" + f; });
+
+const TERMINY = [
+  { id: 904, type: "Parašutistický výcvik", date: "4. 9. 2026", day: "pátek", time: "teorie od 10:00", place: "Jihlava — Henčov", taken: 7, max: 10, price: 4600, img: IMG.vycvik, kind: "kurz",
+    desc: "Zahájení základního výcviku: teorie od 10:00, první seskok v sobotu ráno. Kurz obsahuje zákonem požadovanou výuku dle osnov V-PARA 1 a V-PARA 2, rozšířenou o praktický nácvik na hangáru." },
+  { id: 900, type: "Tandem", date: "4. 9. 2026", day: "pátek", time: "starty od 13:30", place: "Jihlava — Henčov", taken: 16, max: 16, price: 4700, img: IMG.tandem, kind: "tandem",
+    desc: "Tandemové seskoky z 4 000 metrů. Na letišti počítej se dvěma až třemi hodinami — instruktáž, postroj, nástup, seskok, video." },
+  { id: 893, type: "Tandem", date: "5. 9. 2026", day: "sobota", time: "starty 7:30 — 15:00", place: "Jihlava — Henčov", taken: 24, max: 24, price: 4700, img: IMG.tandem, kind: "tandem",
+    desc: "Hlavní sobotní provoz. V 15:30 navíc seskok nad Křižanovem." },
+  { id: 899, type: "Tandem", date: "6. 9. 2026", day: "neděle", time: "starty od 9:00", place: "Jihlava — Henčov", taken: 24, max: 24, price: 4700, img: IMG.tandem, kind: "tandem",
+    desc: "Nedělní provoz, klidnější vzduch a nejlepší viditelnost do Vysočiny." },
+  { id: 901, type: "Tandem", date: "18. 9. 2026", day: "pátek", time: "starty od 14:00", place: "Jihlava — Henčov", taken: 1, max: 8, price: 4700, img: IMG.tandemCam, kind: "tandem",
+    desc: "Odpolední blok s nejlepším světlem pro kameru. Ideální termín, pokud chceš video s externím kameramanem." },
+  { id: 902, type: "Tandem", date: "19. 9. 2026", day: "sobota", time: "starty od 8:30", place: "Jihlava — Henčov", taken: 18, max: 24, price: 4700, img: IMG.tandem, kind: "tandem",
+    desc: "Celodenní provoz. Doprovod má vstup na letiště zdarma." },
+  { id: 903, type: "Tandem", date: "20. 9. 2026", day: "neděle", time: "starty od 8:30", place: "Jihlava — Henčov", taken: 12, max: 16, price: 4700, img: IMG.tandem, kind: "tandem",
+    desc: "Poslední nedělní blok v září." },
+  { id: 910, type: "Kurz IAFF s větrným tunelem", date: "2. 10. 2026", day: "pátek", time: "start 9:00", place: "Jihlava + tunel Praha", taken: 3, max: 6, price: 0, img: IMG.iaff, kind: "kurz",
+    desc: "Zrychlený výcvik volného pádu s přípravou ve větrném tunelu. Cena podle rozsahu tunelových minut — potvrdíme e-mailem." }
+];
+
+const CZK = function (n) { return n.toLocaleString("cs-CZ").replace(/\u00a0/g, " ") + " Kč"; };
+
+class Component extends DCLogic {
+  state = {
+    page: "home", menuOpen: false, terminId: null, people: 1, filter: "Vše",
+    bStep: 0, pax: [{ name: "", weight: "", age: "" }],
+    form: { name: "", email: "", phone: "", city: "", note: "" },
+    terms: false, pay: "card", faqOpen: null, lightbox: null,
+    voucher: 0, voucherFor: "", contactSent: false, code: null, mode: "booking", loginOpen: false
+  };
+
+  go(page) {
+    this.setState({ page: page, menuOpen: false, loginOpen: false });
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+
+  openTermin(id) {
+    const t = TERMINY.filter(function (x) { return x.id === id; })[0];
+    if (t && t.taken >= t.max) return;
+    this.setState({ page: "termin", terminId: id, people: 1, menuOpen: false, bStep: 0 });
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+
+  sel() {
+    return TERMINY.filter(function (x) { return x.id === this.state.terminId; }.bind(this))[0] || TERMINY[4];
+  }
+
+  setPeople(n) {
+    const t = this.sel();
+    const free = t.max - t.taken;
+    const v = Math.max(1, Math.min(n, Math.max(1, free)));
+    const pax = [];
+    for (let i = 0; i < v; i++) pax.push(this.state.pax[i] || { name: "", weight: "", age: "" });
+    this.setState({ people: v, pax: pax });
+  }
+
+  field(key, val) {
+    const f = Object.assign({}, this.state.form);
+    f[key] = val;
+    this.setState({ form: f });
+  }
+
+  next() {
+    const s = this.state.bStep;
+    if (s >= 3) return;
+    const enquiry = !this.sel().price;
+    const last = enquiry ? 1 : 2;
+    if (s >= last) {
+      this.setState({ bStep: 3, code: (enquiry ? "LSD-D" : "LSD-") + Math.floor(10000 + Math.random() * 89999) });
+    } else {
+      this.setState({ bStep: s + 1 });
+    }
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+
+  back() {
+    if (this.state.bStep === 0) { this.setState({ page: "termin" }); return; }
+    const step = this.state.bStep === 3 && !this.sel().price ? 1 : this.state.bStep - 1;
+    this.setState({ bStep: step });
+    if (typeof window !== "undefined") window.scrollTo(0, 0);
+  }
+
+  renderVals() {
+    const st = this.state;
+    const page = st.page;
+    const t = this.sel();
+    const priceEach = t.price || 0;
+    const totalNum = priceEach * st.people;
+
+    const navDefs = [
+      ["Tandem", "tandem"], ["Kurzy", "kurzy"], ["Kalendář", "kalendar"],
+      ["Expedice", "expedice"], ["Galerie", "galerie"], ["O nás", "onas"],
+      ["FAQ", "faq"], ["Kontakt", "kontakt"]
+    ];
+
+    const filterList = ["Vše", "Tandem", "Kurzy", "Volná místa"];
+    const visible = TERMINY.filter(function (x) {
+      if (st.filter === "Tandem") return x.kind === "tandem";
+      if (st.filter === "Kurzy") return x.kind === "kurz";
+      if (st.filter === "Volná místa") return x.max - x.taken > 0;
+      return true;
+    });
+
+    const mapTermin = function (x) {
+      const free = x.max - x.taken;
+      return {
+        date: x.date, day: x.day, type: x.type, place: x.place, time: x.time,
+        spots: x.taken + " / " + x.max + " obsazeno",
+        pct: Math.round((x.taken / x.max) * 100) + "%",
+        price: x.price ? CZK(x.price) : "na dotaz",
+        cta: free > 0 ? "Rezervovat →" : "Obsazeno",
+        open: this.openTermin.bind(this, x.id)
+      };
+    }.bind(this);
+
+    const enquiry = !priceEach;
+    const stepLabels = enquiry
+      ? ["Účastníci", "Kontakt", "Hotovo"]
+      : ["Účastníci", "Kontakt", "Platba", "Hotovo"];
+    const voucherOpts = [
+      { title: "Tandemový seskok", note: "4 000 m, 50 s volného pádu", price: 4700 },
+      { title: "Tandem + video a foto", note: "externí kameraman, sestříhané video", price: 6500 },
+      { title: "Výcvik se 2 seskoky", note: "48 h teorie a praxe, vlastní seskok", price: 4600 }
+    ];
+    const vSel = voucherOpts[st.voucher];
+    const isVoucher = st.mode === "voucher" && st.bStep === 3;
+
+    const faqData = [
+      ["Musím mít nějakou zkušenost?", "Ne. Na tandemový seskok stačí přijít — vše potřebné se dozvíš při instruktáži přímo na letišti. Zvládají to i lidé, kteří nikdy neletěli."],
+      ["Jaký je váhový a věkový limit?", "Do 95 kg a od 15 let. Účastníkům do 18 let stačí písemný souhlas zákonného zástupce."],
+      ["Co když bude špatné počasí?", "Provoz závisí na počasí. Pokud se neskáče, termín přesuneme bez jakéhokoli poplatku — o startu informujeme SMS den předem."],
+      ["Jak dlouho jsem na letišti?", "U tandemu dvě až tři hodiny včetně čekání a předání videa. U základního kurzu jde o 48 hodin výuky rozdělených do dnů."],
+      ["Můžu mít s sebou doprovod?", "Ano a rádi. Doprovod má na letiště vstup zdarma a seskok pěkně vidí ze země."],
+      ["Kdy dostanu video?", "Sestříhané video z tandemu ti předáme ještě týž den, případně posíláme odkaz ke stažení do 48 hodin."],
+      ["Jak funguje dárkový poukaz?", "Vystavíme ho do pěti minut, pošleme v PDF nebo tištěný poštou. Platí 12 měsíců a termín si obdarovaný vybere sám v kalendáři."],
+      ["Je seskok pojištěný?", "Ano, každý účastník je pojištěn v rámci provozu spolku. Doporučujeme si ověřit i vlastní cestovní pojištění pro adrenalinové sporty."]
+    ];
+
+    const teamData = [
+      ["Kateřina Fojtová", "Zakladatelka spolku od 2009", "Vedení, plánování a vyjasňování cílů týmu. Stará se o to, abyste se u nás cítili skvěle.", "1372779154_image_jeseniky-2010-016.jpg"],
+      ["Markéta Svobodová", "Instruktorka parašutismu, kameramanka", "Kategorie D, oprávnění H a H-AFF, trenérka I. a II. stupně. Na kontě 1200+ seskoků.", "1396448517_image_p1090735.jpg"],
+      ["Pavel „Líza“ Linhart", "Instruktor parašutismu, kameraman", "Nejmladší člen týmu. Držitel kategorie D a speciálního oprávnění H.", "1434792026_image_liza.jpg"],
+      ["Eva Nováková", "Parašutistka, balička, rezervace tandemů", "Se spolkem spolupracuje od roku 2015. Většinou právě ona ti potvrdí termín.", "1475007122_image_080.jpg"],
+      ["Andrea Průchová", "Parašutistka, programová koordinátorka", "Ve spolku od 2012. Skákání i balení padáků. Momentálně žije na Bali.", "1470664660_image_13394115_10209817739028824_3442450487870716424_n.jpg"],
+      ["Pavlína Streichsbierová", "Střihačka videí", "Stará se o stříhání tandemových videí — díky ní má seskok i pořádnou dohru.", "1469002345_image_img_7829--copy.jpg"]
+    ];
+
+    return {
+      // navigace
+      nav: navDefs.map(function (d) {
+        return { label: d[0], active: page === d[1], go: this.go.bind(this, d[1]) };
+      }.bind(this)),
+      menuOpen: st.menuOpen,
+      toggleMenu: function () { this.setState({ menuOpen: !st.menuOpen }); }.bind(this),
+      goHome: this.go.bind(this, "home"),
+      goTandem: this.go.bind(this, "tandem"),
+      goKurzy: this.go.bind(this, "kurzy"),
+      goKalendar: this.go.bind(this, "kalendar"),
+      goPoukaz: this.go.bind(this, "poukaz"),
+      goExpedice: this.go.bind(this, "expedice"),
+      goGalerie: this.go.bind(this, "galerie"),
+      goOnas: this.go.bind(this, "onas"),
+      goFaq: this.go.bind(this, "faq"),
+      goKontakt: this.go.bind(this, "kontakt"),
+
+      isHome: page === "home", isTandem: page === "tandem", isKurzy: page === "kurzy",
+      isKalendar: page === "kalendar", isTermin: page === "termin", isBooking: page === "booking",
+      isPoukaz: page === "poukaz", isExpedice: page === "expedice", isGalerie: page === "galerie",
+      isOnas: page === "onas", isFaq: page === "faq", isKontakt: page === "kontakt",
+
+      // home
+      freeSpotsTotal: TERMINY.reduce(function (a, x) { return a + Math.max(0, x.max - x.taken); }, 0),
+      products: [
+        { title: "Tandemový seskok", tag: "Nejžádanější", short: "Skok z 4 000 metrů připoutaný k instruktorovi. Bez tréninku, hned dnes.", price: "4 700 Kč", img: IMG.tandem, go: this.go.bind(this, "tandem") },
+        { title: "Tandem s kamerou + foto", tag: "S videem", short: "Externí kameraman letí s tebou. Sestříhané video a fotky týž den.", price: "6 500 Kč", img: IMG.tandemCam, go: this.go.bind(this, "tandem") },
+        { title: "Výcvik se 2 seskoky", tag: "Vlastní licence", short: "48 hodin teorie a praxe podle osnov ÚCL, dva samostatné seskoky.", price: "4 600 Kč", img: IMG.vycvik, go: this.go.bind(this, "kurzy") },
+        { title: "Kurz IAFF s tunelem", tag: "Zrychlený výcvik", short: "Příprava ve větrném tunelu a rychlý postup do volného pádu.", price: "Cena na dotaz", img: IMG.iaff, go: this.go.bind(this, "kurzy") }
+      ],
+      soonTerminy: TERMINY.slice(0, 5).map(mapTermin),
+      news: [
+        { title: "Jihlava 4. — 6. 9. 2026", text: "Teorie ZV v pátek od 10:00, start ve 13:30. Sobota starty 7:30 — 15:00 (15:30 seskok Křižanov), neděle od 9:00.", img: "https://www.lsd-trip.cz/image/news/1787649526_1_image_srpen1.jpg" },
+        { title: "Jihlava 21. — 23. 8. 2026", text: "Výcvik teorie v pátek od 10:00, seskoky od 14:00. Provoz sobota a neděle od 8:30.", img: "https://www.lsd-trip.cz/image/news/1786465737_1_image_bc527bf2-415c-40dc-a6b9-db69180468aa.jpg" },
+        { title: "Jihlava 7. — 9. 8. 2026", text: "ZV teorie v pátek od 10:00, start ve 14:00. Sobota a neděle od 8:30.", img: "https://www.lsd-trip.cz/image/news/1785300889_1_image_vlcsnap-2026-07-28-17h53m57s259.jpg" }
+      ],
+
+      // tandem
+      tandemSteps: [
+        { n: "01", title: "Příjezd a papíry", text: "Na letišti se ohlásíš u rezervací, podepíšeš prohlášení a dozvíš se čas svého startu." },
+        { n: "02", title: "Instruktáž", text: "Patnáct minut s instruktorem: poloha těla, výskok, otevření padáku, přistání." },
+        { n: "03", title: "Postroj a nástup", text: "Oblečeme ti postroj, zkontrolujeme upnutí a nasedáš do letadla. Výstup na 4 000 m trvá cca 15 minut." },
+        { n: "04", title: "Volný pád", text: "Padesát sekund, 200 km/h. Pak instruktor otevře padák a přijde ticho." },
+        { n: "05", title: "Přistání a video", text: "Pět minut plachtění nad Vysočinou, měkké přistání na nohy a předání videa." }
+      ],
+      tandemVariants: [
+        { title: "Tandem klasik", price: "4 700 Kč", note: "Seskok z 4 000 m, instruktáž, postroj, pojištění." },
+        { title: "Tandem + kamera a foto", price: "6 500 Kč", note: "Externí kameraman, sestříhané video a fotografie." },
+        { title: "Skupina 5+ osob", price: "−10 %", note: "Firemní akce a oslavy, vlastní blok na letišti." }
+      ],
+
+      // kurzy
+      courses: [
+        { title: "Parašutistický výcvik se 2 seskoky", tag: "Základní kurz", text: "48 hodin výuky podle osnov V-PARA 1 a V-PARA 2, rozšířených o praxi navíc. Končíš dvěma samostatnými seskoky.", dur: "48 hodin", level: "Začátečník", price: "4 600 Kč", img: IMG.vycvik, book: this.openTermin.bind(this, 904) },
+        { title: "Parašutistický výcvik s 1 seskokem", tag: "Zkrácená verze", text: "Stejná teorie, jeden samostatný seskok. Ideální, když si chceš vyzkoušet, jestli to je pro tebe.", dur: "48 hodin", level: "Začátečník", price: "3 900 Kč", img: IMG.zv, book: this.openTermin.bind(this, 904) },
+        { title: "Kurz IAFF s větrným tunelem", tag: "Zrychlený výcvik", text: "Příprava ve větrném tunelu a metodika IAFF: rychlejší postup, víc času ve volném pádu, instruktor letí s tebou.", dur: "5 dní", level: "Pokročilý", price: "Cena na dotaz", img: IMG.iaff, book: this.openTermin.bind(this, 910) }
+      ],
+
+      // kalendář
+      filters: filterList.map(function (f) {
+        return { label: f, active: st.filter === f, bg: st.filter === f ? "#0F1B2D" : "#fff", fg: st.filter === f ? "#fff" : "#0F1B2D", set: function () { this.setState({ filter: f }); }.bind(this) };
+      }.bind(this)),
+      terminy: visible.map(mapTermin),
+
+      // detail
+      sel: {
+        type: t.type, date: t.date, time: t.time, place: t.place, img: t.img, desc: t.desc,
+        free: (t.max - t.taken) + " z " + t.max,
+        price: t.price ? CZK(t.price) : "na dotaz",
+        cta: t.price ? "Pokračovat k rezervaci" : "Poslat nezávaznou poptávku"
+      },
+      people: st.people,
+      total: totalNum ? CZK(totalNum) : "Cena na dotaz",
+      incPeople: function () { this.setPeople(st.people + 1); }.bind(this),
+      decPeople: function () { this.setPeople(st.people - 1); }.bind(this),
+      startBooking: function () {
+        this.setState({ page: "booking", bStep: 0, mode: "booking" });
+        if (typeof window !== "undefined") window.scrollTo(0, 0);
+      }.bind(this),
+
+      // booking
+      steps: stepLabels.map(function (l, i) {
+        const reached = enquiry ? (i === 2 ? st.bStep === 3 : i <= st.bStep) : i <= st.bStep;
+        return {
+          label: (i + 1) + ". " + l, num: String(i + 1), name: l,
+          bar: reached ? "#FF4D1C" : "#DDE3EB",
+          color: reached ? "#0F1B2D" : "#8A94A3"
+        };
+      }),
+      step1: st.bStep === 0, step2: st.bStep === 1,
+      step3: st.bStep === 2 && !enquiry, step4: st.bStep === 3,
+      showBookingBar: st.bStep < 3,
+      bookingLabel: t.date + " · " + t.type + " · " + st.people + " os.",
+      nextLabel: enquiry
+        ? (st.bStep === 1 ? "Odeslat poptávku" : "Pokračovat")
+        : (st.bStep === 2 ? "Zaplatit a potvrdit" : "Pokračovat"),
+      isVoucherDone: isVoucher,
+      showSteps: !isVoucher,
+      doneTitle: isVoucher ? "Poukaz je na cestě" : (enquiry ? "Poptávka odeslána" : "Máš to"),
+      doneLabel: isVoucher ? "Poukaz" : (enquiry ? "Poptávka" : "Rezervace"),
+      donePaid: !enquiry && !isVoucher,
+      doneEnquiry: enquiry && !isVoucher,
+      next: this.next.bind(this),
+      back: this.back.bind(this),
+      pax: st.pax.map(function (p, i) {
+        return {
+          n: i + 1, name: p.name, weight: p.weight, age: p.age,
+          setName: function (e) { const a = st.pax.slice(); a[i] = Object.assign({}, a[i], { name: e.target.value }); this.setState({ pax: a }); }.bind(this),
+          setWeight: function (e) { const a = st.pax.slice(); a[i] = Object.assign({}, a[i], { weight: e.target.value }); this.setState({ pax: a }); }.bind(this),
+          setAge: function (e) { const a = st.pax.slice(); a[i] = Object.assign({}, a[i], { age: e.target.value }); this.setState({ pax: a }); }.bind(this)
+        };
+      }.bind(this)),
+      form: st.form,
+      setName: function (e) { this.field("name", e.target.value); }.bind(this),
+      setEmail: function (e) { this.field("email", e.target.value); }.bind(this),
+      setPhone: function (e) { this.field("phone", e.target.value); }.bind(this),
+      setCity: function (e) { this.field("city", e.target.value); }.bind(this),
+      setNote: function (e) { this.field("note", e.target.value); }.bind(this),
+      termsMark: st.terms ? "✓" : "",
+      toggleTerms: function () { this.setState({ terms: !st.terms }); }.bind(this),
+      payMethods: [
+        { key: "card", label: "Platební karta", note: "Okamžité potvrzení rezervace" },
+        { key: "transfer", label: "Bankovní převod", note: "QR platba, potvrzení do 24 h" },
+        { key: "onsite", label: "Platba na letišti", note: "Hotově nebo kartou v den seskoku" }
+      ].map(function (m) {
+        return Object.assign({}, m, { active: st.pay === m.key, border: st.pay === m.key ? "#FF4D1C" : "#E3E8EF", set: function () { this.setState({ pay: m.key }); }.bind(this) });
+      }.bind(this)),
+      cardSelected: st.pay === "card",
+      code: st.code || "LSD-000000",
+      emailOut: st.form.email || "tvůj e-mail",
+      summary: isVoucher ? [
+        { k: "Poukaz", v: vSel.title },
+        { k: "Pro koho", v: st.voucherFor || "nevyplněno" },
+        { k: "Platnost", v: "12 měsíců od vystavení" },
+        { k: "Cena", v: CZK(vSel.price) }
+      ] : [
+        { k: "Akce", v: t.type },
+        { k: "Termín", v: t.date + " · " + t.time },
+        { k: "Místo", v: t.place },
+        { k: "Osoby", v: String(st.people) },
+        { k: "Celkem", v: totalNum ? CZK(totalNum) : "dle rozsahu" }
+      ],
+
+      // poukaz
+      vouchers: voucherOpts.map(function (v, i) {
+        return Object.assign({}, v, {
+          price: CZK(v.price), active: st.voucher === i, border: st.voucher === i ? "#FF4D1C" : "#E3E8EF",
+          set: function () { this.setState({ voucher: i }); }.bind(this)
+        });
+      }.bind(this)),
+      voucherTitle: vSel.title,
+      voucherFor: st.voucherFor || "————",
+      setVoucherFor: function (e) { this.setState({ voucherFor: e.target.value }); }.bind(this),
+      voucherPrice: CZK(vSel.price),
+      buyVoucher: function () {
+        this.setState({ page: "booking", bStep: 3, mode: "voucher", code: "LSD-P" + Math.floor(10000 + Math.random() * 89999) });
+        if (typeof window !== "undefined") window.scrollTo(0, 0);
+      }.bind(this),
+
+      // expedice
+      trips: [
+        { title: "Slovinsko — Bovec", tag: "Expedice", text: "Seskoky nad Julskými Alpami se přistáním v dolině Soči. Týden skákání, raftingu a lokální kuchyně.", meta: "7 dní · červen 2027 · 12 míst", price: "od 21 900 Kč", img: GAL[0] },
+        { title: "Helitour — seskok z vrtulníku", tag: "Helitour", text: "Výskok z vrtulníku bez proudu vzduchu od motoru: pár sekund absolutního ticha, pak volný pád.", meta: "1 den · dle počasí · 6 míst", price: "od 8 900 Kč", img: GAL[3] },
+        { title: "Boogie na Vysočině", tag: "Setkání", text: "Prodloužený víkend pro členy i veřejnost — formace, večerní projekce videí, oheň na letišti.", meta: "3 dny · srpen 2027", price: "vstup 500 Kč", img: GAL[6] }
+      ],
+
+      // galerie
+      gallery: GAL.map(function (src) {
+        return { src: src, open: function () { this.setState({ lightbox: src }); }.bind(this) };
+      }.bind(this)),
+      lightbox: st.lightbox,
+      closeLightbox: function () { this.setState({ lightbox: null }); }.bind(this),
+
+      // o nás
+      team: teamData.map(function (m) {
+        return { name: m[0], role: m[1], bio: m[2], img: "https://www.lsd-trip.cz/image/member/" + m[3] };
+      }),
+
+      // faq
+      faq: faqData.map(function (q, i) {
+        return {
+          q: q[0], a: q[1], open: st.faqOpen === i, mark: st.faqOpen === i ? "−" : "+",
+          toggle: function () { this.setState({ faqOpen: st.faqOpen === i ? null : i }); }.bind(this)
+        };
+      }.bind(this)),
+
+      // kontakt
+      sendContact: function () { this.setState({ contactSent: true }); }.bind(this),
+      voucherForRaw: st.voucherFor,
+      loginOpen: st.loginOpen,
+      openLogin: function () { this.setState({ loginOpen: true }); }.bind(this),
+      closeLogin: function () { this.setState({ loginOpen: false }); }.bind(this),
+      stop: function (e) { e.stopPropagation(); },
+      kurzChecks: ["48 hodin výuky", "Osnovy ÚCL V-PARA", "Praxe na hangáru", "2 samostatné seskoky", "Vybavení v ceně", "Pojištění v ceně"],
+      reasons: [
+        { n: "01", title: "Instruktoři kategorie D", text: "Oprávnění H a H-AFF, tisíce seskoků. Každý z nás byl jednou na tvém místě." },
+        { n: "02", title: "Online rezervace", text: "Vidíš přesnou obsazenost a termín si zarezervuješ i zaplatíš během dvou minut." },
+        { n: "03", title: "Video v den seskoku", text: "Sestříhané video z tandemu dostaneš ještě na letišti nebo do 48 hodin." },
+        { n: "04", title: "Přesun zdarma", text: "Když nepřeje počasí, termín přesuneme bez poplatku. O startu víš den předem." },
+        { n: "05", title: "Doprovod vítán", text: "Rodina a kamarádi mají vstup na letiště zdarma a seskok vidí ze země." },
+        { n: "06", title: "Parta na celý život", text: "Po kurzu se můžeš přidat ke spolku — expedice, boogie a setkání po celý rok." }
+      ],
+      showPageHead: page !== "home" && page !== "termin" && page !== "booking",
+      pageTitle: ({ tandem: "Tandemový seskok", kurzy: "Kurzy a výcvik", kalendar: "Kalendář termínů", poukaz: "Dárkový poukaz", expedice: "Expedice a helitour", galerie: "Galerie", onas: "O nás", faq: "Časté otázky", kontakt: "Kontakt" })[page] || "",
+      pageLead: ({ tandem: "Nejžádanější letecká aktivita v Čechách. Skok z 4 000 m připoutaný k instruktorovi — od 15 let, do 95 kg.", kurzy: "Základní kurz trvá 48 hodin a obsahuje výuku podle platných osnov Úřadu pro civilní letectví (V-PARA 1 a V-PARA 2).", kalendar: "Volná místa v reálném čase. Vyber termín a rezervuj online.", poukaz: "Poukaz vystavíme do pěti minut a pošleme e-mailem v PDF. Termín si obdarovaný vybere sám.", expedice: "Skákání nad Alpami, seskok z vrtulníku a týden v partě, která má stejnou závislost.", faq: "Nenašel jsi odpověď? Zavolej na +420 777 310 959." })[page] || "",
+      contactLabel: st.contactSent ? "Odesláno — ozveme se do 24 h" : "Odeslat zprávu"
+    };
+  }
+
+  componentDidMount() {
+    const apply = function () {
+      const wide = window.innerWidth >= 1080;
+      document.querySelectorAll('[data-nav="desktop"]').forEach(function (el) {
+        el.style.display = wide ? "flex" : "none";
+      });
+      document.querySelectorAll('[data-nav="mobile"]').forEach(function (el) {
+        el.style.display = wide ? "none" : "flex";
+      });
+    };
+    apply();
+    this._onResize = function () { apply(); };
+    window.addEventListener("resize", this._onResize);
+    this._navTick = setInterval(apply, 600);
+  }
+
+  componentWillUnmount() {
+    window.removeEventListener("resize", this._onResize);
+    clearInterval(this._navTick);
+  }
+}
+
+</script>
+</body>
+</html>
+

@@ -14,3 +14,8 @@ node_modules/
 _design/
 *.log
 .DS_Store
+
+# statické návrhy pro majitelku se servírují na /navrh-N/, takže do image
+# patří - kromě předloh z Claude Designu, které se nikam neservírují
+navrh_*/*.dc.html
+navrh_*/support.js

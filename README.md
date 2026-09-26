@@ -13,7 +13,8 @@ public/index.html            shell — hlavička, patička, lightbox
 public/assets/css/style.css  kompletní styly včetně responzivních breakpointů
 public/assets/js/data.js     obsahová data (termíny, kurzy, tým, FAQ, …)
 public/assets/js/app.js      router, stav aplikace a renderování stránek
-src/server.js                Express — statika, API, SPA fallback
+navrh_2/                     alternativní návrh vizuálu, servíruje se na /navrh-2/
+src/server.js                Express — statika, návrhy, API, SPA fallback
 src/db.js                    sdílený connection pool (mysql2)
 scripts/migrate.js           spouštěč migrací, stav v tabulce _migrace
 migrations/*.sql             číslované migrace schématu
@@ -40,6 +41,19 @@ Routování běží na hashi, takže web funguje i z `file://`:
 | `#/onas` | O spolku a tým |
 | `#/faq` | Časté otázky |
 | `#/kontakt` | Kontaktní údaje a formulář |
+
+## Návrhy vizuálu
+
+Vedle produkčního webu v `public/` se dají servírovat alternativní návrhy pro
+majitelku. Složka `navrh_2/` se objeví na `/navrh-2/`, `navrh_3/` na `/navrh-3/`
+a tak dál — mapování dělá `src/server.js` obecně podle názvu složky, takže nový
+návrh stačí přidat jako složku s vlastním `index.html` a nic se nenastavuje.
+
+Návrhy jsou dostupné jen přímou adresou, z webu na rootu na ně nic neodkazuje.
+Vstup bez koncového lomítka (`/navrh-2`) se přesměrovává na `/navrh-2/`, jinak
+by relativní cesty k assets mířily do rootu. Do Docker image se kopíruje jen to,
+co se servíruje — předlohy z Claude Designu (`*.dc.html`, `support.js`) jsou
+vyřazené v `.dockerignore`.
 
 ## API
 
