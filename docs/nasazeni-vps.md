@@ -210,21 +210,65 @@ Nakonec otevři `https://test-lsd.francik.eu/admin` a přihlas se.
 
 ## 9. Zálohy
 
+Skript na server nahrává workflow, ručně se nekopíruje. Nejdřív si ověř, že si
+správně přečetl `.env` — kontrolní režim se nedotkne databáze ani souborů:
+
 ```bash
-crontab -e
+/home/deploy/apps/lsdtrip-test/zaloha.sh --kontrola
 ```
 
-```
-40 3 * * * /home/deploy/apps/lsdtrip-test/zaloha.sh >> /home/deploy/zaloha.log 2>&1
-```
-
-Řádek pro produkci se přidá až při jejím přechodu. První běh pusť ručně,
-ať je jisté, že projde:
+Má vypsat `db_name=lsdtrip_test`, `volume_prefix=lsd_test` a délku hesla.
+Pak ostrý běh:
 
 ```bash
 /home/deploy/apps/lsdtrip-test/zaloha.sh
 ls -la /home/deploy/backups/lsdtrip-test/denni/
 ```
+
+Záloha se přejmenuje z `.tmp` na finální název, **až** projde `gzip -t` a až
+je v dumpu poslední řádek `-- Dump completed`. Nedokončená nebo poškozená
+záloha tedy nikdy nevypadá jako hotová.
+
+Ověřit, že jde skutečně obnovit (na testu, do dočasné databáze):
+
+```bash
+cd /home/deploy/apps/lsdtrip-test
+ROOT=$(grep '^DB_ROOT_PASSWORD=' .env | cut -d= -f2-)
+gzip -dc /home/deploy/backups/lsdtrip-test/denni/db-$(date +%F).sql.gz \
+  | docker compose exec -T -e MYSQL_PWD="$ROOT" db sh -c \
+    'mariadb -u root -e "DROP DATABASE IF EXISTS obnova_test; CREATE DATABASE obnova_test" && mariadb -u root obnova_test'
+docker compose exec -T -e MYSQL_PWD="$ROOT" db mariadb -u root \
+  -e "SELECT COUNT(*) AS tabulek FROM information_schema.tables WHERE table_schema='obnova_test'; DROP DATABASE obnova_test;"
+```
+
+Teprve až tohle projde, nastav cron:
+
+```
+40 3 * * * /home/deploy/apps/lsdtrip-test/zaloha.sh >> /home/deploy/zaloha.log 2>&1
+```
+
+Řádek pro produkci se přidá až při jejím přechodu.
+
+### Zálohy leží na stejném VPS
+
+To je potřeba mít na paměti: chrání před smazáním dat, chybnou migrací nebo
+rozbitým kontejnerem — **ne** před ztrátou serveru. Když odejde disk nebo
+zmizí celý stroj, zmizí i zálohy.
+
+Pro produkci proto doporučuji přidat kopii mimo server. **Zatím jen návrh,
+nic z toho není implementované** — probereme, až bude produkce naostro:
+
+| Varianta | Jak to funguje | Pro a proti |
+| --- | --- | --- |
+| **Contabo Object Storage** | S3 kompatibilní úložiště u stejného poskytovatele, `rclone`/`aws s3 cp` na konci `zaloha.sh` | nejjednodušší, přenos po vnitřní síti zdarma; ale pořád jeden poskytovatel |
+| **rclone na Google Drive** | `rclone copy` do složky na Drive, autorizace tokenem | data u jiného poskytovatele; Drive není pro tohle stavěný a token je potřeba hlídat |
+| **Jiný VPS nebo NAS** | `rsync` přes SSH klíč jen pro zálohy | plná kontrola, ale další stroj k údržbě |
+
+Ať tak či tak, platí tři věci: klíč nebo token do vzdáleného úložiště musí mít
+**právo jen zapisovat** (aby útočník s přístupem na VPS nemohl zálohy smazat),
+kopie se má šifrovat (`age` nebo `gpg`), protože obsahuje osobní údaje zákazníků,
+a jednou za čas je potřeba zkusit obnovu — záloha, kterou nikdo nezkusil obnovit,
+je jen soubor.
 
 ---
 

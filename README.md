@@ -102,7 +102,8 @@ npm test
 ```
 
 Pokrývají: přihlášení a zámek účtu, CSRF, oprávnění rolí, měkké mazání, odpověď na poptávku,
-audit bez úniku hesel, jednorázovost odkazu na heslo, bezpečnostní hlavičky, `robots.txt`
+audit bez úniku hesel, jednorázovost odkazu na heslo, bezpečnostní hlavičky, `robots.txt`,
+čtení `.env` v zálohovacím skriptu (hodnoty s `<`, `>`, mezerami a uvozovkami)
 a pravidlo „žádná doména natvrdo v kódu".
 
 ## Migrace
@@ -202,8 +203,24 @@ Na VPS musí vedle `docker-compose.yml` ležet `.env` se stejnými proměnnými 
 40 3 * * * /home/deploy/apps/lsdtrip-test/zaloha.sh >> /home/deploy/zaloha.log 2>&1
 ```
 
-Zálohuje databázi (`--single-transaction`, bez zamykání) i volume s fotkami,
-drží 14 denních a 8 týdenních kopií a nedokončenou zálohu nikdy nevydává za hotovou.
+Zálohuje databázi (`--single-transaction`, bez zamykání) i volume s fotkami a drží
+14 denních a 8 týdenních kopií. Záloha se přejmenuje z `.tmp` na finální název až po
+ověření `gzip -t` a přítomnosti `-- Dump completed` v dumpu — nedokončená nebo
+poškozená se tedy nikdy netváří jako hotová.
+
+Heslo roota se nepředává v příkazové řádce (ani `-p`, ani `docker compose exec -e`),
+posílá se na stdin a uvnitř kontejneru se z něj udělá `MYSQL_PWD` — v seznamu procesů
+se neobjeví ani na hostiteli, ani v kontejneru. Soubor `.env` skript **nenačítá jako
+shell**: hodnoty v něm obsahují `<`, `>` i mezery a `. ./.env` by na nich spadlo.
+
+Kontrola bez zálohování (vypíše, co si skript přečetl z `.env`):
+
+```bash
+/home/deploy/apps/lsdtrip-test/zaloha.sh --kontrola
+```
+
+Zálohy leží na stejném VPS, takže chrání před chybou v datech, ne před ztrátou serveru.
+Návrh kopie mimo server je v [docs/nasazeni-vps.md](docs/nasazeni-vps.md) (zatím neimplementováno).
 
 ## Přechod na lsd-trip.cz
 
