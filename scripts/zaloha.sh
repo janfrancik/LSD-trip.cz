@@ -123,7 +123,12 @@ SOUBOR_UP="$KAM/denni/uploads-$DEN.tar.gz"
 VOLUME="${VOLUME_PREFIX}_uploads"
 
 if docker volume inspect "$VOLUME" >/dev/null 2>&1; then
-  docker run --rm -v "$VOLUME:/data:ro" -v "$KAM/denni:/zaloha" alpine \
+  # --user: bez něj běží kontejner jako root a archiv vznikne jako root:root,
+  # takže by k němu uživatel deploy neměl přístup a rotace by ho nesmazala.
+  # Fotky ukládá aplikace s právy 0644, takže je non-root přečte; kdyby ne,
+  # tar skončí chybou a skript spadne - což je lepší než tichá neúplná záloha.
+  docker run --rm --user "$(id -u):$(id -g)" \
+    -v "$VOLUME:/data:ro" -v "$KAM/denni:/zaloha" alpine \
     tar czf "/zaloha/uploads-$DEN.tar.gz.tmp" -C /data .
   if gzip -t "$SOUBOR_UP.tmp" 2>/dev/null; then
     mv "$SOUBOR_UP.tmp" "$SOUBOR_UP"

@@ -142,6 +142,18 @@ test('bez .env se záloha vůbec nerozjede', () => {
   }
 });
 
+test('archiv fotek nevzniká jako root', () => {
+  // Bez --user běží kontejner jako root a tar.gz na hostiteli patří root:root.
+  // Uživatel deploy by se k němu nedostal a rotace by ho nesmazala.
+  const zdroj = execFileSync('cat', [skript], { encoding: 'utf8' });
+
+  assert.match(
+    zdroj,
+    /docker run --rm --user "\$\(id -u\):\$\(id -g\)"/,
+    'docker run pro archiv fotek musí běžet pod uživatelem, který skript spustil'
+  );
+});
+
 test('heslo se nikde nepředává v příkazové řádce', () => {
   // Kdyby se heslo dostalo do argumentů, bylo by vidět v ps - jak na
   // hostiteli (docker compose exec -e), tak v kontejneru (mariadb-dump -p).
