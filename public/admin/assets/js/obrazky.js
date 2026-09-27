@@ -45,6 +45,92 @@ export function nahled(priloha) {
    </a>`;
 }
 
+// ------------------------------------- vložení ze schránky a přetažení myší
+//
+// Na počítači je nejrychlejší cesta ke snímku Cmd/Ctrl+V nebo přetažení souboru;
+// vybírat ho přes dialog je zbytečná okluka. Na mobilu zůstává tlačítko
+// s výběrem souboru nebo fotoaparátu - tam schránka ani přetahování nedávají smysl.
+
+// Obrázek z události "paste" nebo "drop". Vrací null, když v ní žádný není
+// (zkopírovaný text, přetažený odkaz).
+export function obrazekZUdalosti(udalost) {
+  const prenos = udalost.clipboardData ?? udalost.dataTransfer;
+  if (!prenos) return null;
+
+  const soubor = [...(prenos.files ?? [])].find((s) => s.type.startsWith('image/'));
+  if (soubor) return soubor;
+
+  // Snímek obrazovky ze schránky nepřijde jako soubor, ale jako položka.
+  for (const polozka of prenos.items ?? []) {
+    if (polozka.kind === 'file' && polozka.type.startsWith('image/')) {
+      const zPolozky = polozka.getAsFile();
+      if (zPolozky) return zPolozky;
+    }
+  }
+  return null;
+}
+
+function nesePrenosSoubor(udalost) {
+  return [...(udalost.dataTransfer?.types ?? [])].includes('Files');
+}
+
+/**
+ * Přetahování nad prvkem. Vrací funkci, která poslouchání odpojí -
+ * obrazovky se překreslují, takže po sobě musí umět uklidit.
+ */
+export function pripojPretazeni(prvek, zpracuj) {
+  const nad = (e) => {
+    if (!nesePrenosSoubor(e)) return;
+    e.preventDefault();
+    prvek.classList.add('nad-souborem');
+  };
+  const pryc = (e) => {
+    // dragleave chodí i při přejezdu mezi vnořenými prvky.
+    if (e.relatedTarget && prvek.contains(e.relatedTarget)) return;
+    prvek.classList.remove('nad-souborem');
+  };
+  const pust = (e) => {
+    prvek.classList.remove('nad-souborem');
+    const soubor = obrazekZUdalosti(e);
+    if (!soubor) return;
+    e.preventDefault();
+    zpracuj(soubor);
+  };
+
+  prvek.addEventListener('dragover', nad);
+  prvek.addEventListener('dragleave', pryc);
+  prvek.addEventListener('drop', pust);
+
+  return () => {
+    prvek.removeEventListener('dragover', nad);
+    prvek.removeEventListener('dragleave', pryc);
+    prvek.removeEventListener('drop', pust);
+  };
+}
+
+/**
+ * Vkládání ze schránky. Posloucháme na dokumentu, protože Cmd+V zpravidla
+ * přijde, když je zaostřené textové pole nebo vůbec nic - `kam` proto
+ * u každé události rozhodne, kam obrázek patří (a null ho zahodí).
+ */
+export function pripojVkladani(kam, zpracuj) {
+  const naVlozeni = (e) => {
+    const soubor = obrazekZUdalosti(e);
+    if (!soubor) return;
+    const cil = kam(e);
+    if (!cil) return;
+    e.preventDefault();
+    zpracuj(soubor, cil);
+  };
+
+  document.addEventListener('paste', naVlozeni);
+  return () => document.removeEventListener('paste', naVlozeni);
+}
+
+// Věta pod tlačítkem. Na mobilu se schová - tam se nic nepřetahuje.
+export const NAPOVEDA_VLOZENI =
+  '<span class="jen-siroke text-faint">Snímek jde i vložit ze schránky (Cmd/Ctrl+V) nebo sem přetáhnout.</span>';
+
 // Tlačítko pro výběr obrázku. Na mobilu otevře fotoaparát i galerii.
 export function tlacitkoObrazek(id, popisek = 'Přidat snímek') {
   return `<label class="btn btn--obrys btn--maly" for="${esc(id)}" style="cursor:pointer">

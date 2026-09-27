@@ -58,6 +58,15 @@ export function vytvorApp() {
 
   // ------------------------------------------------------------- administrace
 
+  // Formátování času má celý projekt na jednom místě (src/cas.js) - server
+  // i prohlížeč. Administrace si ten samý soubor načte jako modul odsud;
+  // kopie v public/ by se dřív nebo později rozešla se serverovou verzí
+  // a v exportu by zase svítil čas z jiné zóny.
+  app.get('/admin/assets/js/cas.js', (req, res) => {
+    res.type('application/javascript; charset=utf-8');
+    res.sendFile(path.join(rootDir, 'src', 'cas.js'));
+  });
+
   // Administrace je samostatná aplikace na /admin. Routuje se na cestě, takže
   // každá podcesta musí vrátit její shell - a CSRF cookie s ním, aby první
   // požadavek z prohlížeče už měl s čím pracovat.

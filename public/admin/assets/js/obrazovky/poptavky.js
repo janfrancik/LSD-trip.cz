@@ -181,6 +181,7 @@ async function detail(koren, id) {
               <h2 class="nadpis-2" style="margin-bottom:10px">
                 ${p.odpoved ? 'Odpovědět znovu' : 'Odpovědět e-mailem'}
               </h2>
+              ${varovaniOdesilani()}
               <form id="form-odpoved" novalidate>
                 ${pole({
                   klic: 'odpoved',
@@ -193,7 +194,9 @@ async function detail(koren, id) {
                          style="width:22px;height:22px;accent-color:var(--accent)" />
                   <span class="prepinac__text">Označit poptávku jako vyřízenou</span>
                 </label>
-                <button type="submit" class="btn btn--hlavni">Odeslat odpověď</button>
+                <button type="submit" class="btn btn--hlavni">
+                  ${odesilaniVypnute() ? 'Uložit odpověď (e-mail neodejde)' : 'Odeslat odpověď'}
+                </button>
               </form>
             </section>`
           : ''}
@@ -283,12 +286,27 @@ async function detail(koren, id) {
         oznacit_vyrizene: oznacit,
       });
       hlaska(vysledek.zprava, vysledek.odeslano ? 'ok' : 'chyba');
+      if (!vysledek.odeslano) {
+        // Hláška za pár vteřin zmizí, tohle ne. Je to jediná informace o tom,
+        // že zákazník odpověď nedostal a musí se mu poslat jinak.
+        await potvrd({
+          nadpis: 'E-mail neodešel',
+          text: `${esc(vysledek.zprava)}<br /><br />
+                 Odpověď je uložená u poptávky. Zákazníkovi ji zatím pošli
+                 jinudy — sám se neodeslala.`,
+          potvrzeni: 'Rozumím',
+          nebezpecne: false,
+          jenPotvrzeni: true,
+        });
+      }
       await nactiPocty();
       detail(koren, id);
     } catch (err) {
       if (!ukazChybyPoli(form, err.detaily)) hlaska(err.message, 'chyba');
       tlacitko.disabled = false;
-      tlacitko.textContent = 'Odeslat odpověď';
+      tlacitko.textContent = odesilaniVypnute()
+        ? 'Uložit odpověď (e-mail neodejde)'
+        : 'Odeslat odpověď';
     }
   });
 
@@ -354,10 +372,33 @@ function radekEmailu(e) {
       <span class="udaj__popisek">${esc(datumCas(e.created_at))}</span>
       <span class="udaj__hodnota">
         ${esc(e.predmet)}<br />
-        <span class="text-faint">
+        <span class="${e.stav === 'chyba' ? 'stitek stitek--chyba' : 'text-faint'}">
           ${esc(STAV_EMAILU[e.stav] ?? e.stav)}
-          ${prepsano ? ` · v testu přesměrováno na ${esc(e.prijemce_skutecny)}` : ''}
         </span>
+        ${prepsano ? `<span class="text-faint"> · v testu přesměrováno na ${esc(e.prijemce_skutecny)}</span>` : ''}
+        ${e.chyba ? `<div class="text-faint">${esc(e.chyba)}</div>` : ''}
       </span>
     </div>`;
+}
+
+// Režim odesílání hlásí server v /ja. Vypnuté odesílání není chyba, ale
+// obsluha o něm musí vědět dřív, než odpověď napíše - ne až potom.
+function odesilaniVypnute() {
+  return globalniStav.ja?.email_rezim === 'vypnuto';
+}
+
+function varovaniOdesilani() {
+  const rezim = globalniStav.ja?.email_rezim;
+  if (rezim === 'live') return '';
+
+  const text =
+    rezim === 'vypnuto'
+      ? 'Odesílání e-mailů je vypnuté. Odpověď se uloží k poptávce, ale zákazníkovi ' +
+        'nikam neodejde — pošli mu ji zatím jinudy.'
+      : 'Testovací režim: odpověď odejde na testovací adresu, ne zákazníkovi.';
+
+  return `<p class="panel--tesny" style="margin-bottom:12px;border-left:3px solid var(--varovani);
+            background:var(--panel-2);padding:10px 12px;color:var(--muted);font-size:14px">
+            ${text}
+          </p>`;
 }

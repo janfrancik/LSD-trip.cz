@@ -8,6 +8,7 @@
 // úkol není hotový.
 
 import pool from '../db.js';
+import { datumCas } from '../cas.js';
 import { prilohyPro } from './prilohy.js';
 
 export const STAVY_VYSLEDKU = ['funguje', 'nefunguje', 'nerozumim', 'k_pretestovani'];
@@ -122,13 +123,6 @@ export function duvodyProtiSchvaleni({ verze, ukoly, souhrn }) {
 
 // ------------------------------------------------------------------- export
 
-function datumCas(hodnota) {
-  if (!hodnota) return '—';
-  const [den, cas] = String(hodnota).split(' ');
-  const [r, m, d] = den.split('-');
-  return `${Number(d)}. ${Number(m)}. ${r}${cas ? ' ' + cas.slice(0, 5) : ''}`;
-}
-
 /**
  * Souhrn verze jako Markdown - k uložení do docs/akceptace/ vedle zadání.
  * Je to zápis o akceptaci: kdo co testoval, kdy a kdo verzi schválil.
@@ -154,7 +148,9 @@ export async function exportMarkdown(verzeId) {
       `neotestováno ${souhrn.neotestovano})`
   );
   radky.push(`- Hlášení: ${souhrn.hlaseni_celkem} (nevyřešená ${souhrn.hlaseni_otevrena})`);
-  radky.push(`- Vygenerováno: ${datumCas(new Date().toISOString().slice(0, 19).replace('T', ' '))}`, '');
+  // Čas vygenerování musí být ve stejné zóně jako časy testů pod ním, jinak
+  // souhrn tvrdí, že vznikl dřív, než co popisuje.
+  radky.push(`- Vygenerováno: ${datumCas(new Date())}`, '');
 
   radky.push('## Úkoly', '');
   for (const u of ukoly) {

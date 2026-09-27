@@ -14,60 +14,14 @@ export function esc(hodnota) {
 }
 
 // ------------------------------------------------------------ české formáty
-
-const MESICE = ['ledna','února','března','dubna','května','června',
-  'července','srpna','září','října','listopadu','prosince'];
-
-function naDatum(hodnota) {
-  if (!hodnota) return null;
-  // Server posílá DATETIME jako "2026-09-27 14:30:00" (dateStrings) - Safari
-  // takový tvar bez úpravy neumí, proto výměna mezery za T.
-  const d = hodnota instanceof Date ? hodnota : new Date(String(hodnota).replace(' ', 'T'));
-  return Number.isNaN(d.getTime()) ? null : d;
-}
-
-export function datum(hodnota) {
-  const d = naDatum(hodnota);
-  return d ? `${d.getDate()}. ${d.getMonth() + 1}. ${d.getFullYear()}` : '—';
-}
-
-export function datumSlovy(hodnota) {
-  const d = naDatum(hodnota);
-  return d ? `${d.getDate()}. ${MESICE[d.getMonth()]} ${d.getFullYear()}` : '—';
-}
-
-export function cas(hodnota) {
-  const d = naDatum(hodnota);
-  if (!d) return '—';
-  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`;
-}
-
-export function datumCas(hodnota) {
-  const d = naDatum(hodnota);
-  return d ? `${datum(d)} ${cas(d)}` : '—';
-}
-
-// "před 5 minutami" - u seznamů se čte lépe než přesné datum.
-export function pred(hodnota) {
-  const d = naDatum(hodnota);
-  if (!d) return '—';
-  const sekundy = Math.floor((Date.now() - d.getTime()) / 1000);
-  if (sekundy < 60) return 'právě teď';
-  const minuty = Math.floor(sekundy / 60);
-  if (minuty < 60) return `před ${minuty} ${sklon(minuty, 'minutou', 'minutami', 'minutami')}`;
-  const hodiny = Math.floor(minuty / 60);
-  if (hodiny < 24) return `před ${hodiny} ${sklon(hodiny, 'hodinou', 'hodinami', 'hodinami')}`;
-  const dny = Math.floor(hodiny / 24);
-  if (dny === 1) return 'včera';
-  if (dny < 7) return `před ${dny} dny`;
-  return datum(d);
-}
-
-export function sklon(pocet, jeden, dva, vic) {
-  if (pocet === 1) return jeden;
-  if (pocet >= 2 && pocet <= 4) return dva;
-  return vic;
-}
+//
+// Formátování času nemá administrace vlastní - bere ho ze stejného modulu jako
+// server (src/cas.js, servíruje se jako /admin/assets/js/cas.js). Kdyby si ho
+// každá strana psala po svém, rozejdou se: přesně tak vznikl export, kde čas
+// vygenerování byl v UTC a časy testů v pražském čase.
+//
+// Reexport, aby obrazovky mohly dál psát `import { datumCas } from '../ui.js'`.
+export { datum, datumSlovy, cas, datumCas, pred, sklon, okamzik } from './cas.js';
 
 // Peníze držíme v haléřích, zobrazujeme v korunách.
 export function kc(halere) {

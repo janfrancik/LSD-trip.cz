@@ -3,7 +3,7 @@
 
 import { api, dotaz } from '../api.js';
 import {
-  esc, pred, prazdno, hlaska, potvrd, formularModal,
+  esc, pred, prazdno, hlaska, potvrd, formularModal, okamzik,
 } from '../ui.js';
 import { stav as globalniStav } from '../admin.js';
 
@@ -97,7 +97,7 @@ function stavUzivatele(u) {
   if (u.smazano_at) return '<span class="stitek stitek--spam">smazaný</span>';
   if (!u.aktivni) return '<span class="stitek">deaktivovaný</span>';
   if (!u.ma_heslo) return '<span class="stitek stitek--prubeh">čeká na heslo</span>';
-  if (u.zamceno_do && new Date(String(u.zamceno_do).replace(' ', 'T')) > new Date()) {
+  if (u.zamceno_do && okamzik(u.zamceno_do) > new Date()) {
     return '<span class="stitek stitek--chyba">zamčený</span>';
   }
   return '<span class="stitek stitek--hotovo">aktivní</span>';

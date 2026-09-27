@@ -173,3 +173,37 @@ test('hledání a filtr podle stavu fungují', async () => {
   assert.equal(nove.data.data.length, 1);
   assert.equal(nove.data.pocty.spam, 1);
 });
+
+test('s vypnutým odesíláním administrace jasně řekne, že odpověď neodešla', async () => {
+  const config = (await import('../src/config.js')).default;
+  const klient = await prihlasenySpravce();
+  const [vysledek] = await pool.query(
+    "INSERT INTO poptavky (jmeno, email, zprava) VALUES ('Martina', 'martina@example.invalid', 'Kdy se skáče?')"
+  );
+
+  const puvodni = config.EMAIL_REZIM;
+  config.EMAIL_REZIM = 'vypnuto';
+  let odpoved;
+  try {
+    odpoved = await klient.post(`/api/admin/poptavky/${vysledek.insertId}/odpovedet`, {
+      odpoved: 'V srpnu máme volno 14. a 21.',
+    });
+  } finally {
+    config.EMAIL_REZIM = puvodni;
+  }
+
+  assert.equal(odpoved.status, 200);
+  assert.equal(odpoved.data.odeslano, false, 'server nesmí tvrdit, že e-mail odešel');
+  assert.match(odpoved.data.zprava, /neodeslal/i);
+
+  // Odpověď se uložila, aby se neztratila práce.
+  const [[poptavka]] = await pool.query('SELECT odpoved FROM poptavky WHERE id = ?', [
+    vysledek.insertId,
+  ]);
+  assert.match(poptavka.odpoved, /V srpnu máme volno/);
+
+  // A v detailu je vidět důvod, ne jen "chyba".
+  const detail = await klient.get(`/api/admin/poptavky/${vysledek.insertId}`);
+  assert.equal(detail.data.emaily[0].stav, 'chyba');
+  assert.match(detail.data.emaily[0].chyba, /vypnut/i);
+});

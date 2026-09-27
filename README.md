@@ -22,6 +22,7 @@ src/server.js                spuštění serveru, údržba, ukončení
 src/config.js                čtení a validace .env — jediné místo s process.env
 src/db.js                    sdílený connection pool (mysql2)
 src/bezpecnost.js            hlavičky, CSP, robots.txt
+src/cas.js                   formátování data a času (Europe/Prague) — server i administrace
 src/nastaveni.js             registr nastavení (popisy v kódu, hodnoty v databázi)
 src/audit.js                 zápis do auditu
 src/auth/                    hesla, session, CSRF, rate limit, role, 2FA
@@ -203,6 +204,26 @@ Role `ucetni` je připravená, ale zatím se pro ni nezakládá účet.
 Role `tester` slouží k akceptačnímu testování na testu — víc nevidí a v produkci
 pro ni není co dělat, protože tam modul Ke schválení neexistuje.
 Hesla se nikdy neposílají e-mailem — nový člověk dostane jednorázový odkaz platný 3 dny.
+
+## Čas a formáty
+
+Všechna data a časy — administrace, e-maily, exporty, doklady — se formátují jedinou
+funkcí ze `src/cas.js`, vždy v **Europe/Prague** a v českém tvaru (`27. 9. 2026 22:49`).
+Administrace si ten samý soubor načítá jako `/admin/assets/js/cas.js`, takže server
+i prohlížeč počítají stejně a nemůžou se rozejít.
+
+- DATETIME z databáze (`2026-09-27 22:49:00`) je **pražský čas na hodinách** — neprochází
+  žádným přepočtem, jen se přeskládá do českého tvaru. Výsledek je proto stejný i na stroji
+  v jiné zóně.
+- `Date` a ISO řetězec se zónou (`…Z`) jsou okamžik na ose času a do pražského času
+  se převedou, včetně letního času.
+- `okamzik()` je opačný směr — pro počítání rozdílů a porovnávání.
+- `isoDatum()` dává `YYYY-MM-DD` pro názvy souborů, taky v pražském dni.
+
+V kódu se nepoužívá `toISOString()`, `toLocaleString()` ani vlastní skládání data z `new Date()`.
+Výjimka je `/api/health`, kde je ISO čas v UTC záměrně — to je strojový výstup, ne čas pro člověka.
+Testy v `test/cas.test.js` hlídají i přechody letního a zimního času a to, že výsledek
+nezávisí na časové zóně stroje.
 
 ## Zabezpečení
 

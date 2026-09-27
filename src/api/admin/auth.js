@@ -9,6 +9,7 @@ import pool from '../../db.js';
 import config from '../../config.js';
 import { asyncHandler, chybaSpatnyVstup, chybaNeprihlasen, chybaBezOpravneni } from '../../chyby.js';
 import { zvaliduj, schemaEmail, schemaHeslo } from '../../validace.js';
+import { okamzik } from '../../cas.js';
 import { zahashujHeslo, overHeslo } from '../../auth/hesla.js';
 import {
   vytvorSession,
@@ -38,6 +39,9 @@ function ja(uzivatel, csrf) {
     },
     prava: pravaProKlienta(uzivatel.role),
     prostredi: config.PROSTREDI,
+    // Aby administrace mohla u odpovědi na poptávku varovat PŘEDEM, že
+    // e-mail nikam nepůjde, ne až po odeslání.
+    email_rezim: config.EMAIL_REZIM,
     // Podle tohoto příznaku administrace ukáže modul Ke schválení a tlačítko
     // „Nahlásit problém“. V produkci je false a API pro akceptaci neexistuje.
     akceptace: config.akceptaceZapnuta,
@@ -90,7 +94,7 @@ router.post(
       await zapisPokus(email, req.ip, false, 'neaktivni');
       throw chybaBezOpravneni('Účet je deaktivovaný. Ozvi se správci.');
     }
-    if (u.zamceno_do && new Date(u.zamceno_do) > new Date()) {
+    if (u.zamceno_do && okamzik(u.zamceno_do) > new Date()) {
       await zapisPokus(email, req.ip, false, 'zamceno');
       throw chybaBezOpravneni(
         'Účet je kvůli opakovaným neúspěšným pokusům dočasně zamčený. Zkus to za 15 minut.'

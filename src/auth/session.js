@@ -9,6 +9,7 @@
 
 import crypto from 'node:crypto';
 import pool from '../db.js';
+import { okamzik } from '../cas.js';
 import config from '../config.js';
 
 export const COOKIE_SESSION = 'lsd_admin';
@@ -83,7 +84,7 @@ export async function nactiSession(req) {
 // Posunutí platnosti při aktivitě, ale ne při každém požadavku - stačí, když
 // se do expirace zbývá méně než polovina původní doby.
 export async function prodluzSession(res, session) {
-  const zbyva = new Date(session.expiresAt).getTime() - Date.now();
+  const zbyva = okamzik(session.expiresAt).getTime() - Date.now();
   if (zbyva > (config.SESSION_DNI * DEN_MS) / 2) return;
 
   const expiresAt = new Date(Date.now() + config.SESSION_DNI * DEN_MS);

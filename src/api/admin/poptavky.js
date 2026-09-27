@@ -87,7 +87,8 @@ router.get(
     if (!rows[0]) throw chybaNenalezeno('Poptávka nenalezena.');
 
     const [emaily] = await pool.query(
-      `SELECT id, predmet, prijemce, prijemce_skutecny, stav, rezim, odeslano_at, created_at
+      `SELECT id, predmet, prijemce, prijemce_skutecny, stav, rezim, chyba,
+              odeslano_at, created_at
          FROM emaily WHERE poptavka_id = ? ORDER BY created_at DESC`,
       [req.params.id]
     );

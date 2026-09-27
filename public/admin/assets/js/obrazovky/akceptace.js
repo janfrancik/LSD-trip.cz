@@ -8,7 +8,9 @@ import { api } from '../api.js';
 import {
   esc, datumCas, pred, prazdno, hlaska, potvrd, formularModal,
 } from '../ui.js';
-import { nahrajObrazek, nahled } from '../obrazky.js';
+import {
+  nahrajObrazek, nahled, pripojPretazeni, pripojVkladani, NAPOVEDA_VLOZENI,
+} from '../obrazky.js';
 import { otevriHlaseni } from '../hlaseni.js';
 import { jdiNa, stav as globalniStav, nactiPocty } from '../admin.js';
 
@@ -342,6 +344,7 @@ function ukolHtml(u, index, data) {
                  ? '<button type="button" class="btn btn--obrys btn--maly" data-ukol-pretestovat>Poslat k přetestování</button>'
                  : ''}
              </div>
+             <div class="pole-skupina__napoveda">${NAPOVEDA_VLOZENI}</div>
              <div class="nahledy" data-nahledy>${draft.prilohy.map(nahled).join('')}</div>`}
 
         ${u.vysledky.length
@@ -451,7 +454,38 @@ function navazAkce(koren, data, kod) {
   });
 }
 
+// Vložený obrázek patří úkolu, ve kterém má člověk kurzor; když nikde, tak
+// tomu jedinému rozbalenému. Posluchač se před každým překreslením odpojí,
+// jinak by se na dokumentu vrstvily.
+let odpojVkladaniDoUkolu = null;
+
+function cilovyUkol(koren) {
+  const zaostreny = document.activeElement?.closest?.('[data-ukol]');
+  if (zaostreny && koren.contains(zaostreny)) return zaostreny;
+
+  const rozbalene = koren.querySelectorAll('.ukol[open]');
+  return rozbalene.length === 1 ? rozbalene[0] : null;
+}
+
+async function pridejSnimek(prvekUkolu, soubor) {
+  const draft = rozepsane.get(Number(prvekUkolu.dataset.ukol));
+  if (!draft) return;
+  try {
+    draft.prilohy.push(await nahrajObrazek(soubor));
+    prvekUkolu.querySelector('[data-nahledy]').innerHTML = draft.prilohy.map(nahled).join('');
+    hlaska('Snímek přidaný. Nezapomeň uložit výsledek.', 'ok');
+  } catch (err) {
+    hlaska(err.message, 'chyba');
+  }
+}
+
 function navazUkoly(koren, data, kod) {
+  odpojVkladaniDoUkolu?.();
+  odpojVkladaniDoUkolu = pripojVkladani(
+    () => cilovyUkol(koren),
+    (soubor, prvekUkolu) => pridejSnimek(prvekUkolu, soubor)
+  );
+
   koren.querySelectorAll('[data-ukol]').forEach((prvek) => {
     const ukolId = Number(prvek.dataset.ukol);
     const ukol = data.ukoly.find((u) => u.id === ukolId);
@@ -477,15 +511,13 @@ function navazUkoly(koren, data, kod) {
     vstupSoubor?.addEventListener('change', async () => {
       const soubor = vstupSoubor.files?.[0];
       if (!soubor) return;
-      try {
-        draft.prilohy.push(await nahrajObrazek(soubor));
-        prvek.querySelector('[data-nahledy]').innerHTML = draft.prilohy.map(nahled).join('');
-      } catch (err) {
-        hlaska(err.message, 'chyba');
-      } finally {
-        vstupSoubor.value = '';
-      }
+      await pridejSnimek(prvek, soubor);
+      vstupSoubor.value = '';
     });
+
+    // Přetáhnout obrázek jde rovnou na úkol. Vkládání ze schránky řeší jeden
+    // posluchač na dokumentu (níž), protože Cmd+V nemíří na konkrétní prvek.
+    if (prvek.querySelector('[data-nahledy]')) pripojPretazeni(prvek, (s) => pridejSnimek(prvek, s));
 
     prvek.querySelector('[data-ulozit]')?.addEventListener('click', async (e) => {
       zapisKomentar();

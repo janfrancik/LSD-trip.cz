@@ -492,6 +492,27 @@ test('export souhrnu obsahuje, kdo co testoval', async () => {
   assert.match(odpoved.data.obsah, /Šéfka: funguje/);
   assert.match(odpoved.data.obsah, /bez problému/);
 
+  // Čas vygenerování musí být pražský, ne UTC. Původně byl v UTC a souhrn pak
+  // tvrdil, že vznikl hodinu před testy, které popisuje.
+  const { datumCas } = await import('../src/cas.js');
+  const vygenerovano = odpoved.data.obsah.match(/- Vygenerováno: (.+)/)[1];
+  const ted = Date.now();
+  const pripustne = [datumCas(new Date(ted)), datumCas(new Date(ted - 60_000))];
+  assert.ok(
+    pripustne.includes(vygenerovano),
+    `čas vygenerování "${vygenerovano}" musí být pražský (čekáno ${pripustne[0]})`
+  );
+
+  const vUtc = new Intl.DateTimeFormat('cs-CZ', {
+    timeZone: 'UTC', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(ted));
+  const vPraze = new Intl.DateTimeFormat('cs-CZ', {
+    timeZone: 'Europe/Prague', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(ted));
+  if (vUtc !== vPraze) {
+    assert.ok(!vygenerovano.includes(vUtc.trim()), 'v souhrnu nesmí být čas v UTC');
+  }
+
   await rm(adresar, { recursive: true, force: true });
 });
 

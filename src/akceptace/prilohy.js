@@ -15,6 +15,7 @@ import crypto from 'node:crypto';
 import path from 'node:path';
 import config from '../config.js';
 import pool from '../db.js';
+import { isoDatum } from '../cas.js';
 import { chybaSpatnyVstup } from '../chyby.js';
 
 const PODADRESAR = 'akceptace';
@@ -62,7 +63,7 @@ export async function ulozPrilohu({ obsah, nazev = null, uzivatelId }) {
   const typ = rozpoznej(bajty);
   if (!typ) throw chybaSpatnyVstup('Přiložit se dá jen obrázek PNG, JPEG nebo WebP.');
 
-  const mesic = new Date().toISOString().slice(0, 7); // 2026-09
+  const mesic = isoDatum(new Date()).slice(0, 7); // 2026-09, podle pražského dne
   const jmeno = `${crypto.randomBytes(16).toString('hex')}.${typ.pripona}`;
   const relativni = path.join(PODADRESAR, mesic, jmeno);
 

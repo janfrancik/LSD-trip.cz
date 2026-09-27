@@ -221,3 +221,34 @@ test('reset hesla neprozradí, jestli e-mail patří k účtu', async () => {
   const [[pocet]] = await pool.query('SELECT COUNT(*) AS pocet FROM reset_hesla');
   assert.equal(pocet.pocet, 1);
 });
+
+test('s vypnutým odesíláním se reset hesla pozná jen z logu e-mailů', async () => {
+  // Zákazníkovi se nesmí prozradit nic - ani to, že e-mail neodešel. Obsluha
+  // to ale musí mít kde zjistit, jinak čeká na odkaz, který nikdy nedorazil.
+  const config = (await import('../src/config.js')).default;
+  await vytvorUzivatele(pool, { email: 'existuje@example.invalid', heslo });
+  const klient = vytvorKlienta(server.url);
+  await klient.get('/api/admin/ja');
+
+  const puvodni = config.EMAIL_REZIM;
+  config.EMAIL_REZIM = 'vypnuto';
+  let odpoved;
+  try {
+    odpoved = await klient.post('/api/admin/reset-hesla', { email: 'existuje@example.invalid' });
+  } finally {
+    config.EMAIL_REZIM = puvodni;
+  }
+
+  assert.equal(odpoved.status, 200);
+  assert.ok(!/neodesl|vypnut|chyb/i.test(JSON.stringify(odpoved.data)),
+    'odpověď ven nesmí prozradit, že e-mail neodešel');
+
+  const [emaily] = await pool.query(
+    'SELECT prijemce, stav, chyba, rezim FROM emaily ORDER BY id DESC LIMIT 1'
+  );
+  assert.equal(emaily.length, 1, 'e-mail musí být v logu, i když se neodeslal');
+  assert.equal(emaily[0].prijemce, 'existuje@example.invalid');
+  assert.equal(emaily[0].stav, 'chyba');
+  assert.equal(emaily[0].rezim, 'vypnuto');
+  assert.match(emaily[0].chyba, /vypnut/i);
+});

@@ -387,6 +387,9 @@ select.pole { appearance: none; background-image: none; }
 .volba--nefunguje.volba--aktivni { background: var(--chyba); border-color: var(--chyba); }
 .volba--nerozumim.volba--aktivni { background: var(--varovani); border-color: var(--varovani); color: #14140F; }
 
+/* Prvek, nad kterým se právě táhne obrázek. */
+.nad-souborem { outline: 2px dashed var(--accent); outline-offset: 3px; }
+
 .nahledy { display: flex; flex-wrap: wrap; gap: 8px; }
 .nahled { display: block; border: 1px solid var(--line); }
 .nahled img { width: 86px; height: 86px; object-fit: cover; }

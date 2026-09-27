@@ -61,9 +61,10 @@ ukoly:
       2. Zadejte svůj e-mail a odešlete.
     vysledek: |
       Obrazovka potvrdí, že pokud e-mail v administraci existuje, odkaz odešel -
-      záměrně neprozradí, jestli takový účet máme. Na testu chodí všechny e-maily
-      do testovací schránky (Honzovi), ne vám; ověření, že odkaz opravdu dorazil,
-      je na něm. Hlavní je, že obrazovka nespadne a napíše srozumitelnou hlášku.
+      záměrně neprozradí, jestli takový účet máme, ani jestli se e-mail povedlo
+      odeslat. Na testu chodí všechny e-maily do testovací schránky (Honzovi),
+      ne vám; ověření, že odkaz opravdu dorazil, je na něm. Dokud není nastavené
+      odesílání, zůstane pokus zapsaný jen v logu e-mailů v administraci.
 
   # ---------------------------------------------------------------- poptávky
   - kod: poptavka-z-webu
@@ -95,6 +96,12 @@ ukoly:
       ne zákazníkovi). Poptávka má štítek „vyřízeno“, text odpovědi je vidět
       v detailu a v části „Odeslané e-maily“ je záznam s časem a poznámkou,
       že byl v testu přesměrovaný.
+
+      Když je odesílání e-mailů vypnuté, musí to administrace říct dopředu
+      (žlutá poznámka nad polem a tlačítko „Uložit odpověď (e-mail neodejde)“)
+      i potom - okno s vysvětlením, že odpověď je uložená, ale zákazníkovi
+      ji musíte poslat jinudy. V seznamu odeslaných e-mailů je u záznamu
+      červené „chyba“ i důvod.
 
   - kod: poptavka-stav-poznamka
     nazev: Stav a interní poznámka u poptávky
@@ -332,3 +339,36 @@ ukoly:
       V souboru je seznam úkolů s výsledky, kdo co testoval a kdy, seznam
       hlášení a údaj o schválení. Takový soubor se přidá do repozitáře
       jako zápis o akceptaci.
+
+  - kod: akceptace-priloha-schranka
+    nazev: Vložení snímku ze schránky a přetažením
+    oblast: akceptace
+    odkaz: /admin/akceptace
+    postup: |
+      Na počítači:
+      1. Udělejte si snímek obrazovky (Mac: Cmd+Shift+4, Windows: Win+Shift+S) -
+         zkopíruje se do schránky.
+      2. V úkolu klikněte do pole Komentář a zmáčkněte Cmd+V (Windows: Ctrl+V).
+      3. Pak zkuste druhou cestu: přetáhněte obrázek ze složky myší přímo na úkol.
+      4. To samé zkuste v okně „Nahlásit problém“ - vložte snímek přes Cmd+V.
+      Na telefonu:
+      5. Otevřete úkol a klikněte na „Přidat snímek“ - vyberte fotku nebo ji vyfoťte.
+    vysledek: |
+      Vložený i přetažený snímek se hned objeví jako náhled a dá se uložit
+      s výsledkem. Při přetahování je kolem úkolu oranžový rámeček, aby bylo
+      vidět, kam se soubor pustí. Na telefonu funguje výběr souboru i fotoaparát
+      jako dřív. Text ve schránce (ne obrázek) se nemá stát přílohou.
+
+  - kod: akceptace-cas-v-exportu
+    nazev: Časy v administraci sedí na hodinky
+    oblast: akceptace
+    odkaz: /admin/akceptace
+    postup: |
+      1. Uložte u libovolného úkolu výsledek a všimněte si, kolik je hodin.
+      2. U verze klikněte na „Stáhnout souhrn“.
+      3. V textu porovnejte řádek „Vygenerováno“ s časy u výsledků
+         a s hodinami na telefonu.
+    vysledek: |
+      Čas vygenerování i časy výsledků jsou v našem čase (Praha) a odpovídají
+      hodinkám. Dřív byl čas vygenerování o hodinu (v létě o dvě) pozadu,
+      protože byl v UTC.

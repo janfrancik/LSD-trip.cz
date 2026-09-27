@@ -56,7 +56,13 @@ a rollback neexistuje.
   Hlídá to test v `test/bezpecnost.test.js`.
 - **Nic natvrdo v kódu, co má spravovat majitelka.** Texty, ceny a lhůty patří do
   nastavení nebo do databáze, ne do zdrojáku.
-- Peníze v haléřích (`INT`), časy v `Europe/Prague`, mazání měkké (`smazano_at`).
+- **Datum a čas jen přes `src/cas.js`** — `datum()`, `cas()`, `datumCas()`, `pred()`,
+  `isoDatum()`, `okamzik()`. Vždy Europe/Prague, v administraci, e-mailech, exportech
+  i dokladech. Nikdy `toISOString()`, `toLocaleString()` ani vlastní skládání z `new Date()`:
+  tak vznikl export, kde čas vygenerování byl v UTC a časy testů v pražském čase.
+  Administrace si ten samý soubor načítá jako `/admin/assets/js/cas.js`, takže existuje
+  jedna implementace, ne dvě. DATETIME z databáze je pražský čas na hodinách, ne UTC.
+- Peníze v haléřích (`INT`), mazání měkké (`smazano_at`).
 - Administrace je česky a pro netechnického člověka: chybová hláška říká, co se stalo
   a co s tím, ne „Invalid input“.
 - Popisky akcí pro lidi piš jako podstatná jména („úprava poptávky“), ne slovesa

@@ -17,6 +17,7 @@ import {
   asyncHandler, chybaNenalezeno, chybaKonflikt, chybaBezOpravneni,
 } from '../../chyby.js';
 import { zvaliduj } from '../../validace.js';
+import { okamzik } from '../../cas.js';
 import { vyzaduje } from '../../auth/opravneni.js';
 import { zapisAudit } from '../../audit.js';
 import { naimportujAkceptaci, stavImportu } from '../../akceptace/import.js';
@@ -60,7 +61,9 @@ function oseklyUkol(ukol, uzivatelId, vidiVse) {
   const muj = ukol.vysledky.find((v) => v.uzivatel_id === uzivatelId) ?? null;
   return {
     ...ukol,
-    zadani_zmeneno_po_testu: Boolean(muj && new Date(ukol.zmeneno_at) > new Date(muj.updated_at)),
+    zadani_zmeneno_po_testu: Boolean(
+      muj && okamzik(ukol.zmeneno_at) > okamzik(muj.updated_at)
+    ),
     muj_vysledek: muj,
     vysledky: vidiVse ? ukol.vysledky : [],
     pocet_vysledku: ukol.vysledky.length,

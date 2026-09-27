@@ -7,7 +7,9 @@
 
 import { api } from './api.js';
 import { esc, hlaska } from './ui.js';
-import { nahrajObrazek, nahled } from './obrazky.js';
+import {
+  nahrajObrazek, nahled, pripojPretazeni, pripojVkladani, NAPOVEDA_VLOZENI,
+} from './obrazky.js';
 
 function kontext() {
   return {
@@ -63,6 +65,7 @@ export function otevriHlaseni({ ukolId = null, nazevUkolu = null } = {}) {
           <div class="nahledy" data-nahledy></div>
           <div class="pole-skupina__napoveda">
             Z telefonu se dá vybrat i fotka. Maximálně 6 MB.
+            ${NAPOVEDA_VLOZENI}
           </div>
         </div>
 
@@ -82,7 +85,25 @@ export function otevriHlaseni({ ukolId = null, nazevUkolu = null } = {}) {
     </div>`;
 
   const form = nadoba.querySelector('form');
+
+  // Přidání snímku má tři cesty: tlačítko, schránku a přetažení. Všechny
+  // končí tady.
+  const pridejSnimek = async (soubor) => {
+    try {
+      prilohy.push(await nahrajObrazek(soubor));
+      nadoba.querySelector('[data-nahledy]').innerHTML = prilohy.map(nahled).join('');
+    } catch (err) {
+      hlaska(err.message, 'chyba');
+    }
+  };
+
+  // Dokud je okno otevřené, patří vložený obrázek jemu.
+  const odpojVkladani = pripojVkladani(() => true, pridejSnimek);
+  const odpojPretazeni = pripojPretazeni(form, pridejSnimek);
+
   const zavri = () => {
+    odpojVkladani();
+    odpojPretazeni();
     nadoba.innerHTML = '';
     document.removeEventListener('keydown', naEsc);
   };
@@ -100,15 +121,8 @@ export function otevriHlaseni({ ukolId = null, nazevUkolu = null } = {}) {
   vstupSoubor.addEventListener('change', async () => {
     const soubor = vstupSoubor.files?.[0];
     if (!soubor) return;
-    try {
-      const priloha = await nahrajObrazek(soubor);
-      prilohy.push(priloha);
-      nadoba.querySelector('[data-nahledy]').innerHTML = prilohy.map(nahled).join('');
-    } catch (err) {
-      hlaska(err.message, 'chyba');
-    } finally {
-      vstupSoubor.value = '';
-    }
+    await pridejSnimek(soubor);
+    vstupSoubor.value = '';
   });
 
   form.addEventListener('submit', async (e) => {
