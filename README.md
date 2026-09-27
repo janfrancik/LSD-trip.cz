@@ -115,6 +115,42 @@ a pravidlo „žádná doména natvrdo v kódu".
 lze pustit opakovaně. MariaDB u DDL příkazů commituje implicitně — migrace proto pište tak,
 aby šly spustit znovu (`IF NOT EXISTS`, `DROP ... IF EXISTS`).
 
+### Migrace musí být zpětně kompatibilní (expand/contract)
+
+Migrace běží **před** startem nové verze (viz [Nasazení](#nasazení)), takže mezi doběhnutím
+migrace a záměnou kontejneru chvíli běží **stará** aplikace nad **novým** schématem. Migrace
+proto nesmí rozbít předchozí verzi kódu.
+
+Pravidlo: **v jednom kroku nikdy nemaž ani nepřejmenovávej sloupec nebo tabulku.**
+Rozděl to na dvě nasazení:
+
+| Krok | Migrace | Kód |
+| --- | --- | --- |
+| **expand** (verze N) | přidej nový sloupec / tabulku, data převeď (`UPDATE … SET nove = stare`) | umí obojí — zapisuje do nového, čte nové s fallbackem na staré |
+| **contract** (verze N+1) | starý sloupec / tabulku odeber | čte a zapisuje už jen nové |
+
+Z toho plyne:
+
+- Přejmenování sloupce = přidat nový + zkopírovat data + (příští verze) zahodit starý.
+  Nikdy `RENAME COLUMN` v jednom kroku.
+- Nový `NOT NULL` sloupec musí mít `DEFAULT`, jinak stará verze neuloží řádek.
+- Zúžení typu, přidání `UNIQUE` nebo cizího klíče patří až do kroku, kdy už žádná běžící
+  verze nezapisuje data, která by tomu odporovala.
+- Odebrání hodnoty z `ENUM` je taky contract — nejdřív ji kód přestane používat.
+- `DROP TABLE` až poté, co ji žádná nasazená verze nečte.
+
+Výjimka je jediná: tabulka, kterou zavádí tatáž verze, co ji používá — tam žádná
+předchozí verze není, o co se opřít.
+
+Hlídá to test v `test/nasazeni.test.js`: `DROP COLUMN`, `DROP TABLE`, `RENAME`/`CHANGE COLUMN`
+v migraci shodí testy. Když jde opravdu o krok *contract* (předchozí verze už sloupec
+nepoužívá), připíše se soubor do seznamu `ODEBRANI_SCHVALENA` i s důvodem — ať je ta úvaha
+vidět v diffu.
+
+Migrace `003` tohle pravidlo porušuje (`DROP COLUMN vyrizeno` hned po převodu na `stav`)
+a v seznamu výjimek je proto od začátku. Prošlo to, protože produkční databáze byla prázdná
+a testovací prostředí ještě neexistovalo — ne proto, že by to bylo správně.
+
 Příkazy se dělí podle středníku, ale s ohledem na komentáře i řetězce. Pokud migrace obsahuje
 středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >>>`.
 

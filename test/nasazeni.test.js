@@ -4,7 +4,7 @@
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -61,4 +61,48 @@ test('workflow se nedotýká .env a uklízí jen vlastní image', () => {
     !/docker (system|image) prune/.test(prikazy),
     'prune by smazal i image cizích aplikací, které na VPS běží vedle'
   );
+});
+
+// --------------------------------------------------- zpětná kompatibilita migrací
+//
+// Migrace běží před startem nové verze, takže mezi migrací a záměnou kontejneru
+// chvíli běží STARÁ aplikace nad NOVÝM schématem. Odebrání sloupce nebo tabulky
+// ji v tu chvíli shodí. Patří proto až do dalšího nasazení (expand/contract,
+// viz CLAUDE.md).
+//
+// Test není chytrý - hlídá jen to, že se takový příkaz nedostane do migrace
+// omylem. Když je odebrání opravdu na řadě (contract krok, předchozí verze už
+// sloupec nepoužívá), připíše se soubor sem i s důvodem.
+const ODEBRANI_SCHVALENA = {
+  // Sloupec `vyrizeno` nahradil `stav`. Prošlo to jen proto, že produkční
+  // databáze byla prázdná a testovací prostředí ještě neexistovalo.
+  '003_emaily_poptavky.sql': ['DROP COLUMN'],
+};
+
+const migraceDir = path.join(__dirname, '..', 'migrations');
+
+test('migrace nemažou a nepřejmenovávají sloupce ani tabulky', () => {
+  const nebezpecne = [/DROP\s+COLUMN/i, /DROP\s+TABLE/i, /RENAME\s+COLUMN/i, /RENAME\s+TABLE/i, /CHANGE\s+COLUMN/i];
+
+  for (const soubor of readdirSync(migraceDir).filter((f) => f.endsWith('.sql'))) {
+    const sql = readFileSync(path.join(migraceDir, soubor), 'utf8')
+      .split('\n')
+      .filter((radek) => !/^\s*--/.test(radek))
+      .join('\n');
+
+    for (const vzor of nebezpecne) {
+      const nalez = sql.match(vzor);
+      if (!nalez) continue;
+
+      const schvaleno = (ODEBRANI_SCHVALENA[soubor] ?? []).some((povolene) =>
+        new RegExp(povolene.replace(/\s+/, '\\s+'), 'i').test(nalez[0])
+      );
+      assert.ok(
+        schvaleno,
+        `${soubor} obsahuje "${nalez[0]}". Migrace musí být zpětně kompatibilní: ` +
+          'nejdřív přidej nové a převeď data, staré odeber až v dalším nasazení. ' +
+          'Pokud tohle JE ten pozdější krok, doplň soubor do ODEBRANI_SCHVALENA i s důvodem.'
+      );
+    }
+  }
 });
