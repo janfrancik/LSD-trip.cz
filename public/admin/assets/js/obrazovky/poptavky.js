@@ -21,7 +21,7 @@ const POPIS_STAVU = {
   spam: { text: 'spam', trida: 'stitek--spam' },
 };
 
-const filtr = { stav: '', q: '', strana: 1 };
+const filtr = { stav: '', q: '', strana: 1, smazane: '' };
 
 export async function vykresli(koren, { parametr }) {
   if (parametr) return detail(koren, parametr);
@@ -39,12 +39,16 @@ async function seznam(koren) {
     <div class="zalozky" role="tablist">
       ${STAVY.map((s) => {
         const pocet = s.klic ? (data.pocty[s.klic] ?? 0) : null;
+        const aktivni = !filtr.smazane && filtr.stav === s.klic;
         return `<button type="button" role="tab"
-          class="zalozka${filtr.stav === s.klic ? ' zalozka--aktivni' : ''}"
-          data-stav="${s.klic}" aria-selected="${filtr.stav === s.klic}">
+          class="zalozka${aktivni ? ' zalozka--aktivni' : ''}"
+          data-stav="${s.klic}" aria-selected="${aktivni}">
           ${esc(s.popis)}${pocet ? ` <span class="zalozka__pocet">${pocet}</span>` : ''}
         </button>`;
       }).join('')}
+      <button type="button" role="tab"
+        class="zalozka${filtr.smazane ? ' zalozka--aktivni' : ''}"
+        data-smazane="1" aria-selected="${Boolean(filtr.smazane)}">Smazané</button>
     </div>
 
     <div class="hledani">
@@ -55,8 +59,12 @@ async function seznam(koren) {
 
     ${data.data.length === 0
       ? prazdno(
-          filtr.q ? 'Nic nenalezeno' : 'Žádné poptávky',
-          filtr.q ? 'Zkus hledat jinak.' : 'Až někdo napíše z webu, objeví se to tady.'
+          filtr.q ? 'Nic nenalezeno' : filtr.smazane ? 'Žádné smazané poptávky' : 'Žádné poptávky',
+          filtr.q
+            ? 'Zkus hledat jinak.'
+            : filtr.smazane
+              ? 'Smazané poptávky se sem ukládají a dají se obnovit.'
+              : 'Až někdo napíše z webu, objeví se to tady.'
         )
       : `
       <div class="seznam">${data.data.map(radek).join('')}</div>
@@ -73,10 +81,18 @@ async function seznam(koren) {
   koren.querySelectorAll('[data-stav]').forEach((b) =>
     b.addEventListener('click', () => {
       filtr.stav = b.dataset.stav;
+      filtr.smazane = '';
       filtr.strana = 1;
       seznam(koren);
     })
   );
+
+  koren.querySelector('[data-smazane]')?.addEventListener('click', () => {
+    filtr.smazane = '1';
+    filtr.stav = '';
+    filtr.strana = 1;
+    seznam(koren);
+  });
 
   const hledat = () => {
     filtr.q = koren.querySelector('#hledat').value.trim();
@@ -209,7 +225,17 @@ async function detail(koren, id) {
           </div>
         </section>
 
-        ${muzeMenit
+        ${p.smazano_at && muzeMenit
+          ? `<section class="panel" style="border-left:3px solid var(--varovani)">
+              <h2 class="nadpis-2" style="margin-bottom:8px">Smazaná poptávka</h2>
+              <p class="text-faint" style="margin-bottom:12px">
+                Smazáno ${esc(datumCas(p.smazano_at))}. V seznamu je jen v záložce Smazané.
+              </p>
+              <button type="button" class="btn btn--hlavni btn--blok" data-obnovit>Obnovit poptávku</button>
+            </section>`
+          : ''}
+
+        ${muzeMenit && !p.smazano_at
           ? `<section class="panel">
               <h2 class="nadpis-2" style="margin-bottom:10px">Stav a poznámka</h2>
               ${pole({
@@ -274,6 +300,17 @@ async function detail(koren, id) {
         interni_poznamka: panel.querySelector('[name="interni_poznamka"]').value,
       });
       hlaska('Uloženo.', 'ok');
+      await nactiPocty();
+      detail(koren, id);
+    } catch (err) {
+      hlaska(err.message, 'chyba');
+    }
+  });
+
+  koren.querySelector('[data-obnovit]')?.addEventListener('click', async () => {
+    try {
+      await api.post(`/poptavky/${p.id}/obnovit`);
+      hlaska('Poptávka je zpátky v seznamu.', 'ok');
       await nactiPocty();
       detail(koren, id);
     } catch (err) {

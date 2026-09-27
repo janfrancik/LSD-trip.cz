@@ -38,6 +38,9 @@ function ja(uzivatel, csrf) {
     },
     prava: pravaProKlienta(uzivatel.role),
     prostredi: config.PROSTREDI,
+    // Podle tohoto příznaku administrace ukáže modul Ke schválení a tlačítko
+    // „Nahlásit problém“. V produkci je false a API pro akceptaci neexistuje.
+    akceptace: config.akceptaceZapnuta,
     csrf,
   };
 }

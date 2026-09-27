@@ -9,6 +9,7 @@
 
 import 'dotenv/config';
 import { spawnSync } from 'node:child_process';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import mysql from 'mysql2/promise';
@@ -17,6 +18,10 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
 
 const TEST_DB = (process.env.DB_NAME ?? 'lsdtrip') + '_test';
+
+// Nahrané soubory z testů nesmí skončit v repozitáři - jdou do systémového
+// temp adresáře, ne do ./uploads.
+export const TESTOVACI_UPLOAD_DIR = path.join(os.tmpdir(), 'lsd-testovaci-uploady');
 
 // Testy nikdy nesmí posílat e-maily ven. Režim 'test' navíc ověřujeme
 // samostatným testem - tady jen zajišťujeme, že cíl je neexistující doména.
@@ -31,6 +36,7 @@ const TESTOVACI_ENV = {
   EMAIL_TEST_PRIJEMCE: 'testovaci-schranka@example.invalid',
   EMAIL_ODESILATEL: 'LSD test <test@example.invalid>',
   RESEND_API_KEY: '',
+  UPLOAD_DIR: TESTOVACI_UPLOAD_DIR,
 };
 
 Object.assign(process.env, TESTOVACI_ENV);
@@ -69,6 +75,11 @@ export async function pripravDatabazi() {
 // Vyprázdnění dat mezi testy. Pořadí respektuje cizí klíče.
 export async function vycistiData(pool) {
   const tabulky = [
+    'akceptace_prilohy',
+    'akceptace_vysledky',
+    'akceptace_hlaseni',
+    'akceptace_ukoly',
+    'akceptace_verze',
     'email_udalosti',
     'emaily',
     'audit_log',
@@ -154,6 +165,7 @@ export function vytvorKlienta(zakladniUrl) {
     get: (cesta) => zavolej('GET', cesta),
     post: (cesta, telo = {}) => zavolej('POST', cesta, telo),
     patch: (cesta, telo = {}) => zavolej('PATCH', cesta, telo),
+    put: (cesta, telo = {}) => zavolej('PUT', cesta, telo),
     del: (cesta) => zavolej('DELETE', cesta),
     cookies,
     // Pro test CSRF: požadavek bez hlavičky, ale s platnou session cookie.

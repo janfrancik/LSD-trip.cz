@@ -34,7 +34,7 @@ export const schemaTelefon = z
   .or(z.literal(''))
   .transform((v) => (v ? v : null));
 
-export const schemaRole = z.enum(['admin', 'provoz', 'instruktor', 'ucetni'], {
+export const schemaRole = z.enum(['admin', 'provoz', 'instruktor', 'ucetni', 'tester'], {
   error: 'Neznámá role.',
 });
 

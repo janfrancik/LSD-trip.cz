@@ -9,6 +9,7 @@
 // zavolat i bez něj. Ostatní routery mají vyzaduje(...) u každé cesty.
 
 import express from 'express';
+import config from '../../config.js';
 import { nactiSession, prodluzSession } from '../../auth/session.js';
 import { overCsrf } from '../../auth/csrf.js';
 import { asyncHandler } from '../../chyby.js';
@@ -19,6 +20,7 @@ import poptavky from './poptavky.js';
 import audit from './audit.js';
 import nastaveni from './nastaveni.js';
 import dashboard from './dashboard.js';
+import akceptace from './akceptace.js';
 
 const router = express.Router();
 
@@ -43,5 +45,11 @@ router.use('/uzivatele', uzivatele);
 router.use('/poptavky', poptavky);
 router.use('/audit', audit);
 router.use('/nastaveni', nastaveni);
+
+// Akceptační testování je nástroj testovacího prostředí. V produkci se router
+// vůbec nenamontuje - cesty tam tedy neexistují, ne že by jen vracely 403.
+if (config.akceptaceZapnuta) {
+  router.use('/akceptace', akceptace);
+}
 
 export default router;

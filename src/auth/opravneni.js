@@ -25,6 +25,10 @@ export const OBLASTI = [
   'uzivatele',
   'audit',
   'nastaveni',
+  // Akceptační testování. Oblast existuje ve všech prostředích, ale API se
+  // v produkci vůbec nenamontuje (viz config.akceptaceZapnuta) - právo tedy
+  // samo o sobě nikam nepustí.
+  'akceptace',
 ];
 
 const VSE_MENIT = Object.fromEntries(OBLASTI.map((o) => [o, 'menit']));
@@ -46,6 +50,7 @@ export const PRAVA = {
     obsah: 'menit',
     poptavky: 'menit',
     zakaznici: 'menit',
+    akceptace: 'menit',
   },
 
   instruktor: {
@@ -62,6 +67,14 @@ export const PRAVA = {
     platby: 'menit',
     doklady: 'menit',
     zakaznici: 'cist',
+  },
+
+  // Tester je člověk přizvaný k odzkoušení nové verze na testu. Nevidí nic
+  // z provozu - jen modul Ke schválení a obrazovky, na které ho pošle zadání
+  // úkolu. Do produkce se takový účet nikdy nedostane k ničemu, protože tam
+  // akceptace neexistuje.
+  tester: {
+    akceptace: 'menit',
   },
 };
 

@@ -9,6 +9,7 @@
 // se skládají z APP_URL. Přechod na jinou doménu je tím jen změna .env.
 
 import 'dotenv/config';
+import path from 'node:path';
 import { z } from 'zod';
 
 const bool = (vychozi) =>
@@ -54,6 +55,10 @@ const schema = z.object({
 
   // Délka platnosti přihlášení ve dnech
   SESSION_DNI: z.coerce.number().int().positive().default(14),
+
+  // Kam se ukládají nahrané soubory (přílohy akceptace, ve fázi 5 fotogalerie).
+  // V Dockeru je to /app/uploads, což je volume - přežije přestavbu image.
+  UPLOAD_DIR: z.string().min(1).default('uploads'),
 });
 
 // Prázdná hodnota v .env (`RESEND_API_KEY=`) znamená "nenastaveno", ne
@@ -79,6 +84,15 @@ const config = {
   ...env,
   jeProdukce: env.NODE_ENV === 'production',
   jeTest: env.NODE_ENV === 'test',
+
+  // Modul „Ke schválení“ (akceptační testování) je nástroj pro nasazení na
+  // testu, ne součást provozu. V produkci se nezapne: nemá API, nezobrazí se
+  // v menu a nikde se neukáže tlačítko „Nahlásit problém“. Ve vývoji zapnutý
+  // je, jinak by se nedal vyzkoušet před nasazením na test.
+  akceptaceZapnuta: env.PROSTREDI !== 'produkce',
+
+  // Absolutní cesta k adresáři s nahranými soubory.
+  uploadDir: path.resolve(process.cwd(), env.UPLOAD_DIR),
 
   // Absolutní adresa k cestě. Jediný správný způsob, jak v aplikaci vyrobit
   // odkaz do světa (e-mail, canonical, webhook).

@@ -9,7 +9,7 @@
 // Použití:
 //   node scripts/vytvor-uzivatele.js <email> "<Jméno Příjmení>" [role]
 //
-// Role: admin (výchozí) | provoz | instruktor | ucetni
+// Role: admin (výchozí) | provoz | instruktor | ucetni | tester
 //
 // V Dockeru:
 //   docker compose -f docker-compose.dev.yml exec app \
@@ -21,8 +21,11 @@ import config from '../src/config.js';
 import { hashTokenu } from '../src/auth/session.js';
 import { posliEmail } from '../src/email/posli.js';
 import { obalka, tlacitko } from '../src/email/sablona.js';
+import { schemaRole } from '../src/validace.js';
 
-const ROLE = ['admin', 'provoz', 'instruktor', 'ucetni'];
+// Seznam rolí se bere z validace, ne z vlastního výčtu - jinak by se skript
+// rozešel s aplikací, jakmile přibude role (přesně to se stalo u role tester).
+const ROLE = schemaRole.options;
 
 async function run() {
   const [email, jmeno, role = 'admin'] = process.argv.slice(2);

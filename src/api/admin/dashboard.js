@@ -9,7 +9,8 @@ import express from 'express';
 import pool from '../../db.js';
 import config from '../../config.js';
 import { asyncHandler } from '../../chyby.js';
-import { vyzaduje } from '../../auth/opravneni.js';
+import { vyzaduje, maPravo } from '../../auth/opravneni.js';
+import { kartaNaPrehled } from '../../akceptace/souhrn.js';
 
 const router = express.Router();
 
@@ -47,9 +48,16 @@ router.get(
         ORDER BY a.created_at DESC, a.id DESC LIMIT 8`
     );
 
+    // Karta akceptace jen na testu (a ve vývoji) a jen tomu, kdo testuje.
+    const akceptace =
+      config.akceptaceZapnuta && maPravo(req.uzivatel.role, 'akceptace')
+        ? await kartaNaPrehled(req.uzivatel.id)
+        : null;
+
     res.json({
       prostredi: config.PROSTREDI,
       email_rezim: config.EMAIL_REZIM,
+      akceptace,
       poptavky: {
         nove: Number(poptavky.nove ?? 0),
         vyrizuji_se: Number(poptavky.vyrizuji_se ?? 0),

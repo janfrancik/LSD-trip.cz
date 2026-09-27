@@ -12,6 +12,7 @@ const ROLE = [
   { hodnota: 'provoz', popis: 'Provoz — rezervace, termíny, obsah' },
   { hodnota: 'instruktor', popis: 'Instruktor — jen soupiska termínu' },
   { hodnota: 'ucetni', popis: 'Účetní — platby a faktury' },
+  { hodnota: 'tester', popis: 'Tester — jen akceptační testování na testu' },
 ];
 
 const POPIS_ROLE = Object.fromEntries(

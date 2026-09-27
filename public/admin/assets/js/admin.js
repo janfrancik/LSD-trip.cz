@@ -14,6 +14,8 @@ import * as uzivatele from './obrazovky/uzivatele.js';
 import * as audit from './obrazovky/audit.js';
 import * as nastaveni from './obrazovky/nastaveni.js';
 import * as ucet from './obrazovky/ucet.js';
+import * as akceptace from './obrazovky/akceptace.js';
+import { otevriHlaseni } from './hlaseni.js';
 
 const ZAKLAD = '/admin';
 
@@ -25,15 +27,26 @@ const OBRAZOVKY = [
   { cesta: 'uzivatele', nazev: 'Uživatelé', ikona: '☺', oblast: 'uzivatele', modul: uzivatele, vMenu: true },
   { cesta: 'nastaveni', nazev: 'Nastavení', ikona: '⚙', oblast: 'nastaveni', modul: nastaveni, vMenu: true },
   { cesta: 'audit', nazev: 'Audit', ikona: '⧉', oblast: 'audit', modul: audit, vMenu: true },
+  // Akceptační testování existuje jen na testu a ve vývoji. Příznak posílá
+  // server v /ja - v produkci je false a modul se vůbec neukáže.
+  {
+    cesta: 'akceptace', nazev: 'Ke schválení', ikona: '✓', oblast: 'akceptace',
+    modul: akceptace, vMenu: true, jenNaTestu: true,
+  },
   { cesta: 'ucet', nazev: 'Můj účet', ikona: '⚿', oblast: null, modul: ucet, vMenu: false },
 ];
 
 export const stav = {
-  ja: null, // { uzivatel, prava, prostredi }
+  ja: null, // { uzivatel, prava, prostredi, akceptace }
   cesta: '',
   parametr: null,
-  pocty: { poptavky: 0 },
+  pocty: { poptavky: 0, akceptace: 0, hlaseni: 0 },
 };
+
+// Je modul Ke schválení k dispozici? Rozhoduje server (prostředí) i oprávnění.
+function maAkceptaci() {
+  return Boolean(stav.ja?.akceptace && stav.ja?.prava?.akceptace);
+}
 
 // --------------------------------------------------------------------- router
 
@@ -78,8 +91,14 @@ export async function vykresli() {
     });
   }
 
+  // Tester nemá Přehled - po přihlášení ho pustíme rovnou tam, kde má úkoly.
+  if (cesta === '' && !stav.ja.prava.dashboard && maAkceptaci()) {
+    return jdiNa('akceptace', true);
+  }
+
   const obrazovka = najdiObrazovku(cesta);
   if (!obrazovka) return jdiNa('', true);
+  if (obrazovka.jenNaTestu && !stav.ja.akceptace) return jdiNa('', true);
 
   if (obrazovka.oblast && !stav.ja.prava[obrazovka.oblast]) {
     app().innerHTML = layout(
@@ -110,7 +129,12 @@ export async function vykresli() {
 
 function layout(vnitrek) {
   const { uzivatel, prostredi } = stav.ja;
-  const menu = OBRAZOVKY.filter((o) => o.vMenu && (!o.oblast || stav.ja.prava[o.oblast]));
+  const menu = OBRAZOVKY.filter(
+    (o) =>
+      o.vMenu &&
+      (!o.oblast || stav.ja.prava[o.oblast]) &&
+      (!o.jenNaTestu || stav.ja.akceptace)
+  );
   const aktivni = stav.cesta;
 
   const odznak =
@@ -141,6 +165,11 @@ function layout(vnitrek) {
         <span class="hlavicka__kde">${esc(nazevObrazovky())}</span>
         <div class="hlavicka__akce">
           ${odznak}
+          ${maAkceptaci() ? zvonecek() : ''}
+          ${maAkceptaci()
+            ? `<button type="button" class="btn btn--obrys btn--maly" data-nahlasit
+                 title="Nahlásit problém na této obrazovce">⚑ <span class="jen-siroke">Nahlásit problém</span></button>`
+            : ''}
           <a class="btn btn--obrys btn--maly" href="${ZAKLAD}/ucet" data-odkaz
              aria-label="Můj účet">⚿</a>
         </div>
@@ -150,9 +179,27 @@ function layout(vnitrek) {
     </div>
 
     <nav class="spodni-lista" aria-label="Hlavní navigace">
-      ${menu.slice(0, 5).map((o) => spodniPolozka(o, aktivni)).join('')}
+      ${spodniMenu(menu).map((o) => spodniPolozka(o, aktivni)).join('')}
     </nav>
   </div>`;
+}
+
+// Zvoneček s počtem úkolů, které čekají na přihlášeného člověka.
+function zvonecek() {
+  const pocet = stav.pocty.akceptace;
+  return `<button type="button" class="zvonecek" data-zvonecek
+     aria-label="${pocet ? `Neotestovaných úkolů: ${pocet}` : 'Ke schválení: vše otestováno'}">
+     <span aria-hidden="true">🔔</span>
+     ${pocet ? `<span class="zvonecek__pocet">${pocet}</span>` : ''}
+   </button>`;
+}
+
+// Do spodní lišty se vejde pět položek. Na testu je Ke schválení to hlavní,
+// proč tam tester jde - musí tam být, i když je v menu až šestá.
+function spodniMenu(menu) {
+  const index = menu.findIndex((o) => o.cesta === 'akceptace');
+  if (index < 0 || index < 5) return menu.slice(0, 5);
+  return [...menu.slice(0, 4), menu[index]];
 }
 
 function nazevObrazovky() {
@@ -160,7 +207,8 @@ function nazevObrazovky() {
 }
 
 function pocetProOblast(oblast) {
-  if (oblast === 'poptavky' && stav.pocty.poptavky > 0) return stav.pocty.poptavky;
+  if (oblast === 'poptavky') return stav.pocty.poptavky;
+  if (oblast === 'akceptace') return stav.pocty.akceptace;
   return 0;
 }
 
@@ -184,6 +232,9 @@ function spodniPolozka(o, aktivni) {
 }
 
 function navazNavigaci() {
+  document.querySelector('[data-zvonecek]')?.addEventListener('click', () => jdiNa('akceptace'));
+  document.querySelector('[data-nahlasit]')?.addEventListener('click', () => otevriHlaseni());
+
   document.querySelector('[data-odhlasit]')?.addEventListener('click', async () => {
     try {
       await api.post('/odhlaseni');
@@ -210,37 +261,61 @@ async function nactiJa() {
 
 // Počty pro odznaky v menu. Chyba tady nesmí shodit celou administraci.
 export async function nactiPocty() {
-  if (!stav.ja?.prava?.poptavky) return;
-  try {
-    const data = await api.get('/poptavky?na_strane=1&stav=nova');
-    stav.pocty.poptavky = data.pocty?.nova ?? 0;
-  } catch {
-    stav.pocty.poptavky = 0;
+  if (stav.ja?.prava?.poptavky) {
+    try {
+      const data = await api.get('/poptavky?na_strane=1&stav=nova');
+      stav.pocty.poptavky = data.pocty?.nova ?? 0;
+    } catch {
+      stav.pocty.poptavky = 0;
+    }
   }
+
+  if (maAkceptaci()) {
+    try {
+      const data = await api.get('/akceptace/pocty');
+      stav.pocty.akceptace = data.k_otestovani ?? 0;
+      stav.pocty.hlaseni = data.hlaseni_otevrena ?? 0;
+    } catch {
+      stav.pocty.akceptace = 0;
+    }
+  }
+
   obnovOdznaky();
 }
 
 // Odznaky se překreslují samostatně - po vyřízení poptávky nemá smysl
 // překreslovat celou obrazovku jen kvůli číslu v menu.
 function obnovOdznaky() {
-  const pocet = stav.pocty.poptavky;
-  for (const [vyber, trida] of [
-    ['.bocni__polozka[href$="/poptavky"]', 'bocni__pocet'],
-    ['.spodni-lista__polozka[href$="/poptavky"]', 'spodni-lista__pocet'],
+  for (const [cesta, pocet] of [
+    ['poptavky', stav.pocty.poptavky],
+    ['akceptace', stav.pocty.akceptace],
   ]) {
-    const polozka = document.querySelector(vyber);
-    if (!polozka) continue;
-    let odznak = polozka.querySelector('.' + trida);
-    if (pocet > 0) {
-      if (!odznak) {
-        odznak = document.createElement('span');
-        odznak.className = trida;
-        polozka.appendChild(odznak);
-      }
-      odznak.textContent = String(pocet);
-    } else if (odznak) {
-      odznak.remove();
+    for (const [vyber, trida] of [
+      [`.bocni__polozka[href$="/${cesta}"]`, 'bocni__pocet'],
+      [`.spodni-lista__polozka[href$="/${cesta}"]`, 'spodni-lista__pocet'],
+    ]) {
+      const polozka = document.querySelector(vyber);
+      if (!polozka) continue;
+      nastavOdznak(polozka, trida, pocet);
     }
+  }
+
+  // Zvoneček se překresluje taky - je to stejný údaj jako odznak v menu.
+  const zvon = document.querySelector('[data-zvonecek]');
+  if (zvon) nastavOdznak(zvon, 'zvonecek__pocet', stav.pocty.akceptace);
+}
+
+function nastavOdznak(polozka, trida, pocet) {
+  let odznak = polozka.querySelector('.' + trida);
+  if (pocet > 0) {
+    if (!odznak) {
+      odznak = document.createElement('span');
+      odznak.className = trida;
+      polozka.appendChild(odznak);
+    }
+    odznak.textContent = String(pocet);
+  } else if (odznak) {
+    odznak.remove();
   }
 }
 

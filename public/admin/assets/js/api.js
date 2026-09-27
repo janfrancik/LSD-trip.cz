@@ -66,6 +66,7 @@ export const api = {
   get: (cesta) => zavolej('GET', cesta),
   post: (cesta, telo = {}) => zavolej('POST', cesta, telo),
   patch: (cesta, telo = {}) => zavolej('PATCH', cesta, telo),
+  put: (cesta, telo = {}) => zavolej('PUT', cesta, telo),
   del: (cesta) => zavolej('DELETE', cesta),
 };
 

@@ -27,7 +27,10 @@ src/audit.js                 zápis do auditu
 src/auth/                    hesla, session, CSRF, rate limit, role, 2FA
 src/api/verejne.js           veřejné API webu
 src/api/admin/               API administrace
+src/akceptace/               modul „Ke schválení“ — import zadání, přílohy, souhrn
 src/email/                   odesílání přes Resend a šablony
+
+docs/akceptace/*.yml         zadání akceptačních testů (importuje se při nasazení)
 
 scripts/migrate.js           spouštěč migrací, stav v tabulce _migrace
 scripts/vytvor-uzivatele.js  založení uživatele administrace
@@ -143,22 +146,26 @@ povinná hlavička `X-CSRF-Token` shodná s cookie `lsd_csrf`.
 | Poptávky | `GET /poptavky`, `GET|PATCH|DELETE /poptavky/:id`, `POST /poptavky/:id/odpovedet`, `POST /poptavky/:id/obnovit` |
 | Audit | `GET /audit` |
 | Nastavení | `GET|PATCH /nastaveni`, `GET /nastaveni/integrace` |
+| Ke schválení (jen mimo produkci) | `GET /akceptace`, `GET /akceptace/pocty`, `GET /akceptace/verze/:kod`, `PUT /akceptace/ukoly/:id/vysledek`, `POST /akceptace/ukoly/:id/k-pretestovani`, `POST /akceptace/verze/:kod/k-pretestovani|schvalit|oznamit`, `GET /akceptace/verze/:kod/export`, `GET|POST /akceptace/hlaseni`, `GET|PATCH /akceptace/hlaseni/:id`, `POST|GET /akceptace/prilohy[/:id]`, `POST /akceptace/import` |
 
 Seznamy berou `?strana=&na_strane=&q=` a vracejí `{ data, celkem, strana, na_strane }`.
 Chyby vracejí `{ chyba: "česky", detaily: { pole: "zpráva" } }`.
 
 ## Role
 
-| | admin | provoz | instruktor | účetní |
-| --- | --- | --- | --- | --- |
-| přehled | ✓ | ✓ | čtení | čtení |
-| poptávky, zákazníci | ✓ | ✓ | – | čtení |
-| termíny, rezervace | ✓ | ✓ | soupiska | čtení |
-| platby, doklady | ✓ | čtení | – | ✓ |
-| obsah, galerie | ✓ | ✓ | – | – |
-| uživatelé, audit, nastavení | ✓ | – | – | – |
+| | admin | provoz | instruktor | účetní | tester |
+| --- | --- | --- | --- | --- | --- |
+| přehled | ✓ | ✓ | čtení | čtení | – |
+| poptávky, zákazníci | ✓ | ✓ | – | čtení | – |
+| termíny, rezervace | ✓ | ✓ | soupiska | čtení | – |
+| platby, doklady | ✓ | čtení | – | ✓ | – |
+| obsah, galerie | ✓ | ✓ | – | – | – |
+| uživatelé, audit, nastavení | ✓ | – | – | – | – |
+| ke schválení (jen na testu) | ✓ | ✓ | – | – | ✓ |
 
 Role `ucetni` je připravená, ale zatím se pro ni nezakládá účet.
+Role `tester` slouží k akceptačnímu testování na testu — víc nevidí a v produkci
+pro ni není co dělat, protože tam modul Ke schválení neexistuje.
 Hesla se nikdy neposílají e-mailem — nový člověk dostane jednorázový odkaz platný 3 dny.
 
 ## Zabezpečení
@@ -169,7 +176,8 @@ Hesla se nikdy neposílají e-mailem — nový člověk dostane jednorázový od
   Navíc zámek účtu v databázi po 10 neúspěších — ten přežije i restart kontejneru.
 - CSRF: `SameSite=Strict` + double-submit token v hlavičce.
 - CSP bez `unsafe-inline` u skriptů, `frame-ancestors 'none'`, `object-src 'none'`.
-- Limit těla požadavku 100 kB, validace všech vstupů přes zod.
+- Limit těla požadavku 100 kB (výjimka: nahrání snímku v akceptaci 8 MB), validace všech
+  vstupů přes zod. Typ nahraného souboru se určuje z jeho obsahu, ne z toho, co tvrdí prohlížeč.
 - Audit každé změny (kdo, kdy, co, před/po) s automatickým vyčištěním hesel a tajemství.
 - Měkké mazání — „smazat" nikdy neznamená ztrátu dat.
 
@@ -221,6 +229,34 @@ Kontrola bez zálohování (vypíše, co si skript přečetl z `.env`):
 
 Zálohy leží na stejném VPS, takže chrání před chybou v datech, ne před ztrátou serveru.
 Návrh kopie mimo server je v [docs/nasazeni-vps.md](docs/nasazeni-vps.md) (zatím neimplementováno).
+
+## Ke schválení (akceptační testování)
+
+Modul `/admin/akceptace` běží **jen mimo produkci** (`PROSTREDI` ≠ `produkce`).
+V produkci se router vůbec nenamontuje, `/ja` hlásí `akceptace: false` a v administraci
+tedy není ani položka v menu, ani tlačítko „Nahlásit problém“.
+
+Jak to funguje:
+
+1. Ke každé fázi je v repozitáři soubor `docs/akceptace/<faze>.yml` — verze a testovací
+   úkoly (postup krok za krokem, očekávaný výsledek, odkaz na obrazovku).
+2. Při startu aplikace se zadání naimportuje. Import je idempotentní a páruje se podle
+   `kod` úkolu: změněný úkol se aktualizuje, chybějící se zhasne (`aktivni = 0`),
+   **výsledky testerů zůstanou**. Ručně jde import spustit tlačítkem „Znovu načíst zadání“.
+3. Tester u úkolu zvolí Funguje / Nefunguje / Nerozumím zadání, napíše komentář a může
+   přiložit snímek obrazovky (PNG, JPEG, WebP, do 6 MB; ukládá se do volume `uploads`).
+   U „nefunguje“ je komentář povinný.
+4. Po opravě a novém nasazení vrátí provoz nebo admin úkol tlačítkem
+   „Poslat k přetestování“ — u testera se objeví znovu.
+5. Verzi schvaluje **jen admin** a jen tehdy, když všechny úkoly fungují a hlášení jsou
+   vyřízená. Schválení se zapíše do auditu, souhrn (kdo co testoval a kdy) jde stáhnout
+   jako Markdown do `docs/akceptace/`.
+
+Upozornění: zvoneček v hlavičce s počtem neotestovaných úkolů, karta na přehledu
+s průběhem a e-mail testerům při nové verzi (odchází jen když je zapnuté odesílání;
+jinak zůstane oznámení v administraci a rozešle se tlačítkem „Oznámit testerům“).
+
+Kdo je tester: každý aktivní uživatel s rolí `tester`, `provoz` nebo `admin`.
 
 ## Přechod na lsd-trip.cz
 

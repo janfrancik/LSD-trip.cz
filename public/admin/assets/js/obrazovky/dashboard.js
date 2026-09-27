@@ -33,6 +33,8 @@ export async function vykresli(koren) {
          </div>`
       : ''}
 
+    ${d.akceptace ? kartaAkceptace(d.akceptace) : ''}
+
     <div class="mrizka mrizka--karty" style="margin-bottom:18px">
       ${karta(d.poptavky.nove, 'Nové poptávky', d.poptavky.nove > 0)}
       ${karta(d.poptavky.vyrizuji_se, 'Rozpracované poptávky')}
@@ -90,6 +92,33 @@ export async function vykresli(koren) {
   koren.querySelectorAll('[data-poptavka]').forEach((prvek) => {
     prvek.addEventListener('click', () => jdiNa(`poptavky/${prvek.dataset.poptavka}`));
   });
+}
+
+// Karta na přehledu: co je na testu nového a jak daleko je testování. Ukazuje
+// se jen na testu (v produkci ji server neposílá) a jen tomu, kdo testuje.
+function kartaAkceptace(a) {
+  const procent = a.moje_celkem ? Math.round((a.moje_hotovo / a.moje_celkem) * 100) : 0;
+  const zbyva = a.moje_celkem - a.moje_hotovo;
+
+  return `<section class="panel" style="border-left:3px solid var(--accent)">
+      <div class="panel__hlava">
+        <h2 class="nadpis-2">Nová verze k otestování</h2>
+        <a href="/admin/akceptace/${esc(a.kod)}" data-odkaz>Otevřít →</a>
+      </div>
+      <p style="margin-bottom:10px">${esc(a.nazev)}</p>
+      <div class="pokrok" role="img"
+           aria-label="Máte otestováno ${a.moje_hotovo} z ${a.moje_celkem} úkolů">
+        <div class="pokrok__pruh" style="width:${procent}%"></div>
+      </div>
+      <p class="text-faint" style="margin-top:8px">
+        Máte otestováno ${a.moje_hotovo}/${a.moje_celkem}${
+          zbyva > 0 ? ` — zbývá ${zbyva} ${sklon(zbyva, 'úkol', 'úkoly', 'úkolů')}` : ' — hotovo, díky'
+        }.
+        ${a.souhrn.nefunguje > 0
+          ? `Za celý tým: ${a.souhrn.nefunguje} ${sklon(a.souhrn.nefunguje, 'úkol nefunguje', 'úkoly nefungují', 'úkolů nefunguje')}.`
+          : ''}
+      </p>
+    </section>`;
 }
 
 function karta(cislo, popis, pozor = false) {

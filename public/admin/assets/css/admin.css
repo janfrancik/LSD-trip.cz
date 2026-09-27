@@ -322,6 +322,88 @@ select.pole { appearance: none; background-image: none; }
 .rozdil__pred { color: var(--chyba); }
 .rozdil__po { color: var(--ok); }
 
+
+/* ------------------------------------------- akceptační testování (jen test)
+
+   Modul „Ke schválení“ se v produkci vůbec nenačte, ale styly tu jsou natrvalo -
+   jeden soubor pro obě prostředí je méně práce než dva, které se rozejdou.
+   -------------------------------------------------------------------------- */
+
+.zvonecek {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 36px; height: 34px; border: 1px solid var(--line-strong); color: var(--text);
+  font-size: 15px; line-height: 1;
+}
+.zvonecek:hover { border-color: var(--text); }
+.zvonecek__pocet {
+  position: absolute; top: -6px; right: -6px;
+  background: var(--accent); color: #fff; font-size: 10px; line-height: 1;
+  padding: 2px 5px; border-radius: 8px;
+}
+
+/* Popisek u tlačítka „Nahlásit problém“ - na mobilu zbyde jen ikona. */
+.jen-siroke { display: none; }
+
+.pokrok { height: 6px; background: var(--panel-2); border: 1px solid var(--line-soft); }
+.pokrok__pruh { height: 100%; background: var(--ok); transition: width 0.25s; }
+
+/* Seznam karet, který zůstává kartami i na širokém displeji - na rozdíl od
+   .seznam, který se nad 900 px schovává ve prospěch tabulky. Úkoly a hlášení
+   mají dlouhý text, v tabulce by se nedaly číst. */
+.seznam-karty { display: grid; gap: 10px; }
+
+.ukoly { display: grid; gap: 10px; }
+
+.ukol { background: var(--panel); border: 1px solid var(--line-soft); }
+.ukol--vyrazeny { opacity: 0.6; }
+.ukol__hlava {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 14px; cursor: pointer; list-style: none;
+}
+.ukol__hlava::-webkit-details-marker { display: none; }
+.ukol__hlava:hover { background: var(--row-hover); }
+.ukol[open] .ukol__hlava { border-bottom: 1px solid var(--line-soft); }
+.ukol__cislo {
+  flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); font-family: var(--font-mono); font-size: 12px; color: var(--dim);
+}
+.ukol__nazev { flex: 1; min-width: 0; font-weight: 600; font-size: 15px; }
+.ukol__telo { padding: 14px; display: grid; gap: 12px; }
+.ukol__cast { display: grid; gap: 5px; }
+/* Tlačítko v části úkolu se nemá roztáhnout přes celou šířku mřížky. */
+.ukol__cast > .btn { justify-self: start; }
+/* Postup je psaný po krocích, takže se zlomy řádků musí zachovat. */
+.ukol__text { white-space: pre-wrap; color: var(--text-2); font-size: 15px; line-height: 1.55; }
+
+/* Volba výsledku: tři velká tlačítka, aby se dala trefit prstem na letišti. */
+.volby { display: grid; gap: 8px; grid-template-columns: 1fr; }
+.volba {
+  padding: 12px 14px; border: 1px solid var(--line-strong); color: var(--text-2);
+  font-size: 14px; font-weight: 600; text-align: center;
+}
+.volba:hover { border-color: var(--text); color: var(--text); }
+.volba--aktivni { color: #fff; }
+.volba--funguje.volba--aktivni { background: var(--ok); border-color: var(--ok); }
+.volba--nefunguje.volba--aktivni { background: var(--chyba); border-color: var(--chyba); }
+.volba--nerozumim.volba--aktivni { background: var(--varovani); border-color: var(--varovani); color: #14140F; }
+
+.nahledy { display: flex; flex-wrap: wrap; gap: 8px; }
+.nahled { display: block; border: 1px solid var(--line); }
+.nahled img { width: 86px; height: 86px; object-fit: cover; }
+
+/* Co se k hlášení přiloží samo - tester to nemá opisovat. */
+.kontext {
+  border: 1px solid var(--line-soft); background: var(--panel-2);
+  padding: 10px 12px; margin-bottom: 18px; display: grid; gap: 5px;
+}
+.kontext__nadpis {
+  font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim);
+}
+.kontext__radek {
+  display: flex; gap: 10px; justify-content: space-between; font-size: 13px; color: var(--faint);
+}
+.kontext__radek span:last-child { text-align: right; word-break: break-all; color: var(--muted); }
+
 /* ------------------------------------------------------- širší displeje */
 
 @media (min-width: 900px) {
@@ -374,6 +456,9 @@ select.pole { appearance: none; background-image: none; }
 
   .mrizka--2 { grid-template-columns: 1fr 1fr; }
   .mrizka--detail { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); align-items: start; }
+
+  .jen-siroke { display: inline; }
+  .volby { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 420px) {

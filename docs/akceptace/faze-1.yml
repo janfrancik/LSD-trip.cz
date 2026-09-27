@@ -1,0 +1,334 @@
+# Zadání akceptačních testů pro fázi 1.
+#
+# Soubor se při nasazení na test naimportuje do administrace (modul
+# „Ke schválení“). Párování je podle `kod` - kód úkolu se proto nikdy nemění,
+# i když se přepíše text. Když se text změní, administrace to testerovi ukáže
+# jako „zadání se od tvého testu změnilo“.
+#
+# Úkoly se píšou pro člověka, který nezná kód: konkrétní hodnoty, krok za krokem,
+# a co má na konci vidět.
+
+verze:
+  kod: faze-1
+  nazev: Fáze 1 — Přihlášení, poptávky, uživatelé, nastavení
+  poradi: 1
+  # Složené odstavce (>-): v administraci se popis zobrazuje se zachovanými
+  # zlomy řádků, takže natvrdo zalomený text by se na mobilu lámal podruhé.
+  popis: >-
+    První část administrace. Jde o to, jestli se do administrace dostanete,
+    jestli se dá vyřídit poptávka z webu, přidat člověk do týmu, změnit
+    nastavení - a jestli je to použitelné z mobilu.
+
+    Testuje se na testovacím webu. Nic z toho, co tady uděláte, se neukáže
+    zákazníkům a žádný e-mail zákazníkovi neodejde.
+
+ukoly:
+  # -------------------------------------------------------------- přihlášení
+  - kod: prihlaseni
+    nazev: Přihlášení do administrace
+    oblast: prihlaseni
+    odkaz: /admin
+    postup: |
+      1. Otevřete administraci na testovacím webu (adresa webu + /admin).
+      2. Zadejte svůj e-mail a heslo, které jste si nastavila z odkazu v pozvánce.
+      3. Klikněte na Přihlásit se.
+    vysledek: |
+      Objeví se Přehled. V levém menu (na mobilu ve spodní liště) jsou položky
+      Přehled, Poptávky, Uživatelé, Nastavení, Audit a Ke schválení.
+      Vpravo nahoře je vidět oranžový odznak „test“, aby bylo poznat,
+      že nejste na skutečném webu.
+
+  - kod: prihlaseni-spatne-heslo
+    nazev: Špatné heslo nepustí dál
+    oblast: prihlaseni
+    odkaz: /admin
+    postup: |
+      1. Odhlaste se (v menu dole „Odhlásit se“).
+      2. Zadejte svůj e-mail a schválně špatné heslo, třeba „spatneheslo123“.
+      3. Zkuste to pětkrát za sebou.
+    vysledek: |
+      Pokaždé se ukáže hláška „Nesprávný e-mail nebo heslo.“ - tedy ne, který
+      z těch dvou údajů je špatně. Po několika pokusech se přihlášení na chvíli
+      zablokuje a napíše, že to máte zkusit později. Pak se normálním heslem
+      znovu přihlaste (pokud to blokování ještě trvá, dejte si pauzu 15 minut).
+
+  - kod: zapomenute-heslo
+    nazev: Zapomenuté heslo
+    oblast: prihlaseni
+    odkaz: /admin
+    postup: |
+      1. Na přihlašovací obrazovce klikněte na „Zapomenuté heslo“.
+      2. Zadejte svůj e-mail a odešlete.
+    vysledek: |
+      Obrazovka potvrdí, že pokud e-mail v administraci existuje, odkaz odešel -
+      záměrně neprozradí, jestli takový účet máme. Na testu chodí všechny e-maily
+      do testovací schránky (Honzovi), ne vám; ověření, že odkaz opravdu dorazil,
+      je na něm. Hlavní je, že obrazovka nespadne a napíše srozumitelnou hlášku.
+
+  # ---------------------------------------------------------------- poptávky
+  - kod: poptavka-z-webu
+    nazev: Poptávka z webu dojde do administrace
+    oblast: poptavky
+    odkaz: /admin/poptavky
+    postup: |
+      1. Otevřete si v druhé záložce testovací web (adresa bez /admin)
+         a najděte kontaktní formulář.
+      2. Vyplňte jméno „Zkouška Martina“, svůj e-mail, telefon 777 111 222
+         a zprávu „Chtěla bych tandem v srpnu, je ještě volno?“.
+      3. Odešlete a vraťte se do administrace na Poptávky.
+    vysledek: |
+      Poptávka je v seznamu jako první, se štítkem „nová“, a je u ní vidět
+      jméno, e-mail, telefon i začátek zprávy. V menu u Poptávek svítí číslo
+      s počtem nových.
+
+  - kod: poptavka-odpoved
+    nazev: Odpověď na poptávku
+    oblast: poptavky
+    odkaz: /admin/poptavky
+    postup: |
+      1. Klikněte na poptávku „Zkouška Martina“.
+      2. Do pole „Text odpovědi“ napište „Dobrý den, v srpnu máme volno
+         14. a 21. Ozvěte se na telefon, domluvíme čas.“
+      3. Nechte zaškrtnuté „Označit poptávku jako vyřízenou“ a odešlete.
+    vysledek: |
+      Dole se objeví hláška, že odpověď odešla (na testu do testovací schránky,
+      ne zákazníkovi). Poptávka má štítek „vyřízeno“, text odpovědi je vidět
+      v detailu a v části „Odeslané e-maily“ je záznam s časem a poznámkou,
+      že byl v testu přesměrovaný.
+
+  - kod: poptavka-stav-poznamka
+    nazev: Stav a interní poznámka u poptávky
+    oblast: poptavky
+    odkaz: /admin/poptavky
+    postup: |
+      1. V detailu poptávky přepněte stav na „Rozpracované“.
+      2. Do interní poznámky napište „Volala jsem, ozve se v pátek.“
+      3. Uložte a vraťte se na seznam poptávek.
+      4. Otevřete poptávku znovu.
+    vysledek: |
+      Stav i poznámka zůstaly uložené. Poznámka je označená jako interní -
+      zákazníkovi se neposílá. V záložkách nad seznamem přeskočila poptávka
+      do „Rozpracované“.
+
+  - kod: poptavka-smazani
+    nazev: Smazání a obnovení poptávky
+    oblast: poptavky
+    odkaz: /admin/poptavky
+    postup: |
+      1. V detailu poptávky klikněte na „Smazat poptávku“.
+      2. Přečtěte si, co se v potvrzení píše, a potvrďte.
+      3. Nahoře v záložkách klikněte na „Smazané“ a poptávku otevřete.
+      4. Klikněte na „Obnovit poptávku“.
+    vysledek: |
+      Potvrzení předem vysvětlí, že poptávka zmizí ze seznamu, ale zůstane
+      uložená a dá se obnovit - ne jen „Jste si jistá?“. Po smazání v běžném
+      seznamu není, ale v záložce Smazané ano. Po obnovení je zpátky mezi
+      ostatními i s odpovědí a poznámkou.
+
+  # --------------------------------------------------------------- uživatelé
+  - kod: uzivatele-pridani
+    nazev: Přidání člověka do týmu
+    oblast: uzivatele
+    odkaz: /admin/uzivatele
+    postup: |
+      1. Na Uživatelích klikněte na „Přidat člověka“.
+      2. Zadejte jméno „Testovací instruktor“, e-mail, který máte po ruce
+         (může být i váš s +test, například jmeno+test@gmail.com),
+         a roli „Instruktor“.
+      3. Uložte.
+    vysledek: |
+      Člověk je v seznamu s rolí Instruktor a s poznámkou, že ještě nemá heslo.
+      Administrace ukáže okno s odkazem na nastavení hesla a napíše, jestli
+      pozvánka odešla e-mailem, nebo jestli je potřeba odkaz poslat ručně -
+      nikdy netvrdí, že e-mail odešel, když je odesílání vypnuté.
+
+  - kod: uzivatele-role
+    nazev: Instruktor vidí jen to svoje
+    oblast: uzivatele
+    odkaz: /admin/uzivatele
+    postup: |
+      1. Zkopírujte si odkaz na nastavení hesla z předchozího úkolu.
+      2. Odhlaste se, otevřete odkaz a nastavte heslo (alespoň 10 znaků).
+      3. Přihlaste se jako „Testovací instruktor“.
+      4. Podívejte se, co je v menu. Pak zkuste do adresy napsat /admin/uzivatele.
+      5. Odhlaste se a přihlaste se zpátky pod sebou.
+    vysledek: |
+      Instruktor má v menu jen Přehled a Můj účet - žádné Poptávky, Uživatele
+      ani Nastavení. Když adresu /admin/uzivatele napíše ručně, dostane
+      vysvětlení, že na tuhle část nemá oprávnění, ne prázdnou obrazovku
+      nebo chybu.
+
+  - kod: ucet-zmena-hesla
+    nazev: Změna vlastního hesla
+    oblast: ucet
+    odkaz: /admin/ucet
+    postup: |
+      1. Otevřete „Můj účet“.
+      2. Změňte si heslo na jiné (alespoň 10 znaků) a uložte.
+      3. Odhlaste se a přihlaste se novým heslem.
+    vysledek: |
+      Změna projde, po odhlášení funguje jen nové heslo. Krátké heslo
+      administrace nepřijme a napíše, kolik znaků je potřeba.
+
+  # --------------------------------------------------------------- nastavení
+  - kod: nastaveni-zmena
+    nazev: Nastavení se opravdu uloží
+    oblast: nastaveni
+    odkaz: /admin/nastaveni
+    postup: |
+      1. Otevřete Nastavení.
+      2. Ve skupině Provoz změňte „Telefon pro rezervace“ na 777 310 959
+         a „Konec sezóny“ na „listopad“.
+      3. Uložte, přejděte na Přehled a vraťte se zpátky do Nastavení.
+    vysledek: |
+      Obě hodnoty zůstaly změněné. U každého pole je popisek běžnou češtinou
+      (ne klíč jako „provoz.telefon“) a tam, kde je to potřeba, i nápověda,
+      co hodnota ovlivní.
+
+  - kod: nastaveni-klice
+    nazev: API klíče nejsou vidět
+    oblast: nastaveni
+    odkaz: /admin/nastaveni
+    postup: |
+      1. V Nastavení sjeďte dolů na část o integracích (Resend, platební brána).
+    vysledek: |
+      U každé integrace je jen stav „nastaveno“ nebo „nenastaveno“ a vysvětlení,
+      že klíč se zadává na serveru. Nikde není vidět samotný klíč ani políčko,
+      kam by se dal napsat.
+
+  # ------------------------------------------------------------------- audit
+  - kod: audit-zapis
+    nazev: V auditu je vidět, kdo co udělal
+    oblast: audit
+    odkaz: /admin/audit
+    postup: |
+      1. Otevřete Audit.
+      2. Najděte záznamy z dnešního dne - změnu nastavení, přidání člověka,
+         odpověď na poptávku, přihlášení.
+      3. Rozklikněte změnu nastavení a podívejte se na detail.
+    vysledek: |
+      U každého záznamu je čas, kdo to byl a co se stalo. U změny je vidět
+      hodnota před a po. Hesla ani klíče v auditu nejsou - místo hodnoty
+      je tam ***.
+
+  # ------------------------------------------------------------------- mobil
+  - kod: mobil
+    nazev: Použitelnost na mobilu
+    oblast: mobil
+    odkaz: /admin
+    postup: |
+      1. Otevřete administraci na telefonu (adresa webu + /admin).
+      2. Projděte Přehled, Poptávky, detail poptávky a Nastavení.
+      3. Zkuste jednou rukou přepínat mezi obrazovkami spodní lištou.
+      4. Klikněte do nějakého textového pole a napište pár znaků.
+    vysledek: |
+      Nic se nemusí posouvat do stran, texty jsou čitelné bez zvětšování,
+      spodní lišta je v dosahu palce a při psaní se stránka nezvětšuje.
+      Tlačítka jsou dost velká, aby se dala trefit prstem.
+
+  - kod: web-nedotceny
+    nazev: Veřejný web funguje jako dřív
+    oblast: web
+    postup: |
+      1. Otevřete testovací web bez /admin.
+      2. Projděte hlavní stránku, fotky, ceny a kontaktní formulář.
+    vysledek: |
+      Web vypadá a chová se stejně jako předtím, nic nechybí a nikde
+      nesvítí chyba.
+
+  # ------------------------------ modul Ke schválení (tenhle modul samotný)
+  - kod: akceptace-vysledek
+    nazev: Zapsání výsledku u úkolu
+    oblast: akceptace
+    odkaz: /admin/akceptace
+    postup: |
+      1. Otevřete „Ke schválení“ a rozklikněte verzi Fáze 1.
+      2. U libovolného úkolu, který jste už zkoušela, klikněte na Funguje
+         a napište krátký komentář.
+      3. U jiného úkolu zkuste Nefunguje bez komentáře.
+    vysledek: |
+      Výsledek se uloží a je u něj vidět vaše jméno a čas. U „Nefunguje“
+      bez komentáře administrace napíše, že komentář je potřeba - jinak
+      by se nedalo poznat, co opravit.
+
+  - kod: akceptace-priloha
+    nazev: Přiložení snímku obrazovky
+    oblast: akceptace
+    odkaz: /admin/akceptace
+    postup: |
+      1. U některého úkolu klikněte na přidání snímku.
+      2. Vyberte fotku nebo snímek obrazovky z telefonu.
+      3. Uložte výsledek a znovu ho otevřete.
+    vysledek: |
+      Snímek je u výsledku vidět jako náhled a dá se otevřít ve velkém.
+      Velký obrázek administrace přijme (do 6 MB), u něčeho jiného než obrázku
+      napíše, co lze přiložit.
+
+  - kod: akceptace-hlaseni
+    nazev: Tlačítko „Nahlásit problém“
+    oblast: akceptace
+    postup: |
+      1. Přejděte na kteroukoli obrazovku administrace, například na Poptávky.
+      2. V hlavičce klikněte na „Nahlásit problém“.
+      3. Napište „Zkouška hlášení - tady jen zkoušíme, že to funguje.“,
+         případně přiložte snímek, a odešlete.
+      4. V modulu Ke schválení se podívejte na seznam hlášení.
+    vysledek: |
+      Okno samo ukáže, z jaké obrazovky hlásíte, jaký máte prohlížeč a rozlišení -
+      nic z toho nemusíte opisovat. Po odeslání je hlášení v seznamu s vaším
+      jménem a časem, a jde u něj přepnout stav na „řeší se“ a „vyřešeno“.
+
+  - kod: akceptace-upozorneni
+    nazev: Zvoneček a karta na přehledu
+    oblast: akceptace
+    odkaz: /admin
+    postup: |
+      1. Podívejte se na zvoneček v hlavičce administrace.
+      2. Otevřete Přehled.
+    vysledek: |
+      U zvonečku je počet úkolů, které ještě nemáte otestované, a kliknutím
+      se dostanete do modulu Ke schválení. Na Přehledu je karta „Nová verze
+      k otestování“ s průběhem (například 5/8). Jak úkoly odškrtáváte,
+      obě čísla klesají.
+
+  - kod: akceptace-pretestovani
+    nazev: Vrácení úkolu k přetestování
+    oblast: akceptace
+    odkaz: /admin/akceptace
+    postup: |
+      1. Označte jeden úkol jako Nefunguje s komentářem „zkouška“.
+      2. U toho úkolu klikněte na „Poslat k přetestování“
+         (to je tlačítko pro provoz a administrátora - po opravě a novém nasazení).
+      3. Podívejte se, jak úkol vypadá teď, a otestujte ho znovu jako Funguje.
+    vysledek: |
+      Po vrácení má úkol stav „k přetestování“ a připočítá se ke zvonečku,
+      takže na něj nezapomenete. Po novém otestování je zase „funguje“
+      a v historii je vidět, že předtím nefungoval.
+
+  - kod: akceptace-schvaleni
+    nazev: Schválení verze
+    oblast: akceptace
+    odkaz: /admin/akceptace
+    postup: |
+      1. Dokud máte neotestované úkoly, klikněte na „Schválit verzi“.
+      2. Přečtěte si, co administrace napíše.
+      3. Až budou všechny ostatní úkoly Funguje a hlášení vyřešená,
+         označte jako Funguje i tento úkol a klikněte na „Schválit verzi“ znovu.
+      4. Napište poznámku, například „Odzkoušeno na mobilu i na počítači.“
+    vysledek: |
+      Poprvé administrace schválení nedovolí a vypíše, co konkrétně chybí
+      (kolik úkolů je neotestovaných, kolik nefunguje, kolik hlášení je
+      otevřených). Podruhé se verze označí jako schválená, s vaším jménem,
+      datem a poznámkou. Záznam o schválení je i v Auditu.
+
+  - kod: akceptace-export
+    nazev: Export souhrnu verze
+    oblast: akceptace
+    odkaz: /admin/akceptace
+    postup: |
+      1. U verze klikněte na „Stáhnout souhrn“.
+      2. Otevřete stažený soubor (je to obyčejný text).
+    vysledek: |
+      V souboru je seznam úkolů s výsledky, kdo co testoval a kdy, seznam
+      hlášení a údaj o schválení. Takový soubor se přidá do repozitáře
+      jako zápis o akceptaci.

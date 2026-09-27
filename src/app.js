@@ -32,9 +32,18 @@ export function vytvorApp() {
   app.use(bezpecnostniHlavicky());
   app.use(cookieParser());
 
-  // Limit těla: administrace posílá jen formuláře, nic velkého. Upload fotek
-  // přijde ve fázi 5 a bude mít vlastní, vyšší limit u svého endpointu.
-  app.use(express.json({ limit: '100kb' }));
+  // Limit těla: administrace posílá jen formuláře, nic velkého. Výjimkou je
+  // nahrání snímku obrazovky v akceptaci - obrázek jde jako base64 v JSON,
+  // takže potřebuje vyšší limit. Limit je proto na cestě, ne globální; kdyby
+  // byl globální, dal by se každý endpoint zahltit osmimegovým tělem.
+  // (Upload fotogalerie přijde ve fázi 5 a bude mít vlastní endpoint.)
+  const teloMale = express.json({ limit: '100kb' });
+  const teloSObrazkem = express.json({ limit: '8mb' });
+  app.use((req, res, next) =>
+    req.path === '/api/admin/akceptace/prilohy'
+      ? teloSObrazkem(req, res, next)
+      : teloMale(req, res, next)
+  );
 
   // ---------------------------------------------------------------------- API
 

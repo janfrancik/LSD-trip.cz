@@ -478,19 +478,20 @@ ALTER TABLE poptavky DROP COLUMN vyrizeno;
 Chyby: `{ chyba: "...", detaily: { pole: "zpráva" } }` — česky, rovnou zobrazitelné.
 
 ### Role → oprávnění
-| | admin | provoz | instruktor | účetní |
-| --- | --- | --- | --- | --- |
-| dashboard | ✓ | ✓ | dnešní termíny | tržby |
-| produkty, ceník | ✓ | čtení | – | čtení |
-| termíny | ✓ | ✓ | čtení + manifest | – |
-| rezervace | ✓ | ✓ | manifest (jméno, váha, zaplaceno) | čtení |
-| poukazy | ✓ | ✓ | – | ✓ |
-| platby, doklady | ✓ | čtení | – | ✓ |
-| e-maily (šablony) | ✓ | – | – | – |
-| e-maily (odeslat účastníkům) | ✓ | ✓ | – | – |
-| galerie, obsah | ✓ | ✓ | – | – |
-| zákazníci, GDPR | ✓ | ✓ | – | čtení |
-| uživatelé, audit, nastavení | ✓ | – | – | – |
+| | admin | provoz | instruktor | účetní | tester |
+| --- | --- | --- | --- | --- | --- |
+| dashboard | ✓ | ✓ | dnešní termíny | tržby | – |
+| produkty, ceník | ✓ | čtení | – | čtení | – |
+| termíny | ✓ | ✓ | čtení + manifest | – | – |
+| rezervace | ✓ | ✓ | manifest (jméno, váha, zaplaceno) | čtení | – |
+| poukazy | ✓ | ✓ | – | ✓ | – |
+| platby, doklady | ✓ | čtení | – | ✓ | – |
+| e-maily (šablony) | ✓ | – | – | – | – |
+| e-maily (odeslat účastníkům) | ✓ | ✓ | – | – | – |
+| galerie, obsah | ✓ | ✓ | – | – | – |
+| zákazníci, GDPR | ✓ | ✓ | – | čtení | – |
+| uživatelé, audit, nastavení | ✓ | – | – | – | – |
+| ke schválení (jen mimo produkci) | ✓ | ✓ | – | – | ✓ |
 
 ---
 
@@ -525,6 +526,9 @@ layout: mobilní spodní lišta se 5 ikonami, na desktopu levý sloupec.
 /admin/#/uzivatele           Uživatelé a role
 /admin/#/audit               Audit log s filtry
 /admin/#/nastaveni           Spolek, lhůty, storno podmínky, připomínky, stavy integrací
+/admin/akceptace             Ke schválení — verze k otestování (JEN mimo produkci)
+/admin/akceptace/:kod        Úkoly verze, výsledky testerů, schválení, export souhrnu
+/admin/akceptace/hlaseni     Hlášení problémů z tlačítka v hlavičce
 ```
 
 ### Zásady UI (pro použití na letišti z mobilu)
@@ -722,6 +726,34 @@ Přeplatek se označí a nabídne se refundace nebo převedení na jinou rezerva
 nezaplacené po `drzeni_do`, platby selhané na bráně a stavy `InvestigationNeeded`
 nebo neshodu částky z Mo.one.
 
+### 6.9 Modul „Ke schválení“ (akceptační testování)
+
+Doplněno 27. 9. 2026, po fázi 1.
+
+Nová verze se nasazuje nejdřív na test a do `main` jde až po odsouhlasení. Aby bylo
+z čeho odsouhlasit, má administrace na testu modul, který drží zadání testů a jejich
+výsledky. **V produkci modul neexistuje** — router se nenamontuje (`config.akceptaceZapnuta`,
+tedy `PROSTREDI ≠ produkce`), `/ja` hlásí `akceptace: false` a administrace ho ani neukáže.
+
+- **Zadání je v repozitáři**, ne v databázi: `docs/akceptace/<faze>.yml`. Patří ke commitu
+  se změnou kódu a při startu aplikace se naimportuje.
+- **Import je idempotentní**, páruje se podle `kod` úkolu. Změněné zadání se aktualizuje
+  a orazítkuje `zmeneno_at` (tester pak vidí, že testoval starší verzi), vyřazený úkol
+  se zhasne (`aktivni = 0`). Výsledky testerů se nikdy nemažou.
+- **Výsledek má každý tester vlastní** (`akceptace_vysledky`, unikát ukol+uživatel):
+  funguje / nefunguje / nerozumím zadání + komentář + přílohy. U „nefunguje“ je komentář
+  povinný. Souhrnný stav úkolu určuje nejhorší výsledek.
+- **Po opravě** vrátí provoz nebo admin úkol do stavu `k_pretestovani`, hromadně i jednotlivě.
+- **Schválení** může jen admin a jen když všechny úkoly fungují a hlášení jsou vyřízená;
+  jinak API vrátí 409 se seznamem důvodů. Schválení se zapisuje do auditu, souhrn se dá
+  stáhnout jako Markdown do `docs/akceptace/`.
+- **Hlášení problému** je na každé obrazovce administrace; adresu, prohlížeč, rozlišení
+  a přihlášeného člověka sbírá samo.
+- **Přílohy** (PNG/JPEG/WebP do 6 MB) jdou do volume `uploads`, v databázi je jen cesta.
+  Typ se pozná z obsahu souboru. Servírují se přes API za přihlášením, ne staticky.
+  Zpracování obrázků (sharp, WebP, EXIF) přijde s galerií ve fázi 5.
+- **Role `tester`** vidí jen tenhle modul a svoje výsledky — ne, jak hlasovali ostatní.
+
 ---
 
 ## 7. Migrace fotek ze starého webu
@@ -859,12 +891,12 @@ Po každé fázi dostaneš seznam, co otestovat. Do `main` nic bez tvého souhla
 
 | Fáze | Obsah | Migrace |
 | --- | --- | --- |
-| **1** | Testovací prostředí (workflow, compose, Caddy podklady). Zabezpečení: helmet, CSP, rate limit, limity těla. Přihlášení (argon2, session v DB, CSRF, reset hesla, 2FA volitelně), uživatelé, role, audit log, nastavení. Zabezpečení `/api/poptavky` → `/api/admin/poptavky`. Skelet `/admin` + dashboard s prázdnými kartami. | `002`, `003` |
-| **2** | DPH (3 režimy), produkty, varianty, příplatky, historie cen. Místa, termíny, kalendář, hromadné vytváření, kopie dne, zrušení kvůli počasí (bez e-mailů). Obsah: stránky, bloky, navigace, FAQ, tým, aktuality, banner. **Veřejný web: SSR + normální URL + napojení na DB** (vizuál bit za bitem stejný) a k tomu celé SEO ze sekce 8 — meta, JSON-LD, sitemap, robots, `llms.txt`, mapa 301. | `004`, `005` |
-| **3** | Zákazníci, rezervace (transakční kapacita), ruční rezervace, přesun, storno, manifest (tisk + CSV + PDF). Napojení `#/booking`. Resend: šablony, render, log, webhooky, hromadný e-mail účastníkům termínu, automatika u zrušení kvůli počasí. | `006`, `007` |
-| **4** | Platby: převod + QR (SPAYD) + VS, **brána Mo.one**, **záložní tok při selhání brány** (QR na návratové stránce, držení místa 48 h, `k_proseteni`), víc plateb na rezervaci a doplatky, ruční označení zaplaceno se způsobem platby, refundace. Fakturace: číselné řady, zálohy, faktury, dobropisy, **rekapitulace DPH po sazbách včetně osvobozených položek**, PDF, automatické vystavení po zaplacení, export pro účetní rozdělený podle režimu DPH. Dárkové poukazy (jedno/víceúčelové) včetně PDF a uplatnění. | `008`, `009` |
-| **5** | Galerie: upload (drag & drop, mobil), sharp → WebP + náhledy, EXIF, alba, řazení, alt. **Migrace fotek ze starého webu** a odstřihnutí `www.lsd-trip.cz`. Dokončení SEO a OG obrázků. | `010` |
-| **6** | Dashboard naostro (obsazenost, nezaplacené, po splatnosti, tržby), reporty, kartotéka zákazníků, GDPR export a anonymizace, zálohy + cron + healthcheck, **newsletter** (formulář, double opt-in, rozesílání, odhlášení). | `011` |
+| **1** | Testovací prostředí (workflow, compose, Caddy podklady). Zabezpečení: helmet, CSP, rate limit, limity těla. Přihlášení (argon2, session v DB, CSRF, reset hesla, 2FA volitelně), uživatelé, role, audit log, nastavení. Zabezpečení `/api/poptavky` → `/api/admin/poptavky`. Skelet `/admin` + dashboard s prázdnými kartami. Modul **Ke schválení** (akceptační testování, jen mimo produkci) včetně zadání pro fázi 1. | `002`, `003`, `004` |
+| **2** | DPH (3 režimy), produkty, varianty, příplatky, historie cen. Místa, termíny, kalendář, hromadné vytváření, kopie dne, zrušení kvůli počasí (bez e-mailů). Obsah: stránky, bloky, navigace, FAQ, tým, aktuality, banner. **Veřejný web: SSR + normální URL + napojení na DB** (vizuál bit za bitem stejný) a k tomu celé SEO ze sekce 8 — meta, JSON-LD, sitemap, robots, `llms.txt`, mapa 301. | `005`, `006` |
+| **3** | Zákazníci, rezervace (transakční kapacita), ruční rezervace, přesun, storno, manifest (tisk + CSV + PDF). Napojení `#/booking`. Resend: šablony, render, log, webhooky, hromadný e-mail účastníkům termínu, automatika u zrušení kvůli počasí. | `007`, `008` |
+| **4** | Platby: převod + QR (SPAYD) + VS, **brána Mo.one**, **záložní tok při selhání brány** (QR na návratové stránce, držení místa 48 h, `k_proseteni`), víc plateb na rezervaci a doplatky, ruční označení zaplaceno se způsobem platby, refundace. Fakturace: číselné řady, zálohy, faktury, dobropisy, **rekapitulace DPH po sazbách včetně osvobozených položek**, PDF, automatické vystavení po zaplacení, export pro účetní rozdělený podle režimu DPH. Dárkové poukazy (jedno/víceúčelové) včetně PDF a uplatnění. | `009`, `010` |
+| **5** | Galerie: upload (drag & drop, mobil), sharp → WebP + náhledy, EXIF, alba, řazení, alt. **Migrace fotek ze starého webu** a odstřihnutí `www.lsd-trip.cz`. Dokončení SEO a OG obrázků. | `011` |
+| **6** | Dashboard naostro (obsazenost, nezaplacené, po splatnosti, tržby), reporty, kartotéka zákazníků, GDPR export a anonymizace, zálohy + cron + healthcheck, **newsletter** (formulář, double opt-in, rozesílání, odhlášení). | `012` |
 
 ### Testy (node:test, proti testovací DB)
 - Kapacita: 20 paralelních rezervací na 5 míst → přesně 5 uspěje, žádné přebookování.
@@ -874,6 +906,7 @@ Po každé fázi dostaneš seznam, co otestovat. Do `main` nic bez tvého souhla
 - Poukaz: dvojí uplatnění téhož kódu selže; hodnotový poukaz odečte správně a zbytek zůstane.
 - Číselná řada: 50 paralelních dokladů → 50 unikátních čísel bez děr.
 - Autorizace: každý admin endpoint bez session vrací 401, s cizí rolí 403, bez CSRF tokenu 403.
+- Akceptace: v produkci (`PROSTREDI=produkce`) vrací `/api/admin/akceptace` 404, ne 401 — modul tam neexistuje. Opakovaný import zadání nezduplikuje úkoly a nesmaže výsledky testerů.
 - `EMAIL_REZIM=test` nikdy neodešle na jinou adresu než `EMAIL_TEST_PRIJEMCE`.
 - V `src/` ani `public/` není natvrdo napsaná doména (`lsd.francik.eu`, `lsd-trip.cz`) — vše z `APP_URL`.
 - SSR vrací kompletní obsah bez JS: `curl` na každou routu obsahuje H1, perex a JSON-LD (test proti crawlerům).
