@@ -4,12 +4,13 @@ on:
   push:
     branches:
       - main
+      - test
 
 env:
   # Pozor: jméno repozitáře je "LSD-trip.cz", ale ghcr.io přijímá jen malá
   # písmena - proto tady nejde použít ${{ github.repository }} a image je
   # zapsaný natvrdo v malých písmenech.
-  IMAGE: ghcr.io/janfrancik/lsd-trip.cz:latest
+  IMAGE_BASE: ghcr.io/janfrancik/lsd-trip.cz
 
 jobs:
   build-and-deploy:
@@ -20,6 +21,21 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      # Jeden workflow pro obě prostředí. Větev main jde do produkce,
+      # větev test do testovacího prostředí s vlastní databází a .env.
+      - name: Určit prostředí
+        id: env
+        run: |
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "tag=latest"                     >> "$GITHUB_OUTPUT"
+            echo "dir=/home/deploy/apps/lsdtrip"  >> "$GITHUB_OUTPUT"
+            echo "nazev=produkce"                 >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=test"                            >> "$GITHUB_OUTPUT"
+            echo "dir=/home/deploy/apps/lsdtrip-test"  >> "$GITHUB_OUTPUT"
+            echo "nazev=test"                          >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Login to ghcr.io
         uses: docker/login-action@v3
@@ -33,24 +49,83 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ env.IMAGE }}
+          tags: ${{ env.IMAGE_BASE }}:${{ steps.env.outputs.tag }}
           platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Deploy on VPS
+      # Na server patří i docker-compose.yml a zálohovací skript. Kdyby se
+      # nahrávaly ručně, první nasazení by spadlo (compose na serveru ještě
+      # není) a časem by se compose rozešel s image, který k němu patří.
+      # Soubor .env se NIKDY nepřepisuje - ten je jen na serveru.
+      - name: Připravit adresář na VPS
         uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.VPS_HOST }}
           username: deploy
           key: ${{ secrets.VPS_SSH_KEY }}
-          envs: GITHUB_ACTOR,GITHUB_TOKEN,IMAGE
+          envs: CILOVY_DIR
+          script: mkdir -p "$CILOVY_DIR"
+        env:
+          CILOVY_DIR: ${{ steps.env.outputs.dir }}
+
+      - name: Nahrát docker-compose.yml
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: docker-compose.yml
+          target: ${{ steps.env.outputs.dir }}
+          overwrite: true
+
+      - name: Nahrát zálohovací skript
+        uses: appleboy/scp-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          source: scripts/zaloha.sh
+          target: ${{ steps.env.outputs.dir }}
+          strip_components: 1
+          overwrite: true
+
+      - name: Deploy on VPS (${{ steps.env.outputs.nazev }})
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: deploy
+          key: ${{ secrets.VPS_SSH_KEY }}
+          envs: GITHUB_ACTOR,GITHUB_TOKEN,CILOVY_DIR,IMAGE_BASE
           script: |
             set -e
-            cd /home/deploy/apps/lsdtrip
+            cd "$CILOVY_DIR"
+            chmod +x zaloha.sh
+
+            # .env vytváří člověk, workflow se ho nedotýká. Bez něj by compose
+            # spadl na chybějících proměnných - tohle to řekne srozumitelně.
+            if [ ! -f .env ]; then
+              echo "CHYBA: v $CILOVY_DIR chybí soubor .env. Založ ho podle docs/nasazeni-vps.md."
+              exit 1
+            fi
+
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
             docker compose pull
             docker compose up -d
+
+            # Migrace až po nastartování - aplikace čeká na zdravou databázi,
+            # takže v tomhle okamžiku je připojení zaručeně dostupné.
             docker compose exec -T app npm run migrate
-            docker image prune -f
+
+            # Úklid jen našich starých vrstev. Obyčejný "docker image prune -f"
+            # maže všechny visící image na stroji, tedy i cizích aplikací,
+            # které na VPS běží vedle.
+            docker image ls "$IMAGE_BASE" --filter dangling=true --quiet \
+              | xargs -r docker image rm || true
+
+            docker compose ps
         env:
           GITHUB_ACTOR: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CILOVY_DIR: ${{ steps.env.outputs.dir }}
+          IMAGE_BASE: ${{ env.IMAGE_BASE }}

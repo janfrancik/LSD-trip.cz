@@ -1,3 +1,13 @@
+# Produkce i testovací prostředí na VPS. Jeden soubor pro obě - liší se jen
+# hodnotami v .env:
+#
+#   produkce: IMAGE_TAG=latest APP_CONTAINER=lsdtrip-app      VOLUME_PREFIX=lsd_main
+#   test:     IMAGE_TAG=test   APP_CONTAINER=lsdtrip-test-app VOLUME_PREFIX=lsd_test
+#
+# Volumes mají výslovná jména (lsd_main_db, lsd_test_db, ...), ne odvozená od
+# názvu adresáře nebo projektu. Přejmenování složky na VPS tím nemůže způsobit,
+# že by Docker založil prázdnou databázi a stará data osiřela.
+
 services:
   db:
     image: mariadb:11.4
@@ -7,6 +17,7 @@ services:
       MARIADB_DATABASE: ${DB_NAME}
       MARIADB_USER: ${DB_USER}
       MARIADB_PASSWORD: ${DB_PASSWORD}
+      TZ: Europe/Prague
     volumes:
       - db_data:/var/lib/mysql
     networks:
@@ -18,14 +29,22 @@ services:
       retries: 10
 
   app:
-    image: ghcr.io/janfrancik/lsd-trip.cz:latest
-    container_name: lsdtrip-app
+    # IMAGE_TAG i APP_CONTAINER jsou povinné, ne s výchozí hodnotou. Kdyby
+    # chyběly v testovacím .env, test by si stáhl produkční image a pojmenoval
+    # se jako produkční kontejner - a Caddy by na něj začal posílat provoz.
+    image: ghcr.io/janfrancik/lsd-trip.cz:${IMAGE_TAG:?IMAGE_TAG musí být v .env (latest pro produkci, test pro test)}
+    container_name: ${APP_CONTAINER:?APP_CONTAINER musí být v .env (lsdtrip-app nebo lsdtrip-test-app)}
     restart: unless-stopped
     env_file:
       - .env
     environment:
       NODE_ENV: production
       DB_HOST: db
+      TZ: Europe/Prague
+    volumes:
+      # Nahrané fotky (fáze 5). Volume, ne bind mount - přežije přestavbu image
+      # a je součástí zálohy na VPS.
+      - uploads:/app/uploads
     networks:
       - internal
       - web
@@ -33,7 +52,7 @@ services:
       db:
         condition: service_healthy
     # Žádné "ports:" - kontejner není publikovaný na hostitele,
-    # Caddy k němu přistupuje přes síť "web" (reverse_proxy lsdtrip-app:3000)
+    # Caddy k němu přistupuje přes síť "web" (reverse_proxy ${APP_CONTAINER}:3000)
 
 networks:
   web:
@@ -42,3 +61,6 @@ networks:
 
 volumes:
   db_data:
+    name: ${VOLUME_PREFIX:?VOLUME_PREFIX musí být v .env, jinak by se prostředí potkala}_db
+  uploads:
+    name: ${VOLUME_PREFIX}_uploads

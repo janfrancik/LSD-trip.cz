@@ -1,0 +1,47 @@
+// src/api/admin/index.js
+//
+// Sestavení administrátorského API. Pořadí je důležité:
+//   1) načtení session (kdo jsem),
+//   2) CSRF u všeho, co mění data,
+//   3) jednotlivé routery, které si samy kontrolují oprávnění.
+//
+// Přihlášení se NEvyžaduje globálně - /prihlaseni a /reset-hesla musí jít
+// zavolat i bez něj. Ostatní routery mají vyzaduje(...) u každé cesty.
+
+import express from 'express';
+import { nactiSession, prodluzSession } from '../../auth/session.js';
+import { overCsrf } from '../../auth/csrf.js';
+import { asyncHandler } from '../../chyby.js';
+
+import auth from './auth.js';
+import uzivatele from './uzivatele.js';
+import poptavky from './poptavky.js';
+import audit from './audit.js';
+import nastaveni from './nastaveni.js';
+import dashboard from './dashboard.js';
+
+const router = express.Router();
+
+// Kdo je přihlášený. Chybějící nebo prošlá session není chyba - jen prázdný req.uzivatel.
+router.use(
+  asyncHandler(async (req, res, next) => {
+    const session = await nactiSession(req);
+    if (session) {
+      req.session = session;
+      req.uzivatel = session.uzivatel;
+      await prodluzSession(res, session);
+    }
+    next();
+  })
+);
+
+router.use(overCsrf);
+
+router.use('/', auth);
+router.use('/dashboard', dashboard);
+router.use('/uzivatele', uzivatele);
+router.use('/poptavky', poptavky);
+router.use('/audit', audit);
+router.use('/nastaveni', nastaveni);
+
+export default router;

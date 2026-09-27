@@ -7,6 +7,7 @@ services:
       MARIADB_DATABASE: ${DB_NAME}
       MARIADB_USER: ${DB_USER}
       MARIADB_PASSWORD: ${DB_PASSWORD}
+      TZ: Europe/Prague
     ports:
       # DB dostupná jen z localhostu vývojářského stroje
       - "127.0.0.1:3306:3306"
@@ -26,11 +27,13 @@ services:
     environment:
       NODE_ENV: development
       DB_HOST: db
+      TZ: Europe/Prague
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
       - .:/app
       - /app/node_modules
+      - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
@@ -38,3 +41,6 @@ services:
 
 volumes:
   db_data:
+    name: lsd_dev_db
+  uploads:
+    name: lsd_dev_uploads

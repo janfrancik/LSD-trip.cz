@@ -53,6 +53,8 @@
     voucher: 0,
     voucherFor: '',
     contactSent: false,
+    contactSending: false,
+    contactError: null,
     code: null
   };
 
@@ -752,7 +754,15 @@
             '<textarea class="field" style="min-height:130px" placeholder="Zpráva" aria-label="Zpráva" data-form="note">' + esc(state.form.note) + '</textarea>' +
           '</div>' +
           '<div style="margin-top:16px">' +
-            btn(state.contactSent ? 'Odesláno — ozveme se do 24 h' : 'Odeslat zprávu', 'btn--primary btn--block', 'send-contact') +
+            btn(
+            state.contactSent ? 'Odesláno — ozveme se do 24 h'
+              : state.contactSending ? 'Odesílám…'
+              : 'Odeslat zprávu',
+            'btn--primary btn--block', 'send-contact'
+          ) +
+          (state.contactError
+            ? '<p style="margin-top:12px;color:var(--accent-lite);font-size:14px">' + esc(state.contactError) + '</p>'
+            : '') +
           '</div>' +
         '</aside>' +
       '</div>' +
@@ -893,7 +903,47 @@
       render();
     },
     'lightbox': function (arg) { openLightbox(Number(arg)); },
-    'send-contact': function () { state.contactSent = true; render(); }
+    /* Odeslání kontaktního formuláře na API. Vizuál se nemění - jen přibyl
+       průběžný stav a hláška, když se odeslání nepovede. */
+    'send-contact': function () {
+      if (state.contactSending || state.contactSent) return;
+
+      var jmeno = (state.form.name || '').trim();
+      var email = (state.form.email || '').trim();
+      var zprava = (state.form.note || '').trim();
+
+      if (!jmeno || email.indexOf('@') === -1) {
+        state.contactError = 'Vyplň prosím jméno a platný e-mail.';
+        render();
+        return;
+      }
+
+      state.contactSending = true;
+      state.contactError = null;
+      render();
+
+      fetch('/api/poptavky', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jmeno: jmeno, email: email, zprava: zprava })
+      })
+        .then(function (odpoved) {
+          return odpoved.json().catch(function () { return {}; }).then(function (data) {
+            if (!odpoved.ok) throw new Error(data.chyba || 'Zprávu se nepodařilo odeslat.');
+            return data;
+          });
+        })
+        .then(function () {
+          state.contactSent = true;
+        })
+        .catch(function (chyba) {
+          state.contactError = chyba.message + ' Zkus to prosím znovu, nebo zavolej.';
+        })
+        .then(function () {
+          state.contactSending = false;
+          render();
+        });
+    }
   };
 
   /* -------------------------------------------------------------- events */

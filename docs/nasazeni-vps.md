@@ -1,0 +1,371 @@
+# Nasazení na VPS
+
+Příprava prostředí na VPS. Postup je psaný k vkládání do terminálu; doplnit je
+potřeba jen hodnoty označené `<DOPLNIT>`.
+
+| | produkce | test |
+| --- | --- | --- |
+| větev | `main` | `test` |
+| doména | `lsd.francik.eu` (později + `www.lsd-trip.cz`) | `test-lsd.francik.eu` |
+| adresář | `/home/deploy/apps/lsdtrip` | `/home/deploy/apps/lsdtrip-test` |
+| kontejner | `lsdtrip-app` | `lsdtrip-test-app` |
+| image | `ghcr.io/janfrancik/lsd-trip.cz:latest` | `…:test` |
+| databáze | `lsdtrip` ve volume `lsd_main_db` | `lsdtrip_test` ve volume `lsd_test_db` |
+| fotky | `lsd_main_uploads` | `lsd_test_uploads` |
+| e-maily | `vypnuto` → později `live` | `vypnuto` → po klíči `test` (vše na jednu adresu) |
+| stav | **zatím se nemění** | nasazuje se teď |
+| indexace | povolená | zakázaná (`robots.txt` + `X-Robots-Tag`) |
+
+**Volumes mají výslovná jména**, ne odvozená od názvu adresáře — přejmenování složky
+tedy nemůže způsobit, že by Docker založil prázdnou databázi a stará data osiřela.
+Bez `VOLUME_PREFIX` v `.env` compose schválně odmítne nastartovat.
+
+**Teď se nasazuje jen test.** Produkce (`lsd.francik.eu`) zůstává beze změny —
+se stávajícím `.env` i volume — dokud se test neodzkouší. Přechod produkce na novou
+verzi je popsaný zvlášť na konci (sekce „Přechod main na novou verzi“).
+
+> **Na VPS běží i jiné aplikace** (Kompas, Todo) ve stejné síti `web`. Žádný příkaz
+> v tomhle návodu proto nesahá mimo adresáře `/home/deploy/apps/lsdtrip*` a mimo
+> volumes `lsd_*`. Zvlášť: **nikdy nepouštěj `docker system prune` ani `docker image prune`**
+> bez filtru — smazaly by i vrstvy cizích aplikací. Nasazovací workflow z téhož důvodu
+> uklízí jen visící image `ghcr.io/janfrancik/lsd-trip.cz`.
+
+**Hotovo (27. 9. 2026):** DNS pro `test-lsd.francik.eu`, Caddyfile pro obě domény
+včetně `X-Robots-Tag` na testu, adresář `/home/deploy/apps/lsdtrip-test`
+a jeho `.env` (práva 600, ověřené). **Caddyfile už neupravuj.**
+
+`docker-compose.yml` ani `zaloha.sh` na server ručně nekopíruj — **nahraje je
+nasazovací workflow** při každém běhu, ještě před `pull` a `up`. Soubor `.env`
+naopak workflow nikdy nepřepisuje, ten zůstává jen na serveru.
+
+---
+
+## 1. DNS — ✅ hotovo
+
+`test-lsd.francik.eu` existuje a Caddy na něj odpovídá (502, dokud kontejner neběží).
+Kontrolní výpis, kdyby bylo potřeba:
+
+```bash
+dig +short lsd.francik.eu test-lsd.francik.eu
+```
+
+## 2. Adresáře a soubory — ✅ hotovo pro test
+
+`/home/deploy/apps/lsdtrip-test` existuje. `docker-compose.yml` a `zaloha.sh` sem
+nahraje workflow, ručně se nic nekopíruje.
+
+```bash
+ls -la /home/deploy/apps/lsdtrip-test/
+```
+
+Po prvním nasazení tu mají být `docker-compose.yml`, `zaloha.sh` a `.env`.
+
+## 3. Hesla — ✅ hotovo pro test
+
+Hesla testu jsou v jeho `.env`. Produkční se budou generovat až při přechodu `main`
+(poslední sekce), a musí být jiná:
+
+```bash
+echo "db:   $(openssl rand -base64 24 | tr -d '/+=')"
+echo "root: $(openssl rand -base64 24 | tr -d '/+=')"
+```
+
+## 4. `.env` pro test — ✅ hotovo
+
+Na serveru je a je ověřený. Níž pro doložení, jak vypadá:
+
+```bash
+cat > /home/deploy/apps/lsdtrip-test/.env <<'EOF'
+NODE_ENV=production
+PORT=3000
+
+APP_URL=https://test-lsd.francik.eu
+PROSTREDI=test
+
+DB_HOST=db
+DB_PORT=3306
+DB_NAME=lsdtrip_test
+DB_USER=lsdtrip
+DB_PASSWORD=<DOPLNIT-TEST-DB-HESLO>
+DB_ROOT_PASSWORD=<DOPLNIT-TEST-ROOT-HESLO>
+
+# Test se nesmí dostat do vyhledávačů.
+ROBOTS=zakazat
+
+# Dokud není Resend klíč, e-maily se jen logují. Po doplnění klíče přepni na
+# EMAIL_REZIM=test - všichni příjemci se pak přepíšou na adresu níž a
+# zákazníkovi nemůže nic odejít.
+EMAIL_REZIM=vypnuto
+# Kam se v testovacím režimu přesměrují VŠECHNY e-maily. Pokud chceš jinou
+# schránku, přepiš ji tady a spusť "docker compose up -d".
+EMAIL_TEST_PRIJEMCE=honza.francik@gmail.com
+EMAIL_ODESILATEL=LSD test <rezervace@lsd.francik.eu>
+RESEND_API_KEY=
+
+# Platební brána (fáze 4). Test vždy proti testovacímu prostředí Mo.one.
+MOONE_BASE_URL=https://api-test.znpay.tech
+MOONE_CLIENT_ID=
+MOONE_CLIENT_SECRET=
+
+SESSION_DNI=14
+
+# Oddělení prostředí. Bez VOLUME_PREFIX compose nenastartuje.
+VOLUME_PREFIX=lsd_test
+IMAGE_TAG=test
+APP_CONTAINER=lsdtrip-test-app
+COMPOSE_PROJECT_NAME=lsdtrip-test
+EOF
+
+chmod 600 /home/deploy/apps/lsdtrip-test/.env
+```
+
+## 5. Caddy — ✅ hotovo, needituj
+
+Caddyfile je nastavený a ověřený: `lsd.francik.eu` vrací 200,
+`test-lsd.francik.eu` zatím 502 (za doménou nic neběží — to se spraví krokem 8).
+Níž je jen pro doložení, jak konfigurace vypadá:
+
+```caddyfile
+# ---------------------------------------------------------------- produkce
+lsd.francik.eu {
+    encode zstd gzip
+    reverse_proxy lsdtrip-app:3000
+}
+
+# ------------------------------------------------------------------- test
+test-lsd.francik.eu {
+    encode zstd gzip
+
+    # Aplikace si hlavičku posílá sama podle ROBOTS=zakazat. Tohle je druhá
+    # pojistka pro případ, že by se .env na testu omylem přepnulo.
+    header X-Robots-Tag "noindex, nofollow, noarchive"
+
+    reverse_proxy lsdtrip-test-app:3000
+}
+```
+
+Co si můžeš ověřit, aniž bys do Caddy sahal — v síti `web` musí být Caddy
+i obě aplikace LSD (a vedle nich klidně Kompas a Todo, ty tam patří):
+
+```bash
+docker network inspect web --format '{{range .Containers}}{{.Name}} {{end}}'
+```
+
+## 6. První nasazení testu
+
+Na svém počítači:
+
+```bash
+git push -u origin test
+```
+
+Workflow postaví image `:test` a nasadí ho. Průběh v Actions na GitHubu.
+Na VPS se dá sledovat:
+
+```bash
+cd /home/deploy/apps/lsdtrip-test
+docker compose logs -f app
+```
+
+## 7. První uživatel administrace
+
+```bash
+cd /home/deploy/apps/lsdtrip-test
+docker compose exec app node scripts/vytvor-uzivatele.js <DOPLNIT-EMAIL> "<DOPLNIT-JMÉNO>" admin
+```
+
+Skript vypíše odkaz na nastavení hesla (platí 3 dny, použitelný jednou).
+Dokud není nastavený Resend, e-mail neodejde — použij odkaz z výpisu.
+
+## 8. Ověření
+
+```bash
+# a) test odpovídá a hlásí své jméno
+curl -s https://test-lsd.francik.eu/api/health; echo
+#    musí vrátit "prostredi":"test"
+
+# b) produkce běží dál a nic se jí nestalo
+curl -s https://lsd.francik.eu/api/health; echo
+
+# c) za doménou je správný kontejner
+docker inspect -f '{{.Name}} → {{.Config.Image}}' lsdtrip-test-app
+
+# d) test má vlastní volumes, produkční se nedotkly
+docker volume ls | grep -i lsd
+
+# e) test vidí jen svou databázi
+cd /home/deploy/apps/lsdtrip-test && docker compose exec -T db \
+  mariadb -uroot -p"$(grep DB_ROOT_PASSWORD .env | cut -d= -f2)" -e "SHOW DATABASES" | grep lsdtrip
+#    musí ukázat lsdtrip_test, nikdy lsdtrip
+
+# f) test se nesmí dostat do vyhledávačů
+curl -s  https://test-lsd.francik.eu/robots.txt          # Disallow: /
+curl -sI https://test-lsd.francik.eu/ | grep -i robots   # X-Robots-Tag: noindex, nofollow
+
+# g) administrace se neindexuje
+curl -sI https://test-lsd.francik.eu/admin | grep -i robots
+```
+
+Nakonec otevři `https://test-lsd.francik.eu/admin` a přihlas se.
+
+## 9. Zálohy
+
+```bash
+crontab -e
+```
+
+```
+40 3 * * * /home/deploy/apps/lsdtrip-test/zaloha.sh >> /home/deploy/zaloha.log 2>&1
+```
+
+Řádek pro produkci se přidá až při jejím přechodu. První běh pusť ručně,
+ať je jisté, že projde:
+
+```bash
+/home/deploy/apps/lsdtrip-test/zaloha.sh
+ls -la /home/deploy/backups/lsdtrip-test/denni/
+```
+
+---
+
+# Přechod main na novou verzi
+
+**Nedělej nic z téhle sekce, dokud není test odzkoušený a dokud se nedohodneme.**
+Do té doby produkce běží ve staré podobě: staré `.env`, staré volume, image `:latest`
+z posledního nasazení. Nové verze se do ní nedostanou, protože se do `main` nic nepushuje.
+
+Až přijde řada, postup je: nové `.env` → odstranění starého volume → sloučení větve.
+
+## P1. Hesla produkce
+
+Jiná než na testu:
+
+```bash
+echo "db:   $(openssl rand -base64 24 | tr -d '/+=')"
+echo "root: $(openssl rand -base64 24 | tr -d '/+=')"
+```
+
+## P2. `.env` pro produkci
+
+```bash
+cat > /home/deploy/apps/lsdtrip/.env <<'EOF'
+NODE_ENV=production
+PORT=3000
+
+APP_URL=https://lsd.francik.eu
+PROSTREDI=produkce
+
+DB_HOST=db
+DB_PORT=3306
+DB_NAME=lsdtrip
+DB_USER=lsdtrip
+DB_PASSWORD=<DOPLNIT-PRODUKCE-DB-HESLO>
+DB_ROOT_PASSWORD=<DOPLNIT-PRODUKCE-ROOT-HESLO>
+
+ROBOTS=povolit
+
+# Produkce zůstává na "vypnuto", dokud nebude ověřená doména v Resendu.
+# Teprve pak EMAIL_REZIM=live - do té doby se e-maily jen zapisují do logu.
+EMAIL_REZIM=vypnuto
+EMAIL_TEST_PRIJEMCE=
+EMAIL_ODESILATEL=LSD <rezervace@lsd.francik.eu>
+RESEND_API_KEY=
+
+# I produkce jede zatím proti testovacímu Mo.one. Přepnutí na ostrou bránu
+# je změna těchhle tří řádků a restart, žádné nasazování.
+MOONE_BASE_URL=https://api-test.znpay.tech
+MOONE_CLIENT_ID=
+MOONE_CLIENT_SECRET=
+
+SESSION_DNI=14
+
+VOLUME_PREFIX=lsd_main
+IMAGE_TAG=latest
+APP_CONTAINER=lsdtrip-app
+COMPOSE_PROJECT_NAME=lsdtrip
+EOF
+
+chmod 600 /home/deploy/apps/lsdtrip/.env
+```
+
+Aplikace si konfiguraci při startu zkontroluje. Když něco chybí nebo zůstane výchozí
+hodnota, **nenastartuje** a do logu napíše co — nikdy neběží s poloviční konfigurací.
+
+## P3. Odstranění starého volume produkce
+
+Produkční databáze je prázdná, nic se nezachovává. Starý volume proto zmizí a
+nový (`lsd_main_db`) se založí při prvním nasazení.
+
+```bash
+cd /home/deploy/apps/lsdtrip
+docker compose down                       # zastaví kontejnery, volume nechá
+docker volume ls | grep -i lsd            # přehled, co na stroji je
+```
+
+Zálohu si pro jistotu udělej i tak — stojí to deset vteřin:
+
+```bash
+docker run --rm -v lsdtrip_db_data:/data:ro -v /home/deploy:/zaloha alpine \
+  tar czf /zaloha/stary-volume-$(date +%F).tar.gz -C /data . 2>/dev/null \
+  && echo "záloha uložena" || echo "volume neexistuje, není co zálohovat"
+```
+
+Teprve potom:
+
+```bash
+docker volume rm lsdtrip_db_data lsdtrip_uploads
+docker volume ls | grep -i lsd            # zbýt mají jen lsd_main_* a lsd_test_*
+```
+
+Maž **jen tahle dvě jména**. Volumes cizích aplikací na stroji zůstávají bez dotyku
+a hromadné příkazy (`docker volume prune`) se tu nepoužívají.
+
+Kdyby `docker volume rm` hlásil, že je volume používaný, běží ještě nějaký kontejner:
+
+```bash
+docker ps -a --filter volume=lsdtrip_db_data
+docker rm -f <jméno kontejneru>
+```
+
+## P4. Sloučení test → main
+
+Do `main` se od teď nevyvíjí — jen se do něj slučuje ověřený `test`:
+
+```bash
+git checkout main
+git merge --ff-only test
+git push origin main
+git checkout test          # a pokračuje se zase v testu
+```
+
+Push do `main` nasadí produkci a spustí migrace. Pak zopakuj ověření z kroku 10
+pro `lsd.francik.eu`.
+
+
+## P5. Ověření produkce
+
+```bash
+curl -s https://lsd.francik.eu/api/health; echo      # "prostredi":"produkce"
+curl -s https://lsd.francik.eu/robots.txt | head -5  # Allow: /
+curl -sI https://lsd.francik.eu/admin | grep -i robots
+docker inspect -f '{{.Name}} → {{.Config.Image}}' lsdtrip-app
+docker volume ls | grep -i lsd                        # lsd_main_* a lsd_test_*
+```
+
+A přidej produkční řádek do cronu:
+
+```
+20 3 * * * /home/deploy/apps/lsdtrip/zaloha.sh >> /home/deploy/zaloha.log 2>&1
+```
+
+---
+
+## Když se něco pokazí
+
+| Příznak | Co s tím |
+| --- | --- |
+| kontejner naběhne a hned spadne | `docker compose logs app` — aplikace píše konkrétní chybějící proměnnou |
+| `required variable VOLUME_PREFIX is missing` | v `.env` chybí `VOLUME_PREFIX`, compose to schválně nepustí dál |
+| Caddy vrací 502 | kontejner neběží, nebo není v síti `web`: `docker network connect web <kontejner>` |
+| deploy spadne na `docker compose exec` | kontejner ještě nestartoval; workflow pusť znovu, `up -d` čeká na zdravou databázi |
+| test začne posílat e-maily ven | okamžitě `EMAIL_REZIM=vypnuto` a `docker compose up -d`; pak zkontroluj `EMAIL_TEST_PRIJEMCE` |

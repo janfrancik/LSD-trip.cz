@@ -10,11 +10,20 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "migrate": "node scripts/migrate.js"
+    "migrate": "node scripts/migrate.js",
+    "test": "node --test --test-concurrency=1 'test/**/*.test.js'",
+    "uzivatel": "node scripts/vytvor-uzivatele.js"
   },
   "dependencies": {
+    "@node-rs/argon2": "^2.2.1",
+    "cookie-parser": "^1.4.7",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
-    "mysql2": "^3.11.0"
+    "express-rate-limit": "^8.7.0",
+    "helmet": "^8.3.0",
+    "mysql2": "^3.11.0",
+    "otpauth": "^9.5.2",
+    "resend": "^6.30.0",
+    "zod": "^4.6.5"
   }
 }

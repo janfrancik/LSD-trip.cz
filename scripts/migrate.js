@@ -37,11 +37,94 @@ async function getAppliedMigrations(conn) {
   return new Set(rows.map((row) => row.name));
 }
 
+// Rozdělení migrace na jednotlivé příkazy.
+//
+// Dělení podle ';' by rozbilo cokoli, co středník obsahuje uvnitř - tělo
+// triggeru, procedury nebo textovou konstantu. Proto: pokud migrace obsahuje
+// řádek '-- >>>', bere se jako výslovný oddělovač příkazů a nic jiného se
+// nedělí. Bez něj se dělí podle ';', ale se přeskočením komentářů a
+// řetězcových literálů.
 function splitStatements(sql) {
-  return sql
-    .split(';')
-    .map((statement) => statement.trim())
-    .filter((statement) => statement.length > 0);
+  if (/^\s*--\s*>>>\s*$/m.test(sql)) {
+    return sql
+      .split(/^\s*--\s*>>>\s*$/m)
+      .map((s) => odstranKomentare(s).trim())
+      .filter((s) => s.length > 0);
+  }
+
+  const prikazy = [];
+  let aktualni = '';
+  let vRetezci = null; // ', " nebo `
+  let vKomentari = null; // 'radkovy' nebo 'blokovy'
+
+  for (let i = 0; i < sql.length; i++) {
+    const z = sql[i];
+    const dalsi = sql[i + 1];
+
+    if (vKomentari === 'radkovy') {
+      if (z === '\n') vKomentari = null;
+      aktualni += z;
+      continue;
+    }
+    if (vKomentari === 'blokovy') {
+      aktualni += z;
+      if (z === '*' && dalsi === '/') {
+        aktualni += dalsi;
+        i++;
+        vKomentari = null;
+      }
+      continue;
+    }
+    if (vRetezci) {
+      aktualni += z;
+      if (z === '\\') {
+        aktualni += dalsi ?? '';
+        i++;
+      } else if (z === vRetezci) {
+        vRetezci = null;
+      }
+      continue;
+    }
+
+    if (z === '-' && dalsi === '-') {
+      vKomentari = 'radkovy';
+      aktualni += z;
+      continue;
+    }
+    if (z === '#') {
+      vKomentari = 'radkovy';
+      aktualni += z;
+      continue;
+    }
+    if (z === '/' && dalsi === '*') {
+      vKomentari = 'blokovy';
+      aktualni += z;
+      continue;
+    }
+    if (z === "'" || z === '"' || z === '`') {
+      vRetezci = z;
+      aktualni += z;
+      continue;
+    }
+    if (z === ';') {
+      prikazy.push(aktualni);
+      aktualni = '';
+      continue;
+    }
+    aktualni += z;
+  }
+  prikazy.push(aktualni);
+
+  return prikazy.map((p) => odstranKomentare(p).trim()).filter((p) => p.length > 0);
+}
+
+// Příkaz složený jen z komentářů nemá smysl posílat do databáze.
+function odstranKomentare(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .split('\n')
+    .filter((radek) => !/^\s*(--|#)/.test(radek))
+    .join('\n');
 }
 
 async function run() {
