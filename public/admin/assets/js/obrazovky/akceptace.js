@@ -75,8 +75,12 @@ async function seznamVerzi(koren) {
       U každého úkolu je postup krok za krokem; stačí říct, jestli to funguje.
     </p>
 
+    ${upozorneniNaImport(data)}
+
     ${data.verze.length === 0
-      ? prazdno('Není co testovat', 'Až přijde nová verze, objeví se tady sama.')
+      ? data.import?.ok === false
+        ? ''
+        : prazdno('Není co testovat', 'Až přijde nová verze, objeví se tady sama.')
       : `<div class="seznam-karty">${data.verze.map(kartaVerze).join('')}</div>`}
 
     <section class="panel" style="margin-top:16px">
@@ -94,6 +98,45 @@ async function seznamVerzi(koren) {
   koren.querySelectorAll('[data-verze]').forEach((prvek) =>
     prvek.addEventListener('click', () => jdiNa(`akceptace/${prvek.dataset.verze}`))
   );
+
+  koren.querySelector('[data-import-znovu]')?.addEventListener('click', async (e) => {
+    const tlacitko = e.currentTarget;
+    tlacitko.disabled = true;
+    try {
+      const vysledek = await api.post('/akceptace/import');
+      hlaska(vysledek.zprava, 'ok');
+      seznamVerzi(koren);
+    } catch (err) {
+      hlaska(err.message, 'chyba');
+      tlacitko.disabled = false;
+    }
+  });
+}
+
+// Import zadání běží při startu aplikace. Když selže (typicky neproběhlé
+// migrace), nesmí modul jen mlčky zůstat prázdný - tohle řekne, co se stalo,
+// a administrátorovi nabídne nový pokus bez nasazování.
+function upozorneniNaImport(data) {
+  const stav = data.import;
+  if (!stav || stav.ok !== false) return '';
+
+  return `<section class="panel" style="border-left:3px solid var(--chyba)">
+      <h2 class="nadpis-2" style="margin-bottom:8px">Zadání testů se nenačetlo</h2>
+      <p class="text-dim">
+        Seznam úkolů je v repozitáři a načítá se při nasazení nové verze.
+        Poslední pokus (${esc(datumCas(stav.cas))}) skončil chybou:
+      </p>
+      <p class="mono" style="margin:10px 0;color:var(--chyba);word-break:break-word">
+        ${esc(stav.chyba)}
+      </p>
+      <p class="text-faint" style="margin-bottom:12px">
+        Nejčastější příčina je neproběhlá migrace databáze. Dokud se zadání
+        nenačte, není co testovat — ozvi se prosím správci.
+      </p>
+      ${data.muzu_schvalovat
+        ? '<button type="button" class="btn btn--hlavni btn--maly" data-import-znovu>Znovu načíst zadání</button>'
+        : ''}
+    </section>`;
 }
 
 function kartaVerze(v) {

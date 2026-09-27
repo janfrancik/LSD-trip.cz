@@ -43,7 +43,14 @@ if (config.akceptaceZapnuta) {
         }
       }
     })
-    .catch((err) => console.error('[akceptace] import zadání selhal:', err.message));
+    .catch((err) =>
+      console.error(
+        `[akceptace] CHYBA: import zadání selhal: ${err.message}\n` +
+          '[akceptace] Modul Ke schválení je prázdný. V administraci je u něj ' +
+          'upozornění a tlačítko „Znovu načíst zadání“. Nejčastější příčina: ' +
+          'neproběhlé migrace databáze.'
+      )
+    );
 }
 
 // Slušné ukončení: dokončit rozběhnuté požadavky a zavřít spojení do databáze.

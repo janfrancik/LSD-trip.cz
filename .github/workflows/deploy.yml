@@ -117,11 +117,24 @@ jobs:
 
             echo "$GITHUB_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
             docker compose pull
-            docker compose up -d
 
-            # Migrace až po nastartování - aplikace čeká na zdravou databázi,
-            # takže v tomhle okamžiku je připojení zaručeně dostupné.
-            docker compose exec -T app npm run migrate
+            # Migrace PŘED startem nové verze.
+            #
+            # Opačné pořadí (up -d a migrace až potom) znamená, že nový kód
+            # chvíli běží nad starým schématem - přesně tak spadl import
+            # akceptace na chybějící tabulce.
+            #
+            # "run --rm" spustí jednorázový kontejner z NOVÉHO image vedle
+            # běžící aplikace: podle depends_on si sám nastartuje databázi
+            # a počká, až je zdravá. Běžící (stará) aplikace se nedotkne.
+            # Když migrace selže, skript tady skončí, "up -d" se neprovede
+            # a dál běží stará verze nad schématem, které k ní patří.
+            if ! docker compose run --rm -T app npm run migrate; then
+              echo "CHYBA: migrace selhaly. Nová verze se nespouští, běží dál ta stará."
+              exit 1
+            fi
+
+            docker compose up -d
 
             # Úklid jen našich starých vrstev. Obyčejný "docker image prune -f"
             # maže všechny visící image na stroji, tedy i cizích aplikací,

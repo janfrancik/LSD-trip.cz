@@ -411,5 +411,6 @@ A přidej produkční řádek do cronu:
 | kontejner naběhne a hned spadne | `docker compose logs app` — aplikace píše konkrétní chybějící proměnnou |
 | `required variable VOLUME_PREFIX is missing` | v `.env` chybí `VOLUME_PREFIX`, compose to schválně nepustí dál |
 | Caddy vrací 502 | kontejner neběží, nebo není v síti `web`: `docker network connect web <kontejner>` |
-| deploy spadne na `docker compose exec` | kontejner ještě nestartoval; workflow pusť znovu, `up -d` čeká na zdravou databázi |
+| deploy spadne na migraci | nová verze se schválně nespustila a běží dál ta stará; oprav migraci a pusť deploy znovu |
+| `Table '...' doesn't exist` v logu aplikace | migrace neproběhla; `docker compose run --rm app npm run migrate` a pak `docker compose up -d` |
 | test začne posílat e-maily ven | okamžitě `EMAIL_REZIM=vypnuto` a `docker compose up -d`; pak zkontroluj `EMAIL_TEST_PRIJEMCE` |

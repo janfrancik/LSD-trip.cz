@@ -193,9 +193,16 @@ Push do `main` nebo `test` spustí `.github/workflows/deploy.yml`:
 
 1. build image pro `linux/amd64` a push do `ghcr.io/janfrancik/lsd-trip.cz:{latest|test}`,
 2. SSH na VPS (uživatel `deploy`, secrets `VPS_HOST` a `VPS_SSH_KEY`),
-3. `docker compose pull` + `up -d` v adresáři podle větve,
-4. `npm run migrate` v běžícím kontejneru,
-5. `docker image prune -f`.
+3. nahrání `docker-compose.yml` a `scripts/zaloha.sh` do adresáře podle větve (`.env` nikdy),
+4. `docker compose pull`,
+5. **migrace před startem**: `docker compose run --rm -T app npm run migrate` —
+   jednorázový kontejner z nového image vedle běžící aplikace. Když migrace selže,
+   deploy skončí, `up -d` se neprovede a dál běží stará verze nad svým schématem,
+6. `docker compose up -d`,
+7. úklid jen vlastních visících image (ne `prune`, na VPS běží i cizí aplikace).
+
+Pořadí kroků 5 a 6 je podstatné: opačně by nová verze chvíli běžela nad starým
+schématem. Hlídá to `test/nasazeni.test.js`.
 
 Jméno repozitáře je `LSD-trip.cz`, ale ghcr.io přijímá jen malá písmena — proto je image
 ve workflow zapsaný natvrdo, ne přes `${{ github.repository }}`.

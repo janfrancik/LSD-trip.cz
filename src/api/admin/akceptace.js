@@ -19,7 +19,7 @@ import {
 import { zvaliduj } from '../../validace.js';
 import { vyzaduje } from '../../auth/opravneni.js';
 import { zapisAudit } from '../../audit.js';
-import { naimportujAkceptaci } from '../../akceptace/import.js';
+import { naimportujAkceptaci, stavImportu } from '../../akceptace/import.js';
 import { ulozPrilohu, pripojPrilohy, prilohyPro, cestaKPriloze } from '../../akceptace/prilohy.js';
 import { oznamVerzi, seznamTesteru } from '../../akceptace/oznameni.js';
 import {
@@ -93,6 +93,9 @@ router.get(
       muzu_schvalovat: jeAdmin(req),
       vidim_ciz_vysledky: vidiCiziVysledky(req),
       verze,
+      // Když import zadání selhal, modul by jinak vypadal jen prázdně.
+      // Administrace z tohohle udělá upozornění s tlačítkem na nový pokus.
+      import: stavImportu(),
       pocty: await poctyProOdznak(req.uzivatel.id),
     });
   })
@@ -632,7 +635,16 @@ router.post(
   vyzaduje('akceptace', 'menit'),
   asyncHandler(async (req, res) => {
     jenAdmin(req);
-    const prehled = await naimportujAkceptaci();
+
+    let prehled;
+    try {
+      prehled = await naimportujAkceptaci();
+    } catch (err) {
+      // Chyba importu je buď v zadání, nebo v databázi (chybějící migrace).
+      // Obojí je věc správce, ne uživatele - ale ať se to dozví česky.
+      throw chybaKonflikt(`Zadání se nepodařilo načíst: ${err.message}`);
+    }
+
     await zapisAudit({
       req,
       akce: 'akceptace_import',

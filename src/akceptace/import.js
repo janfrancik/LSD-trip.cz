@@ -58,13 +58,34 @@ function hashZadani(u) {
     .digest('hex');
 }
 
+// Jak dopadl poslední import. Drží se v paměti procesu, ne v databázi -
+// import může selhat právě proto, že databáze ještě nemá schéma. Administrace
+// to podle tohoto stavu ukáže jako upozornění s tlačítkem na nový pokus,
+// aby modul tiše nezůstal prázdný.
+let stav = { cas: null, ok: null, chyba: null, verzi: 0 };
+
+export function stavImportu() {
+  return { ...stav };
+}
+
 /**
  * Naimportuje všechna zadání ze souborů docs/akceptace/*.yml.
  *
  * @returns {Promise<Array<{id:number, kod:string, nazev:string, nova:boolean,
  *                          pridano:number, zmeneno:number, deaktivovano:number}>>}
  */
-export async function naimportujAkceptaci({ adresar = ADRESAR_ZADANI } = {}) {
+export async function naimportujAkceptaci(volby = {}) {
+  try {
+    const prehled = await provedImport(volby);
+    stav = { cas: new Date(), ok: true, chyba: null, verzi: prehled.length };
+    return prehled;
+  } catch (err) {
+    stav = { cas: new Date(), ok: false, chyba: err.message, verzi: 0 };
+    throw err;
+  }
+}
+
+async function provedImport({ adresar = ADRESAR_ZADANI } = {}) {
   let soubory;
   try {
     soubory = (await readdir(adresar)).filter((f) => f.endsWith('.yml') || f.endsWith('.yaml')).sort();

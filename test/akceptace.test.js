@@ -187,6 +187,58 @@ test('zadání s dvakrát stejným kódem úkolu se odmítne', async () => {
   await rm(adresar, { recursive: true, force: true });
 });
 
+test('selhaný import je vidět v administraci, ne jen v logu', async () => {
+  // Rozbité zadání: stejný kód dvakrát.
+  const adresar = await mkdtemp(path.join(os.tmpdir(), 'lsd-akceptace-'));
+  await writeFile(
+    path.join(adresar, 'spatne.yml'),
+    [
+      'verze:',
+      '  kod: spatne',
+      '  nazev: Špatné zadání',
+      'ukoly:',
+      '  - kod: stejny',
+      '    nazev: První',
+      '    postup: Krok.',
+      '    vysledek: Výsledek.',
+      '  - kod: stejny',
+      '    nazev: Druhý',
+      '    postup: Krok.',
+      '    vysledek: Výsledek.',
+    ].join('\n')
+  );
+  await assert.rejects(() => naimportuj(adresar));
+
+  const spravce = await prihlas();
+  const prehled = await spravce.get('/api/admin/akceptace');
+  assert.equal(prehled.status, 200);
+  assert.equal(prehled.data.import.ok, false, 'administrace musí vědět, že import selhal');
+  assert.match(prehled.data.import.chyba, /dvakrát/);
+  assert.ok(prehled.data.import.cas, 'u chyby je i čas posledního pokusu');
+
+  // Tlačítko „Znovu načíst zadání“ volá tenhle endpoint. Se skutečným zadáním
+  // v repozitáři musí projít a stav se srovnat.
+  const znovu = await spravce.post('/api/admin/akceptace/import');
+  assert.equal(znovu.status, 200);
+
+  const po = await spravce.get('/api/admin/akceptace');
+  assert.equal(po.data.import.ok, true);
+  assert.equal(po.data.import.chyba, null);
+
+  await rm(adresar, { recursive: true, force: true });
+});
+
+test('import přes tlačítko hlásí chybu česky, ne jako pád serveru', async () => {
+  const adresar = await mkdtemp(path.join(os.tmpdir(), 'lsd-akceptace-'));
+  await writeFile(path.join(adresar, 'spatne.yml'), 'verze: tohle není objekt\n');
+  await assert.rejects(() => naimportuj(adresar));
+  await rm(adresar, { recursive: true, force: true });
+
+  const provoz = await prihlas('provoz', 'provoz@example.invalid', 'Provozní');
+  const odpoved = await provoz.post('/api/admin/akceptace/import');
+  assert.equal(odpoved.status, 403, 'zadání načítá jen administrátor');
+});
+
 // ------------------------------------------------------------------ testování
 
 test('tester zapíše výsledek, u „nefunguje“ musí napsat komentář', async () => {
