@@ -12,6 +12,10 @@ import 'dotenv/config';
 import path from 'node:path';
 import { z } from 'zod';
 
+// Jediný seznam režimů odesílání. Ostrý režim se jmenuje 'live' - stejně
+// v .env, v návodu, v testech i ve sloupci emaily.rezim v databázi.
+export const REZIMY_EMAILU = ['live', 'schranka', 'test', 'vypnuto'];
+
 const bool = (vychozi) =>
   z
     .enum(['true', 'false', '1', '0', 'ano', 'ne'])
@@ -49,7 +53,7 @@ const schema = z.object({
   //   schranka = neodesílá se vůbec, ale celý e-mail se uloží do testovací
   //              schránky v administraci (na testu, kde není Resend)
   //   vypnuto  = jen záznam v logu, tělo se neukládá
-  EMAIL_REZIM: z.enum(['live', 'test', 'vypnuto', 'schranka']).default('vypnuto'),
+  EMAIL_REZIM: z.enum(REZIMY_EMAILU).default('vypnuto'),
   EMAIL_TEST_PRIJEMCE: z.string().email().optional(),
   EMAIL_ODESILATEL: z.string().min(3).default('LSD <rezervace@example.invalid>'),
   RESEND_API_KEY: z.string().min(1).optional(),
@@ -80,7 +84,17 @@ if (!vysledek.success) {
   const chyby = vysledek.error.issues
     .map((i) => `  ${i.path.join('.') || '(koren)'}: ${i.message}`)
     .join('\n');
-  console.error('Chybná konfigurace v .env:\n' + chyby);
+
+  // Ostrý režim se jmenuje 'live'. Jiné pojmenování (typicky 'ostry') je
+  // častý překlep z diskuse - ať člověk nemusí hledat v kódu, co se čeká.
+  const rezim = String(process.env.EMAIL_REZIM ?? '').trim();
+  const napoveda =
+    rezim && !REZIMY_EMAILU.includes(rezim)
+      ? `\nEMAIL_REZIM smí být: ${REZIMY_EMAILU.join(' | ')}. ` +
+        `Ostrému odesílání se říká "live"${rezim === 'ostry' ? ', ne "ostry"' : ''}.`
+      : '';
+
+  console.error('Chybná konfigurace v .env:\n' + chyby + napoveda);
   process.exit(1);
 }
 
@@ -88,8 +102,18 @@ const env = vysledek.data;
 
 const config = {
   ...env,
-  jeProdukce: env.NODE_ENV === 'production',
-  jeTest: env.NODE_ENV === 'test',
+
+  // Skutečné prostředí se pozná podle PROSTREDI, NIKDY podle NODE_ENV.
+  // V kontejneru je NODE_ENV=production i na testu (kvůli instalaci závislostí
+  // bez dev balíčků), takže test se podle NODE_ENV tváří jako produkce -
+  // přesně na tom spadl start s EMAIL_REZIM=schranka, protože se po něm
+  // chtěl produkční RESEND_API_KEY.
+  jeProdukce: env.PROSTREDI === 'produkce',
+  jeVyvoj: env.PROSTREDI === 'vyvoj',
+
+  // Secure cookies, HSTS a upgrade-insecure-requests patří k HTTPS, ne
+  // k prostředí: test jede po HTTPS taky a cookie tam musí být Secure.
+  jeHttps: env.APP_URL.startsWith('https://'),
 
   // Modul „Ke schválení“ (akceptační testování) je nástroj pro nasazení na
   // testu, ne součást provozu. V produkci se nezapne: nemá API, nezobrazí se
@@ -107,24 +131,43 @@ const config = {
   },
 };
 
-// V produkci nechceme běžet s výchozími hodnotami, které vypadají nastaveně.
+function zastav(zprava) {
+  console.error(`Chybná konfigurace (.env, PROSTREDI=${env.PROSTREDI}): ${zprava}`);
+  process.exit(1);
+}
+
+// --- Pravidla pro odesílání e-mailů -----------------------------------------
+//
+// Klíč k Resendu potřebuje JEN ostrý režim. Režim 'schranka' ani 'vypnuto' ven
+// nic neposílají, takže po nich klíč chtít nemá smysl - na testu žádný není
+// a mít ho tam by bylo jen riziko navíc.
+
+if (env.EMAIL_REZIM === 'live' && !env.RESEND_API_KEY) {
+  zastav('EMAIL_REZIM=live vyžaduje RESEND_API_KEY, jinak by se e-maily tiše neodesílaly.');
+}
+
+// Testovací režim bez cílové adresy je horší než vypnuté odesílání - e-mail by
+// odešel skutečnému zákazníkovi.
+if (env.EMAIL_REZIM === 'test' && !env.EMAIL_TEST_PRIJEMCE) {
+  zastav('EMAIL_REZIM=test vyžaduje EMAIL_TEST_PRIJEMCE, jinak by e-maily odešly zákazníkům.');
+}
+
+// Schránka je nástroj testovacího prostředí. V produkci by znamenala, že se
+// zákazníkům tiše nic neposílá a všechno leží v administraci.
+if (config.jeProdukce && env.EMAIL_REZIM === 'schranka') {
+  zastav(
+    'EMAIL_REZIM=schranka je jen pro test. V produkci nastav live (ostré odesílání) ' +
+      'nebo vypnuto, dokud není Resend hotový.'
+  );
+}
+
+// --- Produkce nesmí běžet s výchozími hodnotami, které vypadají nastaveně ---
+
 if (config.jeProdukce) {
   const chybi = [];
   if (env.APP_URL.includes('127.0.0.1')) chybi.push('APP_URL');
   if (env.EMAIL_ODESILATEL.includes('example.invalid')) chybi.push('EMAIL_ODESILATEL');
-  if (env.EMAIL_REZIM !== 'vypnuto' && !env.RESEND_API_KEY) chybi.push('RESEND_API_KEY');
-  if (env.EMAIL_REZIM === 'test' && !env.EMAIL_TEST_PRIJEMCE) chybi.push('EMAIL_TEST_PRIJEMCE');
-  if (chybi.length) {
-    console.error(`V produkci musí být nastaveno: ${chybi.join(', ')}`);
-    process.exit(1);
-  }
-}
-
-// Testovací režim bez cílové adresy je horší než vypnuté odesílání - e-mail by
-// odešel skutečnému zákazníkovi. Padáme v každém prostředí, ne jen v produkci.
-if (env.EMAIL_REZIM === 'test' && !env.EMAIL_TEST_PRIJEMCE) {
-  console.error('EMAIL_REZIM=test vyžaduje EMAIL_TEST_PRIJEMCE, jinak by e-maily odešly zákazníkům.');
-  process.exit(1);
+  if (chybi.length) zastav(`v produkci musí být nastaveno: ${chybi.join(', ')}`);
 }
 
 export default config;

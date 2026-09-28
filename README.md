@@ -53,6 +53,10 @@ test/                        testy (node:test) proti skutečné databázi
 | e-maily | `EMAIL_REZIM=live` | `EMAIL_REZIM=schranka` | `EMAIL_REZIM=vypnuto` |
 | indexace | `ROBOTS=povolit` | `ROBOTS=zakazat` | `ROBOTS=zakazat` |
 
+O prostředí rozhoduje **`PROSTREDI`**, nikdy `NODE_ENV`: v kontejneru je `NODE_ENV=production`
+i na testu (aby se neinstalovaly vývojové závislosti), takže podle něj se test tváří jako
+produkce. Zabezpečení cookies a HSTS se řídí tím, jestli `APP_URL` začíná na `https://`.
+
 Stejný `docker-compose.yml` slouží oběma prostředím, liší se jen `.env`. Volumes mají
 výslovná jména podle `VOLUME_PREFIX` (`lsd_main_db`, `lsd_main_uploads`, `lsd_test_db`,
 `lsd_test_uploads`), ne odvozená od názvu adresáře — přejmenování složky na VPS tedy
@@ -74,6 +78,11 @@ na `EMAIL_TEST_PRIJEMCE` **před** voláním Resendu, do logu se uloží obojí 
 i kam doopravdy šel) a předmět dostane předponu `[TEST]`. Hlídá to test `test/emaily.test.js`.
 
 Výchozí hodnota je `vypnuto`: dokud se režim nenastaví vědomě, e-mail se jen zaloguje.
+
+`RESEND_API_KEY` je povinný **jen pro `live`** — `schranka` ani `vypnuto` ven nic neposílají,
+takže po nich klíč nemá kdo chtít. Naopak `schranka` je v produkci zakázaná: znamenala by,
+že zákazníkům tiše nic nechodí. Obojí hlídá `test/konfigurace.test.js`, který aplikaci
+startuje s kopií skutečného `.env` z testovacího serveru.
 
 ## Vývoj
 
@@ -270,7 +279,10 @@ Push do `main` nebo `test` spustí `.github/workflows/deploy.yml`:
    jednorázový kontejner z nového image vedle běžící aplikace. Když migrace selže,
    deploy skončí, `up -d` se neprovede a dál běží stará verze nad svým schématem,
 6. `docker compose up -d`,
-7. úklid jen vlastních visících image (ne `prune`, na VPS běží i cizí aplikace).
+7. **čekání na `healthy`** (max 60 s). Když se aplikace nerozběhne, deploy skončí chybou
+   a vypíše posledních 50 řádků logu — `up -d` sám o sobě úspěch neznamená,
+   kontejner se může točit v restartu,
+8. úklid jen vlastních visících image (ne `prune`, na VPS běží i cizí aplikace).
 
 Pořadí kroků 5 a 6 je podstatné: opačně by nová verze chvíli běžela nad starým
 schématem. Hlídá to `test/nasazeni.test.js`.
@@ -315,7 +327,7 @@ co se stane. Režim se nastavuje v `.env` a v administraci se ukazuje v sekci **
 
 | `EMAIL_REZIM` | Co dělá | Kde se používá |
 | --- | --- | --- |
-| `live` | posílá zákazníkům přes Resend | produkce |
+| `live` | posílá zákazníkům přes Resend (ostrý režim se jmenuje takhle, ne `ostry`) | produkce |
 | `schranka` | **neodesílá nic**, ukládá celý e-mail (HTML, text, přílohy) do administrace | test |
 | `test` | přepíše příjemce na `EMAIL_TEST_PRIJEMCE` a odešle | když je potřeba ověřit doručení |
 | `vypnuto` | jen záznam v logu, tělo se neukládá | výchozí, dokud se režim nenastaví |

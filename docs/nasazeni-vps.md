@@ -463,6 +463,7 @@ ale končily by ve spamu a doména by si tím pokazila pověst.
 | `required variable VOLUME_PREFIX is missing` | v `.env` chybí `VOLUME_PREFIX`, compose to schválně nepustí dál |
 | Caddy vrací 502 | kontejner neběží, nebo není v síti `web`: `docker network connect web <kontejner>` |
 | deploy spadne na migraci | nová verze se schválně nespustila a běží dál ta stará; oprav migraci a pusť deploy znovu |
+| deploy selže na „aplikace nenaběhla do 60 s" | v logu pod tím je důvod; nejčastěji chybná hodnota v `.env`. Stará verze mezitím běží dál |
 | na testu nechodí e-maily | tak to má být: `EMAIL_REZIM=schranka`, e-maily jsou v administraci v sekci E-maily |
 | časy jsou posunuté o hodinu | v databázi je UTC schválně; kontroluj, co ukazuje administrace, ne co je v tabulce |
 | `Table '...' doesn't exist` v logu aplikace | migrace neproběhla; `docker compose run --rm app npm run migrate` a pak `docker compose up -d` |

@@ -41,9 +41,22 @@ Vedle toho platí, co je v README: migrace musí jít spustit **opakovaně**
 (`IF NOT EXISTS`, `DROP … IF EXISTS`), protože MariaDB u DDL commituje implicitně
 a rollback neexistuje.
 
+## Prostředí se pozná z PROSTREDI, ne z NODE_ENV
+
+V kontejneru je `NODE_ENV=production` i na testu. Cokoli, co se má chovat jinak v produkci
+(přísnější validace konfigurace, vypnutá akceptace, indexace), se proto rozhoduje podle
+`config.jeProdukce`, který čte **`PROSTREDI`**. Zabezpečení cookies, HSTS a
+upgrade-insecure-requests se řídí `config.jeHttps` (podle `APP_URL`), protože to je otázka
+HTTPS, ne prostředí.
+
+Na tomhle spadl start testu po přepnutí na `EMAIL_REZIM=schranka`: validace si myslela,
+že běží v produkci, a chtěla `RESEND_API_KEY`, který na testu není a nemá být.
+
 ## Nasazení
 
 - Vyvíjí se ve větvi `test`. **Do `main` nic bez výslovného souhlasu majitele repozitáře.**
+- Deploy čeká, až kontejner nahlásí `healthy`; když ne, selže a vypíše log. `docker compose up -d`
+  sám o sobě neznamená, že aplikace běží.
 - Soubor `.env` na serveru vytváří člověk; workflow ho nikdy nepřepisuje.
 - Na VPS běží vedle i cizí aplikace (Kompas, Todo) ve sdílené síti `web`. Žádný
   `docker system prune`, žádný zásah mimo adresáře `lsdtrip*` a volumes `lsd_*`.

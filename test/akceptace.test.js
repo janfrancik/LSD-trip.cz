@@ -542,10 +542,18 @@ test('v produkci modul akceptace vůbec neexistuje', () => {
     process.exit(0);
   `;
 
+  // Produkce má přísnější validaci konfigurace (nesmí běžet s vývojovými
+  // hodnotami), takže dítě dostane i hodnoty, které by produkce měla mít.
   const vystup = execFileSync(process.execPath, ['--input-type=module', '-e', skript], {
     cwd: process.cwd(),
     encoding: 'utf8',
-    env: { ...process.env, PROSTREDI: 'produkce' },
+    env: {
+      ...process.env,
+      PROSTREDI: 'produkce',
+      APP_URL: 'https://www.lsd-trip.cz',
+      EMAIL_REZIM: 'vypnuto',
+      EMAIL_ODESILATEL: 'LSD <rezervace@lsd-trip.cz>',
+    },
   });
 
   const vysledek = JSON.parse(vystup.trim().split('\n').pop());

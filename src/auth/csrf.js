@@ -21,7 +21,7 @@ export function zajistiCsrfToken(req, res) {
     token = crypto.randomBytes(24).toString('base64url');
     res.cookie(COOKIE_CSRF, token, {
       httpOnly: false, // administrace ho musí přečíst a poslat v hlavičce
-      secure: config.jeProdukce,
+      secure: config.jeHttps,
       sameSite: 'strict',
       path: '/',
     });

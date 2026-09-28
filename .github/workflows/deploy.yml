@@ -136,6 +136,27 @@ jobs:
 
             docker compose up -d
 
+            # Počkat, až kontejner opravdu běží. "up -d" se vrátí hned po
+            # spuštění, takže bez tohohle by deploy hlásil úspěch i u aplikace,
+            # která se točí v restartu kvůli chybě v .env - přesně tak prošel
+            # deploy, po kterém test nenaběhl.
+            KONTEJNER=$(docker compose ps -q app)
+            STAV=zadny
+            for POKUS in $(seq 1 30); do
+              STAV=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}bez-healthchecku{{end}}' "$KONTEJNER" 2>/dev/null || echo nedostupny)
+              case "$STAV" in
+                healthy|bez-healthchecku) break ;;
+              esac
+              sleep 2
+            done
+
+            if [ "$STAV" != "healthy" ] && [ "$STAV" != "bez-healthchecku" ]; then
+              echo "CHYBA: aplikace nenaběhla do 60 s (stav: $STAV). Posledních 50 řádků logu:"
+              docker compose logs --tail 50 app
+              exit 1
+            fi
+            echo "Aplikace běží (stav: $STAV)."
+
             # Úklid jen našich starých vrstev. Obyčejný "docker image prune -f"
             # maže všechny visící image na stroji, tedy i cizích aplikací,
             # které na VPS běží vedle.

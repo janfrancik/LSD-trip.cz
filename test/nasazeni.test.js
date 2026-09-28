@@ -48,6 +48,25 @@ test('neúspěšná migrace zastaví nasazení', () => {
   );
 });
 
+test('deploy počká, až aplikace opravdu běží', () => {
+  // "up -d" se vrátí hned po spuštění kontejneru. Bez čekání na healthcheck
+  // by deploy hlásil úspěch i u aplikace, která se točí v restartu kvůli
+  // chybě v .env - přesně to se stalo při přepnutí na EMAIL_REZIM=schranka.
+  assert.match(
+    prikazy,
+    /docker inspect[^\n]*State\.Health\.Status/,
+    'po up -d se musí čekat na stav healthy'
+  );
+  assert.match(prikazy, /docker compose logs --tail 50 app/, 'při nezdaru vypsat log');
+
+  const cekani = prikazy.indexOf('State.Health.Status');
+  const start = prikazy.indexOf('docker compose up -d');
+  assert.ok(cekani > start, 'čeká se až po startu, ne před ním');
+
+  const padne = prikazy.slice(cekani).match(/exit 1/);
+  assert.ok(padne, 'když kontejner nenaběhne, deploy musí selhat');
+});
+
 test('workflow se nedotýká .env a uklízí jen vlastní image', () => {
   // Pozor na příliš široký vzor: "steps.env.outputs.dir" obsahuje ".env" taky.
   // Kontrolujeme jen to, co se na server nahrává.

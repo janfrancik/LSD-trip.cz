@@ -27,7 +27,7 @@ export function bezpecnostniHlavicky() {
       formAction: ["'self'"],
       frameAncestors: ["'none'"],
       objectSrc: ["'none'"],
-      ...(config.jeProdukce ? { upgradeInsecureRequests: [] } : {}),
+      ...(config.jeHttps ? { upgradeInsecureRequests: [] } : {}),
     },
   });
 
@@ -35,7 +35,7 @@ export function bezpecnostniHlavicky() {
     contentSecurityPolicy: false, // nastavujeme vlastní výše
     crossOriginEmbedderPolicy: false, // blokovalo by fotky ze starého webu
     referrerPolicy: { policy: 'strict-origin-when-cross-origin' },
-    hsts: config.jeProdukce ? { maxAge: 31536000, includeSubDomains: true } : false,
+    hsts: config.jeHttps ? { maxAge: 31536000, includeSubDomains: true } : false,
   });
 
   return [

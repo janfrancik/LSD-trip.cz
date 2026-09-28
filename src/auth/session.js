@@ -23,7 +23,7 @@ export function hashTokenu(token) {
 function nastavCookie(res, token, expiresAt) {
   res.cookie(COOKIE_SESSION, token, {
     httpOnly: true,
-    secure: config.jeProdukce,
+    secure: config.jeHttps,
     sameSite: 'strict',
     path: '/',
     expires: expiresAt,
@@ -98,7 +98,7 @@ export async function zrusSession(res, sessionId) {
   if (sessionId) await pool.query('DELETE FROM sessions WHERE id = ?', [sessionId]);
   res.clearCookie(COOKIE_SESSION, {
     httpOnly: true,
-    secure: config.jeProdukce,
+    secure: config.jeHttps,
     sameSite: 'strict',
     path: '/',
   });
