@@ -18,6 +18,8 @@ export const OBLASTI = [
   'doklady',
   'emaily_sablony',
   'emaily_odeslat',
+  // Odeslané e-maily: na testu schránka, v produkci log s doručením.
+  'emaily_log',
   'galerie',
   'obsah',
   'poptavky',
@@ -46,6 +48,7 @@ export const PRAVA = {
     platby: 'cist',
     doklady: 'cist',
     emaily_odeslat: 'menit',
+    emaily_log: 'cist',
     galerie: 'menit',
     obsah: 'menit',
     poptavky: 'menit',

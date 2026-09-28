@@ -177,13 +177,22 @@ function sklonHlaseni(pocet) {
 }
 
 // ------------------------------------------------------------ detail verze
+//
+// Dva pohledy: "Moje úkoly" (co mám otestovat já) a "Přehled testerů"
+// (tabulka úkoly × testeři, jen pro provoz a admina). Výsledek jednoho testera
+// nikomu jinému úkol nesplní, proto se stav u úkolu ukazuje vždycky můj.
+
+let pohled = 'ukoly';
+const filtrMatice = { tester: '', jenProblemy: false };
 
 async function detailVerze(koren, kod) {
   const data = await api.get(`/akceptace/verze/${encodeURIComponent(kod)}`);
   const { verze, souhrn, ukoly } = data;
   const jeAdmin = data.muzu_schvalovat;
+  const vidiVse = Array.isArray(data.po_testerech);
   const schvalena = verze.stav === 'schvalena';
-  const hotovoProcent = souhrn.celkem ? Math.round((souhrn.funguje / souhrn.celkem) * 100) : 0;
+  const moje = data.muj_souhrn;
+  const hotovoProcent = moje?.celkem ? Math.round((moje.hotovo / moje.celkem) * 100) : 0;
 
   koren.innerHTML = `
     <div style="margin-bottom:14px">
@@ -208,27 +217,62 @@ async function detailVerze(koren, kod) {
          </div>`
       : ''}
 
-    <div class="pokrok" role="img"
-         aria-label="Otestováno ${souhrn.funguje} z ${souhrn.celkem} úkolů">
-      <div class="pokrok__pruh" style="width:${hotovoProcent}%"></div>
-    </div>
-    <div class="mrizka mrizka--karty" style="margin:12px 0 18px">
-      ${karta(souhrn.funguje, 'Funguje')}
-      ${karta(souhrn.nefunguje, 'Nefunguje', souhrn.nefunguje > 0)}
-      ${karta(souhrn.k_pretestovani + souhrn.nerozumim, 'K přetestování a nejasné')}
-      ${karta(souhrn.neotestovano, 'Neotestováno', souhrn.neotestovano > 0)}
-      ${karta(souhrn.hlaseni_otevrena, 'Otevřená hlášení', souhrn.hlaseni_otevrena > 0)}
-    </div>
+    ${moje && moje.celkem
+      ? `<div class="panel panel--tesny" style="margin-bottom:14px">
+           <div class="panel__hlava" style="margin-bottom:8px">
+             <strong>Moje testování</strong>
+             <span class="text-faint">${moje.hotovo}/${moje.celkem} hotovo</span>
+           </div>
+           <div class="pokrok" role="img"
+                aria-label="Mám otestováno ${moje.hotovo} z ${moje.celkem} úkolů">
+             <div class="pokrok__pruh" style="width:${hotovoProcent}%"></div>
+           </div>
+           ${moje.neotestovano + moje.k_pretestovani > 0
+             ? `<div class="text-faint" style="margin-top:8px">
+                  Zbývá ti ${moje.neotestovano + moje.k_pretestovani}
+                  ${sklonUkoly(moje.neotestovano + moje.k_pretestovani)}.
+                </div>`
+             : '<div class="text-faint" style="margin-top:8px">Máš hotovo všechno, díky.</div>'}
+         </div>`
+      : ''}
 
-    ${akce(data, jeAdmin, schvalena)}
+    ${vidiVse
+      ? `<div class="mrizka mrizka--karty" style="margin:0 0 18px">
+           ${karta(souhrn.funguje, 'Funguje (tým)')}
+           ${karta(souhrn.nefunguje, 'Nefunguje', souhrn.nefunguje > 0)}
+           ${karta(souhrn.k_pretestovani + souhrn.nerozumim, 'K přetestování a nejasné')}
+           ${karta(souhrn.neotestovano, 'Nikdo netestoval', souhrn.neotestovano > 0)}
+           ${karta(souhrn.hlaseni_otevrena, 'Otevřená hlášení', souhrn.hlaseni_otevrena > 0)}
+         </div>`
+      : ''}
 
-    <h2 class="nadpis-2" style="margin:20px 0 10px">Úkoly</h2>
-    <div class="ukoly">
-      ${ukoly.map((u, i) => ukolHtml(u, i, data)).join('')}
+    ${akce(data, jeAdmin, schvalena, vidiVse)}
+
+    ${vidiVse
+      ? `<div class="zalozky" role="tablist" style="margin-top:18px">
+           <button type="button" role="tab" class="zalozka${pohled === 'ukoly' ? ' zalozka--aktivni' : ''}"
+             data-pohled="ukoly" aria-selected="${pohled === 'ukoly'}">Moje úkoly</button>
+           <button type="button" role="tab" class="zalozka${pohled === 'matice' ? ' zalozka--aktivni' : ''}"
+             data-pohled="matice" aria-selected="${pohled === 'matice'}">Přehled testerů</button>
+         </div>`
+      : '<h2 class="nadpis-2" style="margin:20px 0 10px">Moje úkoly</h2>'}
+
+    <div data-obsah>
+      ${vidiVse && pohled === 'matice'
+        ? matice(data)
+        : `<div class="ukoly">${ukoly.map((u, i) => ukolHtml(u, i, data)).join('')}</div>`}
     </div>`;
 
+  koren.querySelectorAll('[data-pohled]').forEach((tlacitko) =>
+    tlacitko.addEventListener('click', () => {
+      pohled = tlacitko.dataset.pohled;
+      detailVerze(koren, kod);
+    })
+  );
+
   navazAkce(koren, data, kod);
-  navazUkoly(koren, data, kod);
+  if (vidiVse && pohled === 'matice') navazMatici(koren, data, kod);
+  else navazUkoly(koren, data, kod);
 }
 
 function karta(cislo, popis, pozor = false) {
@@ -238,9 +282,8 @@ function karta(cislo, popis, pozor = false) {
     </div>`;
 }
 
-function akce(data, jeAdmin, schvalena) {
+function akce(data, jeAdmin, schvalena, vidiVse) {
   const duvody = data.duvody_proti_schvaleni ?? [];
-  const muzeRidit = globalniStav.ja.uzivatel.role !== 'tester';
 
   return `<section class="panel">
       <div style="display:flex;flex-wrap:wrap;gap:8px">
@@ -248,38 +291,57 @@ function akce(data, jeAdmin, schvalena) {
           ? '<button type="button" class="btn btn--hlavni btn--maly" data-schvalit>Schválit verzi</button>'
           : ''}
         <button type="button" class="btn btn--obrys btn--maly" data-export>Stáhnout souhrn</button>
-        ${muzeRidit && !schvalena
+        ${vidiVse && !schvalena
           ? '<button type="button" class="btn btn--obrys btn--maly" data-pretestovat>Nefunkční k přetestování</button>'
           : ''}
         ${jeAdmin
-          ? `<button type="button" class="btn btn--obrys btn--maly" data-oznamit>Oznámit testerům</button>
+          ? `<button type="button" class="btn btn--obrys btn--maly" data-testeri>Kdo testuje</button>
+             <button type="button" class="btn btn--obrys btn--maly" data-oznamit>Oznámit testerům</button>
              <button type="button" class="btn btn--obrys btn--maly" data-import>Znovu načíst zadání</button>`
           : ''}
       </div>
-      ${jeAdmin && !schvalena && duvody.length
+      ${vidiVse && data.testeri
         ? `<div class="text-faint" style="margin-top:12px">
-             Ke schválení ještě chybí: ${esc(duvody.join(' '))}
+             Testuje: ${data.testeri.map((t) => esc(t.jmeno)).join(', ') || '(nikdo)'}
+             ${data.testeri_vychozi ? ' (výchozí výběr — všichni, kdo na to mají právo)' : ''}
+           </div>`
+        : ''}
+      ${jeAdmin && !schvalena && duvody.length
+        ? `<div style="margin-top:12px">
+             <div class="popisek">Ke schválení ještě chybí</div>
+             <ul class="duvody">${duvody.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>
            </div>`
         : ''}
     </section>`;
 }
 
 function ukolHtml(u, index, data) {
-  const stav = u.stav;
   const muj = u.muj_vysledek;
+  const stav = u.muj_stav;
   const draft = rozepsany(u);
   const schvalena = data.verze.stav === 'schvalena';
-  const muzeRidit = globalniStav.ja.uzivatel.role !== 'tester';
+  const vidiVse = Array.isArray(data.po_testerech);
+  const ciziVysledky = (u.vysledky ?? []).filter((v) => v.uzivatel_id !== globalniStav.ja.uzivatel.id);
 
   return `<details class="ukol${u.aktivni ? '' : ' ukol--vyrazeny'}" data-ukol="${u.id}">
       <summary class="ukol__hlava">
         <span class="ukol__cislo">${index + 1}</span>
-        <span class="ukol__nazev">${esc(u.nazev)}</span>
+        <span class="ukol__nazev">
+          ${esc(u.nazev)}
+          ${u.jen_admin ? '<span class="stitek" style="margin-left:6px">jen admin</span>' : ''}
+          ${u.role_filtr && !u.jen_admin
+            ? `<span class="stitek" style="margin-left:6px">${esc(u.role_filtr)}</span>`
+            : ''}
+        </span>
         <span class="stitek ${STITEK[stav]}">${esc(POPIS[stav])}</span>
+        ${vidiVse && u.stav_tymu && u.stav_tymu !== stav
+          ? `<span class="text-faint jen-siroke" title="Souhrn za celý tým">tým: ${esc(POPIS[u.stav_tymu])}</span>`
+          : ''}
       </summary>
 
       <div class="ukol__telo">
         ${u.aktivni ? '' : '<p class="text-faint">Tenhle úkol už není součástí zadání, zůstává tu kvůli historii.</p>'}
+        ${u.patri_mi ? '' : '<p class="text-faint">Tenhle úkol testuje někdo jiný — vidíš ho, protože máš přehled za celý tým.</p>'}
 
         <div class="ukol__cast">
           <div class="popisek">Postup</div>
@@ -313,7 +375,7 @@ function ukolHtml(u, index, data) {
              </p>`
           : ''}
 
-        ${schvalena || !u.aktivni
+        ${schvalena || !u.aktivni || !u.patri_mi
           ? ''
           : `<div class="volby" role="group" aria-label="Výsledek testu">
                ${['funguje', 'nefunguje', 'nerozumim']
@@ -340,17 +402,17 @@ function ukolHtml(u, index, data) {
                </label>
                <button type="button" class="btn btn--hlavni btn--maly" data-ulozit>Uložit výsledek</button>
                <button type="button" class="btn btn--obrys btn--maly" data-nahlasit>Nahlásit problém</button>
-               ${muzeRidit
+               ${vidiVse
                  ? '<button type="button" class="btn btn--obrys btn--maly" data-ukol-pretestovat>Poslat k přetestování</button>'
                  : ''}
              </div>
              <div class="pole-skupina__napoveda">${NAPOVEDA_VLOZENI}</div>
              <div class="nahledy" data-nahledy>${draft.prilohy.map(nahled).join('')}</div>`}
 
-        ${u.vysledky.length
+        ${ciziVysledky.length
           ? `<div class="ukol__cast">
-               <div class="popisek">Výsledky testerů</div>
-               <div class="udaje">${u.vysledky.map(radekVysledku).join('')}</div>
+               <div class="popisek">Jak dopadli ostatní</div>
+               <div class="udaje">${ciziVysledky.map(radekVysledku).join('')}</div>
              </div>`
           : ''}
       </div>
@@ -364,9 +426,234 @@ function radekVysledku(v) {
         <span class="stitek ${STITEK[v.stav]}">${esc(POPIS[v.stav])}</span>
         <span class="text-faint"> ${esc(datumCas(v.updated_at))}</span>
         ${v.komentar ? `<div style="margin-top:4px;white-space:pre-wrap">${esc(v.komentar)}</div>` : ''}
-        ${Number(v.prilohy) > 0 ? `<div class="text-faint">příloh: ${Number(v.prilohy)}</div>` : ''}
+        ${v.prilohy?.length ? `<div class="text-faint">příloh: ${v.prilohy.length}</div>` : ''}
       </span>
     </div>`;
+}
+
+// ------------------------------------------------- tabulka úkoly × testeři
+
+function matice(data) {
+  const testeri = data.testeri ?? [];
+  const vybrany = filtrMatice.tester
+    ? testeri.filter((t) => String(t.id) === filtrMatice.tester)
+    : testeri;
+
+  let ukoly = data.ukoly.filter((u) => u.aktivni);
+  if (filtrMatice.jenProblemy) {
+    ukoly = ukoly.filter((u) =>
+      vybrany.some((t) => ['nefunguje', 'nerozumim', 'k_pretestovani', 'neotestovano']
+        .includes(stavBunky(u, t)))
+    );
+  }
+
+  if (testeri.length === 0) {
+    return prazdno('Verzi nikdo netestuje', 'Vyber testery tlačítkem „Kdo testuje“.');
+  }
+
+  return `
+    <div class="souhrn-testeru">
+      ${(data.po_testerech ?? [])
+        .map(
+          (t) => `<div class="souhrn-testeru__polozka">
+            <span class="souhrn-testeru__jmeno">${esc(t.uzivatel.jmeno)}</span>
+            <span class="souhrn-testeru__cislo${t.hotovo < t.celkem ? ' souhrn-testeru__cislo--ceka' : ''}">
+              ${t.hotovo}/${t.celkem}
+            </span>
+          </div>`
+        )
+        .join('')}
+    </div>
+
+    <div class="hledani" style="margin-top:12px">
+      <select class="pole" data-filtr-tester aria-label="Filtrovat podle testera">
+        <option value="">Všichni testeři</option>
+        ${testeri
+          .map(
+            (t) => `<option value="${t.id}"${filtrMatice.tester === String(t.id) ? ' selected' : ''}>
+              ${esc(t.jmeno)}</option>`
+          )
+          .join('')}
+      </select>
+      <label class="prepinac" style="white-space:nowrap">
+        <input type="checkbox" data-filtr-problemy ${filtrMatice.jenProblemy ? 'checked' : ''}
+               style="width:22px;height:22px;accent-color:var(--accent)" />
+        <span class="prepinac__text">Jen problémové</span>
+      </label>
+    </div>
+
+    ${ukoly.length === 0
+      ? prazdno('Nic k zobrazení', 'Při tomhle filtru není co ukázat.')
+      : `
+      <table class="matice">
+        <thead>
+          <tr>
+            <th>Úkol</th>
+            ${vybrany.map((t) => `<th class="matice__tester">${esc(t.jmeno)}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>
+          ${ukoly
+            .map(
+              (u) => `<tr>
+                <td class="matice__ukol">${esc(u.nazev)}</td>
+                ${vybrany.map((t) => bunka(u, t)).join('')}
+              </tr>`
+            )
+            .join('')}
+        </tbody>
+      </table>
+
+      <div class="matice-seznam">
+        ${ukoly
+          .map(
+            (u) => `<div class="panel panel--tesny">
+              <div style="font-weight:600;margin-bottom:8px">${esc(u.nazev)}</div>
+              <div class="matice-seznam__testeri">
+                ${vybrany.map((t) => chip(u, t)).join('')}
+              </div>
+            </div>`
+          )
+          .join('')}
+      </div>`}
+
+    <p class="text-faint" style="margin-top:10px">
+      ${Object.entries(ZNACKY).map(([stav, znacka]) => `${znacka} ${POPIS[stav]}`).join(' · ')}
+      · – netýká se
+    </p>`;
+}
+
+const ZNACKY = {
+  funguje: '✓',
+  nefunguje: '✕',
+  nerozumim: '?',
+  k_pretestovani: '↻',
+  neotestovano: '·',
+};
+
+function stavBunky(ukol, tester) {
+  if (!patriTesterovi(ukol, tester)) return null;
+  return ukol.vysledky?.find((v) => v.uzivatel_id === tester.id)?.stav ?? 'neotestovano';
+}
+
+// Stejné pravidlo jako na serveru: jen_admin patří adminovi, role_filtr
+// vyjmenovaným rolím, jinak úkol platí pro všechny.
+function patriTesterovi(ukol, tester) {
+  if (ukol.jen_admin) return tester.role === 'admin';
+  if (!ukol.role_filtr) return true;
+  return ukol.role_filtr.split(',').map((r) => r.trim()).includes(tester.role);
+}
+
+function bunka(ukol, tester) {
+  const stav = stavBunky(ukol, tester);
+  if (!stav) return '<td class="matice__bunka matice__bunka--netyka">–</td>';
+  return `<td class="matice__bunka">
+      <button type="button" class="bunka bunka--${stav}"
+        data-bunka="${ukol.id}:${tester.id}"
+        title="${esc(tester.jmeno)}: ${esc(POPIS[stav])}"
+        aria-label="${esc(tester.jmeno)}: ${esc(POPIS[stav])}">${ZNACKY[stav]}</button>
+    </td>`;
+}
+
+function chip(ukol, tester) {
+  const stav = stavBunky(ukol, tester);
+  if (!stav) {
+    return `<span class="chip chip--netyka">${esc(tester.jmeno)} · netýká se</span>`;
+  }
+  return `<button type="button" class="chip chip--${stav}" data-bunka="${ukol.id}:${tester.id}">
+      ${ZNACKY[stav]} ${esc(tester.jmeno)}
+    </button>`;
+}
+
+function navazMatici(koren, data, kod) {
+  koren.querySelector('[data-filtr-tester]')?.addEventListener('change', (e) => {
+    filtrMatice.tester = e.currentTarget.value;
+    detailVerze(koren, kod);
+  });
+  koren.querySelector('[data-filtr-problemy]')?.addEventListener('change', (e) => {
+    filtrMatice.jenProblemy = e.currentTarget.checked;
+    detailVerze(koren, kod);
+  });
+
+  koren.querySelectorAll('[data-bunka]').forEach((prvek) =>
+    prvek.addEventListener('click', () => {
+      const [ukolId, testerId] = prvek.dataset.bunka.split(':').map(Number);
+      const ukol = data.ukoly.find((u) => u.id === ukolId);
+      const tester = data.testeri.find((t) => t.id === testerId);
+      detailBunky(ukol, tester);
+    })
+  );
+}
+
+// Co přesně tester u úkolu napsal. Bez tohohle je tabulka jen barevná mřížka.
+function detailBunky(ukol, tester) {
+  const vysledek = ukol.vysledky?.find((v) => v.uzivatel_id === tester.id) ?? null;
+  const stav = vysledek?.stav ?? 'neotestovano';
+
+  const nadoba = document.getElementById('modal');
+  nadoba.innerHTML = `
+    <div class="modal-pozadi" data-zavrit>
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="bunka-nadpis">
+        <h2 class="modal__nadpis" id="bunka-nadpis">${esc(tester.jmeno)}</h2>
+        <p class="modal__text">${esc(ukol.nazev)}</p>
+
+        <div class="udaje" style="margin-bottom:16px">
+          <div class="udaj"><span class="udaj__popisek">Výsledek</span>
+            <span class="udaj__hodnota"><span class="stitek ${STITEK[stav]}">${esc(POPIS[stav])}</span></span></div>
+          ${vysledek
+            ? `<div class="udaj"><span class="udaj__popisek">Kdy</span>
+                 <span class="udaj__hodnota">${esc(datumCas(vysledek.updated_at))}</span></div>
+               ${vysledek.predchozi_stav
+                 ? `<div class="udaj"><span class="udaj__popisek">Předtím</span>
+                    <span class="udaj__hodnota">${esc(POPIS[vysledek.predchozi_stav])}</span></div>`
+                 : ''}
+               <div class="udaj"><span class="udaj__popisek">Zařízení</span>
+                 <span class="udaj__hodnota text-faint">${esc(zarizeniSlovy(vysledek.zarizeni))}</span></div>`
+            : ''}
+        </div>
+
+        ${vysledek?.komentar
+          ? `<div class="ukol__cast" style="margin-bottom:14px">
+               <div class="popisek">Komentář</div>
+               <div class="ukol__text">${esc(vysledek.komentar)}</div>
+             </div>`
+          : '<p class="text-faint" style="margin-bottom:14px">Bez komentáře.</p>'}
+
+        ${vysledek?.prilohy?.length
+          ? `<div class="nahledy" style="margin-bottom:14px">
+               ${vysledek.prilohy.map(nahled).join('')}
+             </div>`
+          : ''}
+
+        <div class="modal__akce">
+          <button type="button" class="btn btn--hlavni" data-ne>Zavřít</button>
+        </div>
+      </div>
+    </div>`;
+
+  const zavri = () => {
+    nadoba.innerHTML = '';
+  };
+  nadoba.querySelector('[data-ne]').addEventListener('click', zavri);
+  nadoba.querySelector('[data-zavrit]').addEventListener('click', (e) => {
+    if (e.target.hasAttribute('data-zavrit')) zavri();
+  });
+}
+
+// Z user agenta jen to, co člověku něco řekne.
+function zarizeniSlovy(ua) {
+  if (!ua) return 'neznámé';
+  const zarizeni = /iPhone|iPad/.test(ua) ? 'iPhone / iPad' : /Android/.test(ua) ? 'Android' : 'počítač';
+  const prohlizec = /Edg\//.test(ua)
+    ? 'Edge'
+    : /Chrome\//.test(ua) && !/Chromium/.test(ua)
+      ? 'Chrome'
+      : /Firefox\//.test(ua)
+        ? 'Firefox'
+        : /Safari\//.test(ua)
+          ? 'Safari'
+          : 'prohlížeč';
+  return `${prohlizec}, ${zarizeni}`;
 }
 
 // --------------------------------------------------------------- obsluha
@@ -417,15 +704,59 @@ function navazAkce(koren, data, kod) {
   });
 
   koren.querySelector('[data-pretestovat]')?.addEventListener('click', async () => {
-    const ano = await potvrd({
-      nadpis: 'Poslat nefunkční úkoly k přetestování?',
-      text: 'Všechny úkoly označené „nefunguje“ nebo „nerozumím zadání“ se vrátí testerům. Dělá se to po nasazení opravy.',
+    const volba = await formularModal({
+      nadpis: 'Poslat k přetestování',
+      text: `Dělá se to po nasazení opravy. Ve výchozím stavu se úkol vrátí jen těm,
+             komu nefungoval — komu fungoval, nemá co zkoušet znovu.`,
+      polia: [
+        {
+          klic: 'vsem',
+          popisek: 'Poslat všem, i těm, komu to fungovalo',
+          typ: 'prepinac',
+          hodnota: false,
+          napoveda: 'Hodí se, když oprava změnila chování pro všechny.',
+        },
+      ],
       potvrzeni: 'Poslat',
-      nebezpecne: false,
     });
-    if (!ano) return;
+    if (!volba) return;
     try {
-      const vysledek = await api.post(`/akceptace/verze/${encodeURIComponent(kod)}/k-pretestovani`);
+      const vysledek = await api.post(
+        `/akceptace/verze/${encodeURIComponent(kod)}/k-pretestovani`,
+        { vsem: volba.vsem }
+      );
+      hlaska(vysledek.zprava, 'ok');
+      await nactiPocty();
+      detailVerze(koren, kod);
+    } catch (err) {
+      hlaska(err.message, 'chyba');
+    }
+  });
+
+  koren.querySelector('[data-testeri]')?.addEventListener('click', async () => {
+    try {
+      const seznam = await api.get(`/akceptace/verze/${encodeURIComponent(kod)}/testeri`);
+      const vybrani = new Set(seznam.testeri.map((t) => t.id));
+
+      const volba = await formularModal({
+        nadpis: 'Kdo verzi testuje',
+        text: seznam.vychozi
+          ? 'Zatím platí výchozí výběr: všichni, kdo mají právo testovat. Jakmile někoho vybereš, počítá se verze jen jim.'
+          : 'Schválit verzi půjde, až budou mít všichni vybraní hotovo.',
+        polia: seznam.moznosti.map((m) => ({
+          klic: `u${m.id}`,
+          popisek: `${m.jmeno} (${m.role})`,
+          typ: 'prepinac',
+          hodnota: vybrani.has(m.id),
+        })),
+        potvrzeni: 'Uložit',
+      });
+      if (!volba) return;
+
+      const uzivatele = seznam.moznosti.filter((m) => volba[`u${m.id}`]).map((m) => m.id);
+      const vysledek = await api.put(`/akceptace/verze/${encodeURIComponent(kod)}/testeri`, {
+        uzivatele,
+      });
       hlaska(vysledek.zprava, 'ok');
       await nactiPocty();
       detailVerze(koren, kod);
@@ -554,8 +885,24 @@ function navazUkoly(koren, data, kod) {
     });
 
     prvek.querySelector('[data-ukol-pretestovat]')?.addEventListener('click', async () => {
+      const volba = await formularModal({
+        nadpis: 'Poslat úkol k přetestování',
+        text: 'Vrátí se těm, komu nefungoval. Nebo všem, kdo ho testovali.',
+        polia: [
+          {
+            klic: 'vsem',
+            popisek: 'Poslat všem, i těm, komu to fungovalo',
+            typ: 'prepinac',
+            hodnota: false,
+          },
+        ],
+        potvrzeni: 'Poslat',
+      });
+      if (!volba) return;
       try {
-        const vysledek = await api.post(`/akceptace/ukoly/${ukolId}/k-pretestovani`);
+        const vysledek = await api.post(`/akceptace/ukoly/${ukolId}/k-pretestovani`, {
+          vsem: volba.vsem,
+        });
         hlaska(vysledek.zprava, 'ok');
         await nactiPocty();
         detailVerze(koren, kod);

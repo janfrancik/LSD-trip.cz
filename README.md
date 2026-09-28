@@ -29,7 +29,7 @@ src/auth/                    hesla, session, CSRF, rate limit, role, 2FA
 src/api/verejne.js           veřejné API webu
 src/api/admin/               API administrace
 src/akceptace/               modul „Ke schválení“ — import zadání, přílohy, souhrn
-src/email/                   odesílání přes Resend a šablony
+src/email/                   odesílání přes Resend, šablony a přílohy
 
 docs/akceptace/*.yml         zadání akceptačních testů (importuje se při nasazení)
 
@@ -50,7 +50,7 @@ test/                        testy (node:test) proti skutečné databázi
 | image | `ghcr.io/…:latest` | `ghcr.io/…:test` | build z repozitáře |
 | databáze | `lsdtrip` | `lsdtrip_test` | `lsdtrip` |
 | volumes | `lsd_main_*` | `lsd_test_*` | `lsd_dev_*` |
-| e-maily | `EMAIL_REZIM=live` | `EMAIL_REZIM=test` | `EMAIL_REZIM=vypnuto` |
+| e-maily | `EMAIL_REZIM=live` | `EMAIL_REZIM=schranka` | `EMAIL_REZIM=vypnuto` |
 | indexace | `ROBOTS=povolit` | `ROBOTS=zakazat` | `ROBOTS=zakazat` |
 
 Stejný `docker-compose.yml` slouží oběma prostředím, liší se jen `.env`. Volumes mají
@@ -64,10 +64,14 @@ Postup zprovoznění obou prostředí včetně příkazů k vložení je v
 
 ### Na testu nemůže odejít e-mail zákazníkovi
 
-`EMAIL_REZIM=test` není podmínka u odesílání, ale jediná cesta ven: `posliEmail()` přepíše
-příjemce na `EMAIL_TEST_PRIJEMCE` **před** voláním Resendu. Do logu se uloží obojí —
-komu e-mail patří (`emaily.prijemce`) i kam doopravdy šel (`emaily.prijemce_skutecny`).
-Předmět dostane předponu `[TEST]`. Hlídá to i test `test/emaily.test.js`.
+Na testu běží `EMAIL_REZIM=schranka`: `posliEmail()` se k odesílací službě vůbec nedostane,
+e-mail se celý uloží do administrace (`/admin/emaily`) a `emaily.prijemce_skutecny` zůstane
+prázdné. Resend je tam zbytečný a **žádný klíč se na test nedává** — co není nastavené,
+nemůže nic poslat.
+
+Kdyby bylo někdy potřeba ověřit i doručení, je tu `EMAIL_REZIM=test`: příjemce se přepíše
+na `EMAIL_TEST_PRIJEMCE` **před** voláním Resendu, do logu se uloží obojí (komu e-mail patří
+i kam doopravdy šel) a předmět dostane předponu `[TEST]`. Hlídá to test `test/emaily.test.js`.
 
 Výchozí hodnota je `vypnuto`: dokud se režim nenastaví vědomě, e-mail se jen zaloguje.
 
@@ -183,7 +187,8 @@ povinná hlavička `X-CSRF-Token` shodná s cookie `lsd_csrf`.
 | Poptávky | `GET /poptavky`, `GET|PATCH|DELETE /poptavky/:id`, `POST /poptavky/:id/odpovedet`, `POST /poptavky/:id/obnovit` |
 | Audit | `GET /audit` |
 | Nastavení | `GET|PATCH /nastaveni`, `GET /nastaveni/integrace` |
-| Ke schválení (jen mimo produkci) | `GET /akceptace`, `GET /akceptace/pocty`, `GET /akceptace/verze/:kod`, `PUT /akceptace/ukoly/:id/vysledek`, `POST /akceptace/ukoly/:id/k-pretestovani`, `POST /akceptace/verze/:kod/k-pretestovani|schvalit|oznamit`, `GET /akceptace/verze/:kod/export`, `GET|POST /akceptace/hlaseni`, `GET|PATCH /akceptace/hlaseni/:id`, `POST|GET /akceptace/prilohy[/:id]`, `POST /akceptace/import` |
+| E-maily | `GET /emaily`, `GET /emaily/:id`, `GET /emaily/:id/telo`, `GET /emaily/:id/priloha/:prilohaId` |
+| Ke schválení (jen mimo produkci) | `GET /akceptace`, `GET /akceptace/pocty`, `GET /akceptace/verze/:kod`, `PUT /akceptace/ukoly/:id/vysledek`, `POST /akceptace/ukoly/:id/k-pretestovani`, `POST /akceptace/verze/:kod/k-pretestovani|schvalit|oznamit`, `GET|PUT /akceptace/verze/:kod/testeri`, `GET /akceptace/verze/:kod/export`, `GET|POST /akceptace/hlaseni`, `GET|PATCH /akceptace/hlaseni/:id`, `POST|GET /akceptace/prilohy[/:id]`, `POST /akceptace/import` |
 
 Seznamy berou `?strana=&na_strane=&q=` a vracejí `{ data, celkem, strana, na_strane }`.
 Chyby vracejí `{ chyba: "česky", detaily: { pole: "zpráva" } }`.
@@ -198,6 +203,7 @@ Chyby vracejí `{ chyba: "česky", detaily: { pole: "zpráva" } }`.
 | platby, doklady | ✓ | čtení | – | ✓ | – |
 | obsah, galerie | ✓ | ✓ | – | – | – |
 | uživatelé, audit, nastavení | ✓ | – | – | – | – |
+| e-maily (schránka / log) | ✓ | čtení | – | – | – |
 | ke schválení (jen na testu) | ✓ | ✓ | – | – | ✓ |
 
 Role `ucetni` je připravená, ale zatím se pro ni nezakládá účet.
@@ -205,25 +211,33 @@ Role `tester` slouží k akceptačnímu testování na testu — víc nevidí a 
 pro ni není co dělat, protože tam modul Ke schválení neexistuje.
 Hesla se nikdy neposílají e-mailem — nový člověk dostane jednorázový odkaz platný 3 dny.
 
-## Čas a formáty
+## Čas: v databázi UTC, na obrazovce Praha
 
-Všechna data a časy — administrace, e-maily, exporty, doklady — se formátují jedinou
-funkcí ze `src/cas.js`, vždy v **Europe/Prague** a v českém tvaru (`27. 9. 2026 22:49`).
-Administrace si ten samý soubor načítá jako `/admin/assets/js/cas.js`, takže server
-i prohlížeč počítají stejně a nemůžou se rozejít.
+**V databázi je všechno v UTC.** Spojení má `time_zone = '+00:00'` (`src/db.js`), kontejnery
+běží s `TZ=UTC`, takže `NOW()` i výchozí hodnoty sloupců píšou UTC bez ohledu na nastavení
+serveru. Pražský čas „na hodinách“ by byl nejednoznačný: poslední říjnovou neděli proběhne
+hodina 2:00–3:00 dvakrát, takže `2026-10-25 02:30:00` jsou dva různé okamžiky hodinu od sebe —
+a držení rezervace na 48 h, splatnosti ani pořadí plateb by se z toho nedaly spočítat.
 
-- DATETIME z databáze (`2026-09-27 22:49:00`) je **pražský čas na hodinách** — neprochází
-  žádným přepočtem, jen se přeskládá do českého tvaru. Výsledek je proto stejný i na stroji
-  v jiné zóně.
-- `Date` a ISO řetězec se zónou (`…Z`) jsou okamžik na ose času a do pražského času
-  se převedou, včetně letního času.
-- `okamzik()` je opačný směr — pro počítání rozdílů a porovnávání.
-- `isoDatum()` dává `YYYY-MM-DD` pro názvy souborů, taky v pražském dni.
+**Na Europe/Prague se převádí až při zobrazení**, jedinou funkcí ze `src/cas.js`, v českém
+tvaru (`27. 9. 2026 22:49`). Administrace si ten samý soubor načítá jako
+`/admin/assets/js/cas.js`, takže server i prohlížeč počítají stejně.
 
-V kódu se nepoužívá `toISOString()`, `toLocaleString()` ani vlastní skládání data z `new Date()`.
-Výjimka je `/api/health`, kde je ISO čas v UTC záměrně — to je strojový výstup, ne čas pro člověka.
-Testy v `test/cas.test.js` hlídají i přechody letního a zimního času a to, že výsledek
-nezávisí na časové zóně stroje.
+| Funkce | K čemu |
+| --- | --- |
+| `datum()`, `cas()`, `datumCas()`, `datumSlovy()` | zobrazení člověku |
+| `pred()` | „před 5 minutami“ do seznamů |
+| `okamzik()` | řetězec z databáze → `Date` (pro porovnání a rozdíly) |
+| `proDb()` | `Date` → `YYYY-MM-DD HH:MM:SS` v UTC |
+| `isoDatum()` | `YYYY-MM-DD` pro názvy souborů, v pražském dni |
+
+V kódu se nepoužívá `toISOString()`, `toLocaleString()`, `new Date(<řetězec z databáze>)`
+ani vlastní skládání data — `new Date('2026-09-27 20:49:00')` přečte řetězec jako místní čas
+stroje a výsledek je posunutý. Výjimka je `/api/health`, kde je ISO čas v UTC záměrně:
+to je strojový výstup, ne čas pro člověka.
+
+Testy v `test/cas.test.js` hlídají přechody letního i zimního času, zápis a čtení proti
+skutečné databázi a to, že výsledek nezávisí na časové zóně stroje.
 
 ## Zabezpečení
 
@@ -294,6 +308,27 @@ Kontrola bez zálohování (vypíše, co si skript přečetl z `.env`):
 Zálohy leží na stejném VPS, takže chrání před chybou v datech, ne před ztrátou serveru.
 Návrh kopie mimo server je v [docs/nasazeni-vps.md](docs/nasazeni-vps.md) (zatím neimplementováno).
 
+## E-maily a testovací schránka
+
+Všechno odesílání jde přes `src/email/posli.js`, který podle `EMAIL_REZIM` rozhodne,
+co se stane. Režim se nastavuje v `.env` a v administraci se ukazuje v sekci **E-maily**:
+
+| `EMAIL_REZIM` | Co dělá | Kde se používá |
+| --- | --- | --- |
+| `live` | posílá zákazníkům přes Resend | produkce |
+| `schranka` | **neodesílá nic**, ukládá celý e-mail (HTML, text, přílohy) do administrace | test |
+| `test` | přepíše příjemce na `EMAIL_TEST_PRIJEMCE` a odešle | když je potřeba ověřit doručení |
+| `vypnuto` | jen záznam v logu, tělo se neukládá | výchozí, dokud se režim nenastaví |
+
+Testovací schránka (`/admin/emaily`) je plnohodnotný náhled: hledání podle adresáta,
+předmětu a šablony, přepínač HTML/text, přílohy ke stažení a vypsané odkazy z e-mailu,
+na které jde kliknout — pozvánka i reset hesla se tak dají na testu projít celé.
+HTML e-mailu se vykresluje v sandboxovaném `iframe` přes `srcdoc`: neběží v něm skripty
+a nemá přístup ke stránce administrace ani k session.
+
+Po každé akci, která posílá e-mail, administrace řekne, co se stalo — a v režimu
+`schranka` nabídne odkaz „Zobrazit e-mail“. Nikdy netvrdí „odesláno“, když se neodeslalo.
+
 ## Ke schválení (akceptační testování)
 
 Modul `/admin/akceptace` běží **jen mimo produkci** (`PROSTREDI` ≠ `produkce`).
@@ -308,19 +343,33 @@ Jak to funguje:
    `kod` úkolu: změněný úkol se aktualizuje, chybějící se zhasne (`aktivni = 0`),
    **výsledky testerů zůstanou**. Ručně jde import spustit tlačítkem „Znovu načíst zadání“.
 3. Tester u úkolu zvolí Funguje / Nefunguje / Nerozumím zadání, napíše komentář a může
-   přiložit snímek obrazovky (PNG, JPEG, WebP, do 6 MB; ukládá se do volume `uploads`).
-   U „nefunguje“ je komentář povinný.
-4. Po opravě a novém nasazení vrátí provoz nebo admin úkol tlačítkem
-   „Poslat k přetestování“ — u testera se objeví znovu.
-5. Verzi schvaluje **jen admin** a jen tehdy, když všechny úkoly fungují a hlášení jsou
-   vyřízená. Schválení se zapíše do auditu, souhrn (kdo co testoval a kdy) jde stáhnout
+   přiložit snímek obrazovky (PNG, JPEG, WebP, do 6 MB; vložením ze schránky, přetažením
+   nebo výběrem souboru; ukládá se do volume `uploads`). U „nefunguje“ je komentář povinný.
+4. **Výsledek má každý tester svůj.** Zvoneček, karta na přehledu i seznam úkolů ukazují
+   stav přihlášeného člověka — to, že úkol zkusil někdo jiný, nikoho jiného nezbavuje
+   povinnosti zkusit ho taky.
+5. Kdo verzi testuje, vybírá admin tlačítkem „Kdo testuje“. Bez výběru platí výchozí stav:
+   všichni s rolí `tester`, `provoz` nebo `admin`. Úkol může být omezený na role
+   (`role: provoz` v YAML) nebo jen pro admina (`jen_admin: true`) — ostatním se neukáže.
+6. Provoz a admin mají navíc záložku **Přehled testerů**: tabulka úkoly × testeři
+   (✓ funguje, ✕ nefunguje, ? nejasné zadání, ↻ k přetestování, · neotestováno, – netýká se),
+   kliknutí na buňku ukáže komentář, přílohy, čas a zařízení. Filtry: jen problémové,
+   podle testera. Nahoře je vidět, kolik má kdo hotovo (`Majitelka 12/24`).
+7. Po opravě a novém nasazení vrátí provoz nebo admin úkol tlačítkem
+   „Poslat k přetestování“ — ve výchozím stavu **jen těm, komu nefungoval**; volba
+   „poslat všem“ je pro případ, kdy oprava změnila chování pro všechny.
+8. Verzi schvaluje **jen admin** a jen tehdy, když **všichni přiřazení testeři** mají
+   všechno otestované a v pořádku a hlášení jsou vyřízená. Odmítnutí říká jmenovitě,
+   na koho se čeká („Majitelka: 3 úkoly neotestované“). Schválení se zapíše do auditu,
+   souhrn (kdo co testoval a kdy, včetně tabulky úkoly × testeři) jde stáhnout
    jako Markdown do `docs/akceptace/`.
 
 Upozornění: zvoneček v hlavičce s počtem neotestovaných úkolů, karta na přehledu
 s průběhem a e-mail testerům při nové verzi (odchází jen když je zapnuté odesílání;
 jinak zůstane oznámení v administraci a rozešle se tlačítkem „Oznámit testerům“).
 
-Kdo je tester: každý aktivní uživatel s rolí `tester`, `provoz` nebo `admin`.
+Kdo je tester: aktivní uživatelé přiřazení k verzi, jinak všichni s rolí `tester`,
+`provoz` nebo `admin`.
 
 ## Přechod na lsd-trip.cz
 

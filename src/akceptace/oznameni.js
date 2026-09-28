@@ -52,6 +52,7 @@ export async function oznamVerzi(verzeId, { pocetUkolu = null } = {}) {
   const podpis = await hodnota('emaily.podpis');
   const odkaz = config.url('/admin/akceptace/' + verze.kod);
   let odeslano = 0;
+  let doSchranky = 0;
 
   for (const tester of testeri) {
     const vysledek = await posliEmail({
@@ -77,12 +78,14 @@ export async function oznamVerzi(verzeId, { pocetUkolu = null } = {}) {
         `Seznam úkolů k otestování: ${odkaz}\n`,
     });
     if (vysledek.odeslano) odeslano += 1;
+    if (vysledek.doSchranky) doSchranky += 1;
   }
 
   await pool.query('UPDATE akceptace_verze SET oznameno_at = NOW() WHERE id = ?', [verzeId]);
 
   return {
     odeslano,
+    doSchranky,
     prijemci: testeri.map((t) => t.email),
     rezim: config.EMAIL_REZIM,
   };

@@ -5,18 +5,47 @@
 // v pražském čase, takže souhrn tvrdil, že vznikl hodinu před testy,
 // které popisuje.
 
-import test from 'node:test';
+import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { pripravDatabazi, vycistiData } from './pomocnik.js';
 import {
   datum, datumCas, cas, datumSlovy, isoDatum, okamzik, pred, slozky,
 } from '../src/cas.js';
 
-test('DATETIME z databáze se bere jako pražský čas, nepřepočítává se', () => {
-  assert.equal(datumCas('2026-09-27 22:49:00'), '27. 9. 2026 22:49');
-  assert.equal(datum('2026-09-27 22:49:00'), '27. 9. 2026');
-  assert.equal(cas('2026-09-27 22:49:00'), '22:49');
+let pool;
+
+before(async () => {
+  await pripravDatabazi();
+  pool = (await import('../src/db.js')).default;
+});
+
+after(async () => {
+  await pool.end();
+});
+
+test('DATETIME z databáze je UTC a zobrazuje se v pražském čase', () => {
+  // Letní čas: v databázi 20:49 UTC, na hodinách v Praze 22:49.
+  assert.equal(datumCas('2026-09-27 20:49:00'), '27. 9. 2026 22:49');
+  assert.equal(datum('2026-09-27 20:49:00'), '27. 9. 2026');
+  assert.equal(cas('2026-09-27 20:49:00'), '22:49');
+  // Zimní čas: +1 hodina.
+  assert.equal(datumCas('2026-01-15 10:00:00'), '15. 1. 2026 11:00');
   assert.equal(datumSlovy('2026-09-27'), '27. září 2026');
+});
+
+test('nejednoznačná hodina při přechodu na zimní čas je v UTC jednoznačná', () => {
+  // Tohle je důvod, proč se v databázi drží UTC: "2026-10-25 02:30" pražského
+  // času jsou dva různé okamžiky hodinu od sebe. V UTC se nepletou.
+  const prvni = '2026-10-25 00:30:00'; // ještě letní čas
+  const druhy = '2026-10-25 01:30:00'; // už zimní
+  assert.equal(datumCas(prvni), '25. 10. 2026 2:30');
+  assert.equal(datumCas(druhy), '25. 10. 2026 2:30');
+  assert.equal(
+    okamzik(druhy).getTime() - okamzik(prvni).getTime(),
+    60 * 60 * 1000,
+    'stejný čas na hodinách, ale okamžiky jsou hodinu od sebe'
+  );
 });
 
 test('okamžik v UTC se převede do pražského času', () => {
@@ -40,27 +69,31 @@ test('přechod na zimní čas (poslední říjnová neděle)', () => {
   assert.equal(datumCas('2026-10-25T01:30:00Z'), '25. 10. 2026 2:30', 'zimní čas');
 });
 
-test('pražský čas z databáze se převede zpět na správný okamžik', () => {
-  // Letní čas: 22:49 v Praze = 20:49 UTC.
-  assert.equal(okamzik('2026-09-27 22:49:00').toISOString(), '2026-09-27T20:49:00.000Z');
-  // Zimní čas: 11:00 v Praze = 10:00 UTC.
-  assert.equal(okamzik('2026-01-15 11:00:00').toISOString(), '2026-01-15T10:00:00.000Z');
-  // Těsně po přechodu na letní čas.
-  assert.equal(okamzik('2026-03-29 03:30:00').toISOString(), '2026-03-29T01:30:00.000Z');
+test('čas z databáze se čte jako UTC, ne jako místní čas stroje', () => {
+  assert.equal(okamzik('2026-09-27 20:49:00').toISOString(), '2026-09-27T20:49:00.000Z');
+  assert.equal(okamzik('2026-01-15 10:00:00').toISOString(), '2026-01-15T10:00:00.000Z');
+});
+
+test('proDb vrací tvar pro databázi v UTC', async () => {
+  const { proDb } = await import('../src/cas.js');
+  assert.equal(proDb(new Date('2026-09-27T20:49:00Z')), '2026-09-27 20:49:00');
+  assert.equal(proDb('2026-09-27 20:49:00'), '2026-09-27 20:49:00');
+  assert.equal(proDb(null), null);
 });
 
 test('den v názvu souboru je pražský, ne UTC', () => {
   // 23:30 UTC je v Praze už další den.
   assert.equal(isoDatum(new Date('2026-09-27T23:30:00Z')), '2026-09-28');
-  assert.equal(isoDatum('2026-09-27 22:49:00'), '2026-09-27');
+  assert.equal(isoDatum('2026-09-27 23:30:00'), '2026-09-28');
+  assert.equal(isoDatum('2026-09-27 20:49:00'), '2026-09-27');
 });
 
 test('„před chvílí" počítá od skutečného okamžiku', () => {
   const ted = new Date('2026-09-27T20:49:00Z'); // 22:49 v Praze
-  assert.equal(pred('2026-09-27 22:48:30', ted), 'právě teď');
-  assert.equal(pred('2026-09-27 22:44:00', ted), 'před 5 minutami');
-  assert.equal(pred('2026-09-27 19:49:00', ted), 'před 3 hodinami');
-  assert.equal(pred('2026-09-26 22:49:00', ted), 'včera');
+  assert.equal(pred('2026-09-27 20:48:30', ted), 'právě teď');
+  assert.equal(pred('2026-09-27 20:44:00', ted), 'před 5 minutami');
+  assert.equal(pred('2026-09-27 17:49:00', ted), 'před 3 hodinami');
+  assert.equal(pred('2026-09-26 20:49:00', ted), 'včera');
 });
 
 test('nesmysl nebo prázdno nevrací „Invalid Date"', () => {
@@ -76,10 +109,10 @@ test('výsledek nezávisí na časové zóně stroje', () => {
   const skript = `
     const { datumCas, isoDatum, okamzik } = await import('./src/cas.js');
     console.log(JSON.stringify({
-      zDb: datumCas('2026-09-27 22:49:00'),
+      zDb: datumCas('2026-09-27 20:49:00'),
       zUtc: datumCas('2026-09-27T20:49:00Z'),
       den: isoDatum(new Date('2026-09-27T23:30:00Z')),
-      okamzik: okamzik('2026-09-27 22:49:00').toISOString(),
+      okamzik: okamzik('2026-09-27 20:49:00').toISOString(),
     }));
   `;
 
@@ -101,4 +134,50 @@ test('výsledek nezávisí na časové zóně stroje', () => {
       `v zóně ${zona} musí vyjít to samé`
     );
   }
+});
+
+// ------------------------------------------------------------- proti databázi
+
+test('spojení do databáze běží v UTC', async () => {
+  const [[r]] = await pool.query(
+    'SELECT @@session.time_zone AS zona, NOW() AS ted, UTC_TIMESTAMP() AS utc'
+  );
+  assert.equal(r.zona, '+00:00', 'bez toho by NOW() psalo čas podle zóny serveru');
+  assert.equal(r.ted, r.utc, 'NOW() musí být totéž co UTC_TIMESTAMP()');
+});
+
+test('okamžik uložený do databáze se přečte jako tentýž okamžik', async () => {
+  await vycistiData(pool);
+
+  // Okamžik v létě (Praha +2) i v zimě (+1) - kdyby se někde ztratila zóna,
+  // rozdíl se pozná právě tady.
+  for (const iso of ['2026-07-15T10:00:00.000Z', '2026-01-15T10:00:00.000Z']) {
+    const puvodni = new Date(iso);
+    const [vysledek] = await pool.query(
+      'INSERT INTO poptavky (jmeno, email, zprava, created_at) VALUES (?, ?, ?, ?)',
+      ['Zkouška času', 'cas@example.invalid', 'test', puvodni]
+    );
+
+    const [[radek]] = await pool.query('SELECT created_at FROM poptavky WHERE id = ?', [
+      vysledek.insertId,
+    ]);
+
+    assert.equal(
+      okamzik(radek.created_at).getTime(),
+      puvodni.getTime(),
+      `okamžik ${iso} se má uložit i přečíst beze změny`
+    );
+  }
+
+  // A ten samý údaj se člověku ukáže v pražském čase.
+  const [[letni]] = await pool.query(
+    "SELECT created_at FROM poptavky WHERE created_at = '2026-07-15 10:00:00'"
+  );
+  assert.equal(datumCas(letni.created_at), '15. 7. 2026 12:00');
+});
+
+test('NOW() v databázi a Date.now() v aplikaci jdou stejně', async () => {
+  const [[r]] = await pool.query('SELECT NOW() AS ted');
+  const rozdil = Math.abs(okamzik(r.ted).getTime() - Date.now());
+  assert.ok(rozdil < 5000, `čas databáze a aplikace se liší o ${rozdil} ms`);
 });

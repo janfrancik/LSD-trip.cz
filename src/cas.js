@@ -11,12 +11,14 @@
 // Tenhle soubor běží v Node i v prohlížeči (administrace si ho načítá jako
 // /admin/assets/js/cas.js, viz src/app.js), takže nesmí nic importovat.
 //
-// Dva druhy vstupu, dvojí zacházení:
-//   1. "2026-09-27 22:49:00" z databáze - DATETIME bez zóny. Aplikace i databáze
-//      běží v Europe/Prague, takže je to pražský čas na hodinách. Nepřepočítává
-//      se, jen se přeskládá - výsledek je proto stejný i na stroji v jiné zóně.
-//   2. Date nebo ISO řetězec se zónou ("2026-09-27T20:49:00Z") - okamžik na ose
-//      času. Ten se do pražského času převede přes Intl, včetně letního času.
+// V databázi je všechno v UTC (od migrace 005). "2026-09-27 20:49:00" z DATETIME
+// je tedy okamžik v UTC, stejně jako Date nebo ISO řetězec se zónou - všechno
+// se sem dá poslat a ven vypadne pražský čas, včetně letního.
+//
+// Proč UTC v databázi: pražský čas "na hodinách" je nejednoznačný. Poslední
+// říjnovou neděli proběhne hodina 2:00-3:00 dvakrát, takže "2026-10-25 02:30:00"
+// jsou dva různé okamžiky vzdálené hodinu. U držení rezervace, splatností
+// a pořadí plateb je to chyba, kterou už nejde opravit.
 
 export const ZONA = 'Europe/Prague';
 
@@ -25,7 +27,7 @@ const MESICE = [
   'července', 'srpna', 'září', 'října', 'listopadu', 'prosince',
 ];
 
-// DATE i DATETIME z databáze, s nepovinnými sekundami a zlomky.
+// DATE i DATETIME z databáze (bez zóny = UTC), s nepovinnými sekundami a zlomky.
 const DB_TVAR = /^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.\d+)?)?$/;
 
 const formatovac = new Intl.DateTimeFormat('en-CA', {
@@ -62,21 +64,20 @@ export function slozky(hodnota) {
 
   if (typeof hodnota === 'number') return zOkamziku(new Date(hodnota));
 
-  const text = String(hodnota).trim();
-  const zDb = text.match(DB_TVAR);
-  if (zDb) {
-    return {
-      rok: Number(zDb[1]),
-      mesic: Number(zDb[2]),
-      den: Number(zDb[3]),
-      hodina: Number(zDb[4] ?? 0),
-      minuta: Number(zDb[5] ?? 0),
-      sekunda: Number(zDb[6] ?? 0),
-    };
-  }
+  const datum = zTextu(String(hodnota).trim());
+  return datum ? zOkamziku(datum) : null;
+}
 
-  const datum = new Date(text);
-  return Number.isNaN(datum.getTime()) ? null : zOkamziku(datum);
+// Řetězec na okamžik. Tvar z databáze nemá zónu a je v UTC - bez doplněného
+// "Z" by ho prohlížeč i Node četly jako místní čas stroje.
+function zTextu(text) {
+  const zDb = text.match(DB_TVAR);
+  const datum = zDb
+    ? new Date(
+        `${zDb[1]}-${zDb[2]}-${zDb[3]}T${zDb[4] ?? '00'}:${zDb[5] ?? '00'}:${zDb[6] ?? '00'}Z`
+      )
+    : new Date(text);
+  return Number.isNaN(datum.getTime()) ? null : datum;
 }
 
 /**
@@ -84,31 +85,17 @@ export function slozky(hodnota) {
  * Hodnotu z databáze bere jako pražský čas na hodinách, ne jako UTC.
  */
 export function okamzik(hodnota) {
+  if (hodnota == null || hodnota === '') return null;
   if (hodnota instanceof Date) return Number.isNaN(hodnota.getTime()) ? null : hodnota;
   if (typeof hodnota === 'number') return new Date(hodnota);
-
-  const casti = slozky(hodnota);
-  if (!casti) return null;
-
-  const text = String(hodnota).trim();
-  if (!DB_TVAR.test(text)) return new Date(text);
-
-  // Pražský čas na hodinách → okamžik. Posun se hledá ve dvou krocích: první
-  // odhad může spadnout na jinou stranu přechodu letního času, druhý už ne.
-  const jakoUtc = Date.UTC(
-    casti.rok, casti.mesic - 1, casti.den, casti.hodina, casti.minuta, casti.sekunda
-  );
-  let vysledek = jakoUtc - posunMs(new Date(jakoUtc));
-  vysledek = jakoUtc - posunMs(new Date(vysledek));
-  return new Date(vysledek);
+  return zTextu(String(hodnota).trim());
 }
 
-// O kolik jdou pražské hodiny napřed proti UTC v daném okamžiku.
-function posunMs(okamzikUtc) {
-  const c = zOkamziku(okamzikUtc);
-  const prazskeJakoUtc = Date.UTC(c.rok, c.mesic - 1, c.den, c.hodina, c.minuta, c.sekunda);
-  // Sekundy zaokrouhlené na celé - milisekundy Intl nevrací.
-  return prazskeJakoUtc - Math.floor(okamzikUtc.getTime() / 1000) * 1000;
+// Čas pro zápis do databáze: "YYYY-MM-DD HH:MM:SS" v UTC. Ovladač si s Date
+// poradí sám, tohle je pro místa, kde se čas skládá do řetězce.
+export function proDb(hodnota = new Date()) {
+  const datum = okamzik(hodnota);
+  return datum ? datum.toISOString().slice(0, 19).replace('T', ' ') : null;
 }
 
 // ------------------------------------------------------------------ formáty

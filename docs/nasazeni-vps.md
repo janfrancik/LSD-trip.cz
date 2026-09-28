@@ -92,12 +92,12 @@ DB_ROOT_PASSWORD=<DOPLNIT-TEST-ROOT-HESLO>
 # Test se nesmí dostat do vyhledávačů.
 ROBOTS=zakazat
 
-# Dokud není Resend klíč, e-maily se jen logují. Po doplnění klíče přepni na
-# EMAIL_REZIM=test - všichni příjemci se pak přepíšou na adresu níž a
-# zákazníkovi nemůže nic odejít.
-EMAIL_REZIM=vypnuto
-# Kam se v testovacím režimu přesměrují VŠECHNY e-maily. Pokud chceš jinou
-# schránku, přepiš ji tady a spusť "docker compose up -d".
+# Na testu se e-maily NEODESÍLAJÍ. Ukládají se celé do administrace
+# (menu E-maily = testovací schránka), včetně odkazů, na které jde kliknout -
+# pozvánka i reset hesla se tak dají projít bez Resendu. Klíč sem nepatří.
+EMAIL_REZIM=schranka
+# Používá se jen v režimu EMAIL_REZIM=test (kdyby bylo potřeba ověřit
+# i skutečné doručení). V režimu schranka se neuplatní.
 EMAIL_TEST_PRIJEMCE=honza.francik@gmail.com
 EMAIL_ODESILATEL=LSD test <rezervace@lsd.francik.eu>
 RESEND_API_KEY=
@@ -404,6 +404,57 @@ A přidej produkční řádek do cronu:
 
 ---
 
+## Resend na produkci
+
+Na testu Resend není a nebude — tam stačí testovací schránka. Ostré odesílání se zapne
+až v produkci, na doméně spolku. Co k tomu bude potřeba:
+
+**Od spolku (majitelka):**
+
+1. **Účet u Resendu** ([resend.com](https://resend.com)) na e-mail spolku, ne na osobní.
+   Zdarma je 3 000 e-mailů měsíčně, 100 denně; na tandemovou sezónu to stačí, placený tarif
+   (~20 USD) se dá zapnout později bez zásahu do kódu.
+2. **Přístup k DNS domény `lsd-trip.cz`** — kde je doména registrovaná a kdo tam umí přidat
+   záznamy. Bez toho e-maily skončí ve spamu.
+3. **Adresa odesílatele**, ze které se bude psát zákazníkům (návrh: `rezervace@lsd-trip.cz`),
+   a adresa pro odpovědi, pokud má být jiná.
+
+**DNS záznamy pro `lsd-trip.cz`** (přesné hodnoty vygeneruje Resend při přidání domény,
+tohle je, co se bude zadávat):
+
+| Typ | Název | Hodnota |
+| --- | --- | --- |
+| TXT | `resend._domainkey` | DKIM klíč z Resendu |
+| MX | `send` | `feedback-smtp.eu-west-1.amazonses.com` (priorita 10) |
+| TXT | `send` | `v=spf1 include:amazonses.com ~all` |
+| TXT | `_dmarc` | `v=DMARC1; p=none; adkim=r; aspf=r` |
+
+Doménu je potřeba v Resendu ověřit (tlačítko *Verify*) — teprve pak se dá posílat.
+
+**API klíč:** vytvořit v Resendu s právem **jen odesílat** (*Sending access*) a omezením
+na doménu `lsd-trip.cz`. Klíč se nikam necommituje, patří jen do `.env` na serveru:
+
+```bash
+nano /home/deploy/apps/lsdtrip/.env
+```
+
+```ini
+EMAIL_REZIM=live
+EMAIL_ODESILATEL=LSD <rezervace@lsd-trip.cz>
+RESEND_API_KEY=re_<doplnit>
+```
+
+```bash
+cd /home/deploy/apps/lsdtrip && docker compose up -d
+```
+
+Restart stačí — nic se nenasazuje. Po přepnutí pošli přes administraci jeden e-mail sobě
+a zkontroluj v sekci E-maily, že má stav „odesláno“ a že v poště opravdu je.
+
+Dokud tohle není hotové, nech produkci na `EMAIL_REZIM=vypnuto` (nebo `schranka`, pokud
+chceš mít uložené, co by odešlo). Nikdy `live` bez ověřené domény — e-maily by odcházely,
+ale končily by ve spamu a doména by si tím pokazila pověst.
+
 ## Když se něco pokazí
 
 | Příznak | Co s tím |
@@ -412,5 +463,7 @@ A přidej produkční řádek do cronu:
 | `required variable VOLUME_PREFIX is missing` | v `.env` chybí `VOLUME_PREFIX`, compose to schválně nepustí dál |
 | Caddy vrací 502 | kontejner neběží, nebo není v síti `web`: `docker network connect web <kontejner>` |
 | deploy spadne na migraci | nová verze se schválně nespustila a běží dál ta stará; oprav migraci a pusť deploy znovu |
+| na testu nechodí e-maily | tak to má být: `EMAIL_REZIM=schranka`, e-maily jsou v administraci v sekci E-maily |
+| časy jsou posunuté o hodinu | v databázi je UTC schválně; kontroluj, co ukazuje administrace, ne co je v tabulce |
 | `Table '...' doesn't exist` v logu aplikace | migrace neproběhla; `docker compose run --rm app npm run migrate` a pak `docker compose up -d` |
 | test začne posílat e-maily ven | okamžitě `EMAIL_REZIM=vypnuto` a `docker compose up -d`; pak zkontroluj `EMAIL_TEST_PRIJEMCE` |

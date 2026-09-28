@@ -95,7 +95,10 @@ test('po deseti neúspěšných pokusech se účet zamkne', async () => {
     'sef@example.invalid',
   ]);
   assert.ok(u.zamceno_do, 'v databázi musí být zámek účtu');
-  assert.ok(new Date(u.zamceno_do) > new Date(), 'zámek musí platit do budoucna');
+  // Čas z databáze je v UTC - přečíst ho přes okamzik(), ne přes new Date(),
+  // který by ho vzal jako místní čas stroje.
+  const { okamzik } = await import('../src/cas.js');
+  assert.ok(okamzik(u.zamceno_do) > new Date(), 'zámek musí platit do budoucna');
 
   // I se správným heslem se teď dovnitř nedostane. Který z obou mechanismů
   // zabere dřív, nerozhoduje - obojí je správná odpověď:

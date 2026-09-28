@@ -9,10 +9,14 @@
 // spletl kdokoli.
 //
 // Režim 'vypnuto' je výchozí: e-mail se jen zaloguje a nikam neodejde.
+// Režim 'schranka' (testovací prostředí, kde není Resend) taky nic neodešle,
+// ale uloží celý e-mail - HTML, text i přílohy - do testovací schránky
+// v administraci, kde se dá otevřít jako v poštovním klientovi.
 
 import { Resend } from 'resend';
 import config from '../config.js';
 import pool from '../db.js';
+import { ulozPrilohuEmailu } from './prilohy.js';
 
 let resend = null;
 function klient() {
@@ -25,7 +29,7 @@ function klient() {
 function skutecnyPrijemce(prijemce) {
   if (config.EMAIL_REZIM === 'live') return prijemce;
   if (config.EMAIL_REZIM === 'test') return config.EMAIL_TEST_PRIJEMCE;
-  return null; // vypnuto
+  return null; // vypnuto i schranka - ven nejde nic
 }
 
 /**
@@ -52,30 +56,46 @@ export async function posliEmail({
 }) {
   const kam = skutecnyPrijemce(prijemce);
   const rezim = config.EMAIL_REZIM;
+  const doSchranky = rezim === 'schranka';
 
   // Předmět v testu označíme, aby nebylo pochyb, odkud e-mail přišel.
   const predmetKOdeslani = rezim === 'test' ? `[TEST] ${predmet}` : predmet;
 
   const [vysledekVlozeni] = await pool.query(
     `INSERT INTO emaily
-       (sablona_klic, prijemce, prijemce_skutecny, predmet, telo_snapshot,
+       (sablona_klic, prijemce, prijemce_skutecny, predmet, telo_snapshot, telo_text,
         rezervace_id, zakaznik_id, termin_id, poptavka_id, uzivatel_id, stav, rezim)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 've_fronte', ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       sablona,
       prijemce,
       kam,
       predmetKOdeslani,
       telo,
+      textovaVerze,
       vazby.rezervaceId ?? null,
       vazby.zakaznikId ?? null,
       vazby.terminId ?? null,
       vazby.poptavkaId ?? null,
       vazby.uzivatelId ?? null,
+      doSchranky ? 've_schrance' : 've_fronte',
       rezim,
     ]
   );
   const id = vysledekVlozeni.insertId;
+
+  // Přílohy se ukládají vždy - ve schránce si je má být možné stáhnout,
+  // v produkci slouží jako doklad o tom, co přesně zákazník dostal.
+  for (const priloha of prilohy) {
+    await ulozPrilohuEmailu(id, priloha).catch((err) =>
+      console.error(`[email] přílohu se nepodařilo uložit (log #${id}):`, err.message)
+    );
+  }
+
+  if (doSchranky) {
+    console.log(`[email] schránka - uložen "${predmet}" pro ${prijemce} (schránka #${id})`);
+    return { id, odeslano: false, doSchranky: true, prijemceSkutecny: null };
+  }
 
   if (!kam) {
     await pool.query(
@@ -83,7 +103,7 @@ export async function posliEmail({
       ['Odesílání e-mailů je vypnuté (EMAIL_REZIM=vypnuto).', id]
     );
     console.log(`[email] vypnuto - neodeslán "${predmet}" pro ${prijemce} (log #${id})`);
-    return { id, odeslano: false, prijemceSkutecny: null };
+    return { id, odeslano: false, doSchranky: false, prijemceSkutecny: null };
   }
 
   const api = klient();
@@ -93,7 +113,7 @@ export async function posliEmail({
       ['Chybí RESEND_API_KEY.', id]
     );
     console.error(`[email] chybí RESEND_API_KEY - neodeslán "${predmet}" (log #${id})`);
-    return { id, odeslano: false, prijemceSkutecny: kam };
+    return { id, odeslano: false, doSchranky: false, prijemceSkutecny: kam };
   }
 
   try {
@@ -113,14 +133,14 @@ export async function posliEmail({
         WHERE id = ?`,
       [data?.id ?? null, id]
     );
-    return { id, odeslano: true, prijemceSkutecny: kam };
+    return { id, odeslano: true, doSchranky: false, prijemceSkutecny: kam };
   } catch (err) {
     await pool.query(
       `UPDATE emaily SET stav = 'chyba', chyba = ?, stav_at = NOW() WHERE id = ?`,
       [String(err.message ?? err).slice(0, 2000), id]
     );
     console.error(`[email] odeslání selhalo (log #${id}):`, err.message);
-    return { id, odeslano: false, prijemceSkutecny: kam };
+    return { id, odeslano: false, doSchranky: false, prijemceSkutecny: kam };
   }
 }
 

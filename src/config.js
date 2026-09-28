@@ -43,7 +43,13 @@ const schema = z.object({
 
   // Odesílání e-mailů. Výchozí 'vypnuto' je záměr: dokud se režim nenastaví
   // vědomě, e-mail se jen zaloguje a nikam neodejde.
-  EMAIL_REZIM: z.enum(['live', 'test', 'vypnuto']).default('vypnuto'),
+  //
+  //   live     = posílá se zákazníkům (jen produkce)
+  //   test     = všechno se přepíše na EMAIL_TEST_PRIJEMCE
+  //   schranka = neodesílá se vůbec, ale celý e-mail se uloží do testovací
+  //              schránky v administraci (na testu, kde není Resend)
+  //   vypnuto  = jen záznam v logu, tělo se neukládá
+  EMAIL_REZIM: z.enum(['live', 'test', 'vypnuto', 'schranka']).default('vypnuto'),
   EMAIL_TEST_PRIJEMCE: z.string().email().optional(),
   EMAIL_ODESILATEL: z.string().min(3).default('LSD <rezervace@example.invalid>'),
   RESEND_API_KEY: z.string().min(1).optional(),

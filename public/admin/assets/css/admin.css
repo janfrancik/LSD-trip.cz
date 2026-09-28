@@ -387,6 +387,57 @@ select.pole { appearance: none; background-image: none; }
 .volba--nefunguje.volba--aktivni { background: var(--chyba); border-color: var(--chyba); }
 .volba--nerozumim.volba--aktivni { background: var(--varovani); border-color: var(--varovani); color: #14140F; }
 
+/* Náhled e-mailu. Cizí HTML běží v sandboxovaném iframe, ne v naší stránce. */
+.prepinac-nahledu { display: flex; gap: 4px; margin-bottom: 12px;
+  border-bottom: 1px solid var(--line-soft); }
+.nahled-emailu {
+  width: 100%; height: 60vh; min-height: 320px; border: 1px solid var(--line-soft);
+  background: #0B0B0C;
+}
+.telo-text {
+  white-space: pre-wrap; word-break: break-word; margin: 0;
+  font-family: var(--font-mono); font-size: 13px; color: var(--text-2);
+  background: var(--panel-2); border: 1px solid var(--line-soft); padding: 12px;
+  max-height: 60vh; overflow: auto;
+}
+
+/* Tabulka úkoly × testeři. Na mobilu se místo ní ukazuje seznam po úkolech -
+   mřížka se šesti sloupci se na telefonu číst nedá. */
+.matice { display: none; }
+.matice-seznam { display: grid; gap: 10px; }
+.matice-seznam__testeri { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.bunka, .chip {
+  display: inline-flex; align-items: center; justify-content: center; gap: 5px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--text-2);
+}
+.bunka { width: 32px; height: 32px; font-size: 15px; line-height: 1; }
+.chip { padding: 6px 10px; font-size: 13px; }
+.bunka--funguje, .chip--funguje { border-color: var(--ok); color: var(--ok); }
+.bunka--nefunguje, .chip--nefunguje { border-color: var(--chyba); color: var(--chyba); }
+.bunka--nerozumim, .chip--nerozumim { border-color: var(--varovani); color: var(--varovani); }
+.bunka--k_pretestovani, .chip--k_pretestovani { border-color: var(--accent); color: var(--accent); }
+.bunka--neotestovano, .chip--neotestovano { border-color: var(--line); color: var(--ghost); }
+.chip--netyka { color: var(--ghost); border-style: dashed; padding: 6px 10px; font-size: 13px; }
+.bunka:hover, .chip:hover { border-color: var(--text); color: var(--text); }
+.matice__bunka { text-align: center; }
+.matice__bunka--netyka { color: var(--ghost); text-align: center; }
+.matice__tester { white-space: nowrap; }
+.matice__ukol { max-width: 380px; }
+
+/* Kolik má kdo hotovo - první, na co se člověk podívá. */
+.souhrn-testeru { display: flex; flex-wrap: wrap; gap: 8px; }
+.souhrn-testeru__polozka {
+  display: flex; align-items: baseline; gap: 8px;
+  border: 1px solid var(--line-soft); background: var(--panel); padding: 8px 12px;
+}
+.souhrn-testeru__jmeno { font-size: 14px; }
+.souhrn-testeru__cislo { font-family: var(--font-mono); font-size: 14px; color: var(--ok); }
+.souhrn-testeru__cislo--ceka { color: var(--accent); }
+
+.duvody { margin: 6px 0 0; padding-left: 18px; list-style: disc; color: var(--muted); font-size: 14px; }
+.duvody li { margin-bottom: 3px; }
+
 /* Prvek, nad kterým se právě táhne obrázek. */
 .nad-souborem { outline: 2px dashed var(--accent); outline-offset: 3px; }
 
@@ -448,6 +499,12 @@ select.pole { appearance: none; background-image: none; }
   /* Na širokém displeji je tabulka čitelnější než karty. */
   .seznam { display: none; }
   .tabulka { display: table; }
+  .matice { display: table; }
+  .matice-seznam { display: none; }
+  .matice th { text-align: left; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--dim); font-weight: 600; padding: 0 10px 9px; border-bottom: 1px solid var(--line); }
+  .matice td { padding: 8px 10px; border-bottom: 1px solid var(--line-soft); font-size: 14px; }
+  .matice tbody tr:hover { background: var(--row-hover); }
   .tabulka th {
     text-align: left; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--dim); font-weight: 600; padding: 0 12px 9px; border-bottom: 1px solid var(--line);

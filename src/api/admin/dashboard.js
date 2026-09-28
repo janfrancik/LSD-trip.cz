@@ -51,7 +51,7 @@ router.get(
     // Karta akceptace jen na testu (a ve vývoji) a jen tomu, kdo testuje.
     const akceptace =
       config.akceptaceZapnuta && maPravo(req.uzivatel.role, 'akceptace')
-        ? await kartaNaPrehled(req.uzivatel.id)
+        ? await kartaNaPrehled(req.uzivatel)
         : null;
 
     res.json({

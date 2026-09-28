@@ -50,6 +50,48 @@ export function hlaska(text, typ = 'ok') {
   setTimeout(() => prvek.remove(), typ === 'chyba' ? 8000 : 4000);
 }
 
+// --------------------------------------------------------- výsledek e-mailu
+
+/**
+ * Co se stalo s e-mailem po akci, která ho posílá. Tři případy:
+ *   - odešel: stačí hláška,
+ *   - je v testovací schránce: odkaz, kde se dá otevřít (na testu je to
+ *     jediná cesta, jak si e-mail přečíst),
+ *   - neodešel: dialog, který nezmizí sám - obsluha musí vědět, že to
+ *     zákazníkovi musí poslat jinudy.
+ *
+ * Odkaz je záměrně obyčejný (bez data-odkaz): administrace se na něm načte
+ * znovu, zato spolehlivě a se zavřeným dialogem.
+ */
+export function vysledekEmailu({ zprava, odeslano, email_do_schranky, email_id }) {
+  if (odeslano) {
+    hlaska(zprava, 'ok');
+    return Promise.resolve();
+  }
+
+  if (email_do_schranky) {
+    return potvrd({
+      nadpis: 'E-mail uložen do testovací schránky',
+      text: `${esc(zprava)}<br /><br />
+             Na testovacím webu se e-maily neodesílají — uloží se sem i s odkazy,
+             na které jde kliknout.
+             ${email_id ? `<br /><br /><a href="/admin/emaily/${Number(email_id)}">Zobrazit e-mail →</a>` : ''}`,
+      potvrzeni: 'Zavřít',
+      nebezpecne: false,
+      jenPotvrzeni: true,
+    });
+  }
+
+  return potvrd({
+    nadpis: 'E-mail neodešel',
+    text: `${esc(zprava)}<br /><br />
+           Zákazníkovi ho zatím pošli jinudy — sám se neodeslal.`,
+    potvrzeni: 'Rozumím',
+    nebezpecne: false,
+    jenPotvrzeni: true,
+  });
+}
+
 // ------------------------------------------------------- potvrzení a modály
 
 // Potvrzení destruktivní akce. Text musí říct, co se stane - ne "Jsi si jistý?".

@@ -3,6 +3,7 @@
 import { api, dotaz } from '../api.js';
 import {
   esc, pred, datumCas, prazdno, strankovani, hlaska, potvrd, pole, ukazChybyPoli,
+  vysledekEmailu,
 } from '../ui.js';
 import { jdiNa, stav as globalniStav, nactiPocty } from '../admin.js';
 
@@ -195,7 +196,7 @@ async function detail(koren, id) {
                   <span class="prepinac__text">Označit poptávku jako vyřízenou</span>
                 </label>
                 <button type="submit" class="btn btn--hlavni">
-                  ${odesilaniVypnute() ? 'Uložit odpověď (e-mail neodejde)' : 'Odeslat odpověď'}
+                  ${popisekTlacitka()}
                 </button>
               </form>
             </section>`
@@ -285,28 +286,13 @@ async function detail(koren, id) {
         odpoved,
         oznacit_vyrizene: oznacit,
       });
-      hlaska(vysledek.zprava, vysledek.odeslano ? 'ok' : 'chyba');
-      if (!vysledek.odeslano) {
-        // Hláška za pár vteřin zmizí, tohle ne. Je to jediná informace o tom,
-        // že zákazník odpověď nedostal a musí se mu poslat jinak.
-        await potvrd({
-          nadpis: 'E-mail neodešel',
-          text: `${esc(vysledek.zprava)}<br /><br />
-                 Odpověď je uložená u poptávky. Zákazníkovi ji zatím pošli
-                 jinudy — sám se neodeslala.`,
-          potvrzeni: 'Rozumím',
-          nebezpecne: false,
-          jenPotvrzeni: true,
-        });
-      }
+      await vysledekEmailu(vysledek);
       await nactiPocty();
       detail(koren, id);
     } catch (err) {
       if (!ukazChybyPoli(form, err.detaily)) hlaska(err.message, 'chyba');
       tlacitko.disabled = false;
-      tlacitko.textContent = odesilaniVypnute()
-        ? 'Uložit odpověď (e-mail neodejde)'
-        : 'Odeslat odpověď';
+      tlacitko.textContent = popisekTlacitka();
     }
   });
 
@@ -384,7 +370,14 @@ function radekEmailu(e) {
 // Režim odesílání hlásí server v /ja. Vypnuté odesílání není chyba, ale
 // obsluha o něm musí vědět dřív, než odpověď napíše - ne až potom.
 function odesilaniVypnute() {
-  return globalniStav.ja?.email_rezim === 'vypnuto';
+  return ['vypnuto', 'schranka'].includes(globalniStav.ja?.email_rezim);
+}
+
+function popisekTlacitka() {
+  const rezim = globalniStav.ja?.email_rezim;
+  if (rezim === 'schranka') return 'Uložit odpověď do schránky';
+  if (rezim === 'vypnuto') return 'Uložit odpověď (e-mail neodejde)';
+  return 'Odeslat odpověď';
 }
 
 function varovaniOdesilani() {
@@ -395,7 +388,10 @@ function varovaniOdesilani() {
     rezim === 'vypnuto'
       ? 'Odesílání e-mailů je vypnuté. Odpověď se uloží k poptávce, ale zákazníkovi ' +
         'nikam neodejde — pošli mu ji zatím jinudy.'
-      : 'Testovací režim: odpověď odejde na testovací adresu, ne zákazníkovi.';
+      : rezim === 'schranka'
+        ? 'Testovací schránka: odpověď se uloží do administrace (E-maily), ' +
+          'zákazníkovi nikam neodejde.'
+        : 'Testovací režim: odpověď odejde na testovací adresu, ne zákazníkovi.';
 
   return `<p class="panel--tesny" style="margin-bottom:12px;border-left:3px solid var(--varovani);
             background:var(--panel-2);padding:10px 12px;color:var(--muted);font-size:14px">

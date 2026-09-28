@@ -1,10 +1,11 @@
 FROM node:24-alpine
 
-# Aplikace i databáze běží v pražském čase. Data se ukládají jako DATETIME
-# v místním čase, takže časová zóna kontejneru musí být jednoznačná - jinak
-# by se "dnešní termíny" lámaly o půlnoci UTC.
+# V databázi jsou všechny časy v UTC, na pražský čas se převádí až při
+# zobrazení (src/cas.js). Kontejner proto běží v UTC - formátování na zóně
+# stroje nezávisí, ale logy a časy v nich mají být jednoznačné.
+# tzdata zůstává: Intl v src/cas.js potřebuje pravidla pro Europe/Prague.
 RUN apk add --no-cache tzdata
-ENV TZ=Europe/Prague
+ENV TZ=UTC
 
 WORKDIR /app
 

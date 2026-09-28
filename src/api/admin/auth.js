@@ -269,11 +269,22 @@ export async function posliOdkazNaHeslo(uzivatel, ucel, req = null) {
       akce: jePozvanka ? 'pozvanka_odeslana' : 'reset_hesla_odeslan',
       entita: 'uzivatel',
       entitaId: uzivatel.id,
-      popis: vysledek.odeslano ? null : 'E-mail se neodeslal, odkaz je potřeba předat ručně',
+      popis: vysledek.odeslano
+        ? null
+        : vysledek.doSchranky
+          ? 'E-mail je v testovací schránce'
+          : 'E-mail se neodeslal, odkaz je potřeba předat ručně',
     });
   }
 
-  return { token, url, odeslano: vysledek.odeslano, prijemceSkutecny: vysledek.prijemceSkutecny };
+  return {
+    token,
+    url,
+    odeslano: vysledek.odeslano,
+    doSchranky: Boolean(vysledek.doSchranky),
+    emailId: vysledek.id,
+    prijemceSkutecny: vysledek.prijemceSkutecny,
+  };
 }
 
 // GET /api/admin/reset-hesla/:token - ověření, že odkaz ještě platí

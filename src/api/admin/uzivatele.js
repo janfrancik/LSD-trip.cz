@@ -108,6 +108,8 @@ router.post(
     res.status(201).json({
       ...rows[0],
       pozvanka_odeslana: pozvanka?.odeslano ?? false,
+      email_do_schranky: pozvanka?.doSchranky ?? false,
+      email_id: pozvanka?.emailId ?? null,
       // Když e-mail neodešel (vypnuté odesílání, chybějící klíč), vrátíme odkaz,
       // ať ho správce může předat sám. Správce stejně může komukoli heslo
       // resetovat, takže tím nic navíc neotevíráme - jen ušetříme běh na server.
@@ -263,10 +265,14 @@ router.post(
     res.json({
       ok: true,
       odeslano: vysledek.odeslano,
+      email_do_schranky: vysledek.doSchranky,
+      email_id: vysledek.emailId,
       zprava: vysledek.odeslano
         ? `Odkaz pro nastavení hesla jsme poslali na ${vysledek.prijemceSkutecny}.`
-        : 'E-mail se neodeslal — odesílání e-mailů není nastavené. Předej odkaz níž osobně.',
-      ...(vysledek.odeslano ? {} : { odkaz_na_heslo: vysledek.url }),
+        : vysledek.doSchranky
+          ? 'E-mail je uložený v testovací schránce — odkaz v něm funguje.'
+          : 'E-mail se neodeslal — odesílání e-mailů není nastavené. Předej odkaz níž osobně.',
+      ...(vysledek.odeslano || vysledek.doSchranky ? {} : { odkaz_na_heslo: vysledek.url }),
     });
   })
 );

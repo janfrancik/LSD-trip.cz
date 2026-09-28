@@ -32,6 +32,19 @@ const schemaUkol = z.object({
   nazev: z.string().trim().min(3).max(200),
   oblast: z.string().trim().max(40).optional(),
   odkaz: z.string().trim().max(255).optional(),
+  // Komu se úkol ukáže. Bez těchhle polí platí "všem přiřazeným testerům".
+  role: z
+    .union([z.string(), z.array(z.string())])
+    .optional()
+    .transform((v) =>
+      v === undefined
+        ? undefined
+        : (Array.isArray(v) ? v : String(v).split(','))
+            .map((r) => r.trim().toLowerCase())
+            .filter(Boolean)
+            .join(',')
+    ),
+  jen_admin: z.boolean().optional(),
   postup: z.string().trim().min(3),
   vysledek: z.string().trim().min(3),
 });
@@ -54,7 +67,12 @@ const schemaSoubor = z.object({
 function hashZadani(u) {
   return crypto
     .createHash('sha256')
-    .update(JSON.stringify([u.nazev, u.postup, u.vysledek, u.odkaz ?? '', u.oblast ?? '']))
+    .update(
+      JSON.stringify([
+        u.nazev, u.postup, u.vysledek, u.odkaz ?? '', u.oblast ?? '',
+        u.role ?? '', u.jen_admin ? 1 : 0,
+      ])
+    )
     .digest('hex');
 }
 
@@ -143,11 +161,13 @@ async function ulozVerzi({ verze, ukoly }) {
     if (!stary) {
       await pool.query(
         `INSERT INTO akceptace_ukoly
-           (verze_id, kod, nazev, postup, ocekavany_vysledek, odkaz, oblast, poradi, definice_hash)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (verze_id, kod, nazev, postup, ocekavany_vysledek, odkaz, oblast,
+            role_filtr, jen_admin, poradi, definice_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           verzeId, ukol.kod, ukol.nazev, ukol.postup, ukol.vysledek,
-          ukol.odkaz ?? null, ukol.oblast ?? null, index, hash,
+          ukol.odkaz ?? null, ukol.oblast ?? null,
+          ukol.role ?? null, ukol.jen_admin ? 1 : 0, index, hash,
         ]
       );
       pridano += 1;
@@ -163,11 +183,12 @@ async function ulozVerzi({ verze, ukoly }) {
     await pool.query(
       `UPDATE akceptace_ukoly
           SET nazev = ?, postup = ?, ocekavany_vysledek = ?, odkaz = ?, oblast = ?,
-              poradi = ?, aktivni = 1, definice_hash = ?, zmeneno_at = NOW()
+              role_filtr = ?, jen_admin = ?, poradi = ?, aktivni = 1,
+              definice_hash = ?, zmeneno_at = NOW()
         WHERE id = ?`,
       [
         ukol.nazev, ukol.postup, ukol.vysledek, ukol.odkaz ?? null, ukol.oblast ?? null,
-        index, hash, stary.id,
+        ukol.role ?? null, ukol.jen_admin ? 1 : 0, index, hash, stary.id,
       ]
     );
     // Změna zadání se počítá jen tehdy, když se opravdu změnil text. Oživení

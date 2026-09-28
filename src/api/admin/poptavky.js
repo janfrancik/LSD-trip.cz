@@ -201,10 +201,13 @@ router.post(
     res.json({
       ok: true,
       odeslano: vysledek.odeslano,
+      email_do_schranky: Boolean(vysledek.doSchranky),
       email_id: vysledek.id,
       zprava: vysledek.odeslano
         ? `Odpověď odešla na ${vysledek.prijemceSkutecny}.`
-        : 'Odpověď je uložená, ale e-mail se neodeslal — zkontroluj nastavení odesílání.',
+        : vysledek.doSchranky
+          ? 'Odpověď je uložená v testovací schránce — zákazníkovi nic neodešlo.'
+          : 'Odpověď je uložená, ale e-mail se neodeslal — zkontroluj nastavení odesílání.',
     });
   })
 );

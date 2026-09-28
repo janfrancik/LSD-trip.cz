@@ -59,12 +59,17 @@ ukoly:
     postup: |
       1. Na přihlašovací obrazovce klikněte na „Zapomenuté heslo“.
       2. Zadejte svůj e-mail a odešlete.
+      3. Přihlaste se zpátky (starým heslem) a otevřete v menu E-maily.
+      4. Najděte e-mail „Nastavení nového hesla“ a otevřete ho.
+      5. Klikněte na odkaz v e-mailu (nebo na odkaz vypsaný pod náhledem)
+         a nastavte si nové heslo.
+      6. Odhlaste se a přihlaste se novým heslem.
     vysledek: |
-      Obrazovka potvrdí, že pokud e-mail v administraci existuje, odkaz odešel -
-      záměrně neprozradí, jestli takový účet máme, ani jestli se e-mail povedlo
-      odeslat. Na testu chodí všechny e-maily do testovací schránky (Honzovi),
-      ne vám; ověření, že odkaz opravdu dorazil, je na něm. Dokud není nastavené
-      odesílání, zůstane pokus zapsaný jen v logu e-mailů v administraci.
+      Obrazovka po odeslání potvrdí, že pokud e-mail v administraci existuje,
+      odkaz odešel - záměrně neprozradí, jestli takový účet máme.
+      V E-mailech je celý e-mail i s odkazem, odkaz funguje a heslo se dá
+      nastavit. Na testovacím webu se e-maily nikam neodesílají, takže tohle
+      je jediná cesta, jak se k odkazu dostat - a je to tak schválně.
 
   # ---------------------------------------------------------------- poptávky
   - kod: poptavka-z-webu
@@ -97,11 +102,10 @@ ukoly:
       v detailu a v části „Odeslané e-maily“ je záznam s časem a poznámkou,
       že byl v testu přesměrovaný.
 
-      Když je odesílání e-mailů vypnuté, musí to administrace říct dopředu
-      (žlutá poznámka nad polem a tlačítko „Uložit odpověď (e-mail neodejde)“)
-      i potom - okno s vysvětlením, že odpověď je uložená, ale zákazníkovi
-      ji musíte poslat jinudy. V seznamu odeslaných e-mailů je u záznamu
-      červené „chyba“ i důvod.
+      Na testovacím webu se e-maily neodesílají, takže administrace napíše
+      dopředu (žlutá poznámka nad polem, tlačítko „Uložit odpověď do schránky“)
+      i potom: okno s odkazem „Zobrazit e-mail“. Po kliknutí se otevře celý
+      e-mail tak, jak by přišel zákazníkovi. Zákazníkovi nic nedorazí.
 
   - kod: poptavka-stav-poznamka
     nazev: Stav a interní poznámka u poptávky
@@ -308,13 +312,16 @@ ukoly:
          (to je tlačítko pro provoz a administrátora - po opravě a novém nasazení).
       3. Podívejte se, jak úkol vypadá teď, a otestujte ho znovu jako Funguje.
     vysledek: |
-      Po vrácení má úkol stav „k přetestování“ a připočítá se ke zvonečku,
-      takže na něj nezapomenete. Po novém otestování je zase „funguje“
-      a v historii je vidět, že předtím nefungoval.
+      Okno se zeptá, jestli poslat jen tomu, komu to nefungovalo (výchozí),
+      nebo všem. Po vrácení má úkol stav „k přetestování“ a připočítá se
+      ke zvonečku, takže na něj nezapomenete. Po novém otestování je zase
+      „funguje“ a v historii je vidět, že předtím nefungoval. Komu úkol
+      fungoval, tomu se znovu neobjeví — pokud jste nezvolili „všem“.
 
   - kod: akceptace-schvaleni
     nazev: Schválení verze
     oblast: akceptace
+    jen_admin: true
     odkaz: /admin/akceptace
     postup: |
       1. Dokud máte neotestované úkoly, klikněte na „Schválit verzi“.
@@ -323,14 +330,15 @@ ukoly:
          označte jako Funguje i tento úkol a klikněte na „Schválit verzi“ znovu.
       4. Napište poznámku, například „Odzkoušeno na mobilu i na počítači.“
     vysledek: |
-      Poprvé administrace schválení nedovolí a vypíše, co konkrétně chybí
-      (kolik úkolů je neotestovaných, kolik nefunguje, kolik hlášení je
-      otevřených). Podruhé se verze označí jako schválená, s vaším jménem,
-      datem a poznámkou. Záznam o schválení je i v Auditu.
+      Poprvé administrace schválení nedovolí a vypíše jmenovitě, na koho se čeká
+      („Majitelka: 3 úkoly neotestované“) a kolik je otevřených hlášení.
+      Podruhé se verze označí jako schválená, s vaším jménem, datem a poznámkou.
+      Záznam o schválení je i v Auditu.
 
   - kod: akceptace-export
     nazev: Export souhrnu verze
     oblast: akceptace
+    jen_admin: true
     odkaz: /admin/akceptace
     postup: |
       1. U verze klikněte na „Stáhnout souhrn“.
@@ -372,3 +380,98 @@ ukoly:
       Čas vygenerování i časy výsledků jsou v našem čase (Praha) a odpovídají
       hodinkám. Dřív byl čas vygenerování o hodinu (v létě o dvě) pozadu,
       protože byl v UTC.
+
+  # -------------------------------------------- testovací schránka e-mailů
+  - kod: schranka-prehled
+    nazev: Testovací schránka e-mailů
+    oblast: emaily
+    odkaz: /admin/emaily
+    postup: |
+      1. Otevřete v menu E-maily.
+      2. Přečtěte si, co je nahoře napsané.
+      3. Najděte e-mail, který vznikl při odpovědi na poptávku,
+         a rozklikněte ho.
+      4. Přepněte mezi HTML a Text.
+      5. Zkuste vyhledat e-mail podle adresáta (napište část adresy do hledání).
+    vysledek: |
+      Nahoře je upozornění „Testovací schránka — nic neodešlo“. Seznam ukazuje
+      komu, co a kdy. V detailu vypadá e-mail stejně, jako by přišel do pošty:
+      barvy, logo, tlačítko. Přepnutí na Text ukáže holou textovou verzi.
+      Hledání najde e-mail podle adresáta i podle předmětu.
+
+  - kod: schranka-na-mobilu
+    nazev: Schránka na mobilu
+    oblast: emaily
+    odkaz: /admin/emaily
+    postup: |
+      1. Otevřete na telefonu E-maily a rozklikněte libovolný e-mail.
+      2. Zkuste náhled posouvat a přečíst.
+    vysledek: |
+      Náhled se vejde na šířku displeje, jde v něm rolovat a text je čitelný
+      bez zvětšování. Nic nepřetéká mimo obrazovku.
+
+  # ------------------------------------------------ výsledky po testerech
+  - kod: moje-ukoly
+    nazev: Každý má svůj vlastní seznam úkolů
+    oblast: akceptace
+    odkaz: /admin/akceptace
+    postup: |
+      1. Domluvte se s dalším testerem (nebo s Honzou), ať nějaký úkol
+         označí jako Funguje.
+      2. Otevřete si stejný úkol u sebe.
+      3. Podívejte se na zvoneček a na kartu na Přehledu.
+    vysledek: |
+      Úkol, který otestoval někdo jiný, je pro vás pořád neotestovaný -
+      jeho práce vás nezbaví toho zkusit to taky. Zvoneček i karta
+      na Přehledu ukazují vaše čísla, ne týmová („Máte otestováno 5/12“).
+
+  - kod: prehled-testeru
+    nazev: Přehled, kdo co otestoval
+    oblast: akceptace
+    jen_admin: true
+    odkaz: /admin/akceptace
+    postup: |
+      1. Otevřete verzi a přepněte na záložku „Přehled testerů“.
+      2. Nahoře si přečtěte, kolik má kdo hotovo.
+      3. Klikněte na některou buňku v tabulce.
+      4. Zapněte „Jen problémové“ a pak vyberte v rozbalovátku jednoho testera.
+      5. To samé si prohlédněte na telefonu.
+    vysledek: |
+      Tabulka má řádky úkoly a sloupce testery, v buňkách je značka
+      (✓ funguje, ✕ nefunguje, ? nejasné zadání, ↻ k přetestování,
+      · neotestováno, – netýká se). Kliknutí na buňku ukáže komentář, přílohy,
+      čas a z čeho tester testoval. Filtry seznam zúží. Na telefonu je místo
+      tabulky seznam po úkolech se jmény.
+
+  - kod: prirazeni-testeru
+    nazev: Výběr, kdo verzi testuje
+    oblast: akceptace
+    jen_admin: true
+    odkaz: /admin/akceptace
+    postup: |
+      1. U verze klikněte na „Kdo testuje“.
+      2. Odškrtněte někoho, kdo testovat nemá, a uložte.
+      3. Podívejte se na řádek „Testuje:“ pod tlačítky a na přehled testerů.
+      4. Zkuste verzi schválit a přečtěte si, na koho se ještě čeká.
+    vysledek: |
+      V okně jsou vidět všichni, kdo mají právo testovat. Po uložení se počítá
+      jen s vybranými - na odškrtnutého se při schvalování nečeká a v přehledu
+      testerů už není. Když nevyberete nikoho, platí zase výchozí stav
+      (všichni, kdo na to mají právo).
+
+  # ----------------------------------------------------------------- časy
+  - kod: casy-sedi
+    nazev: Časy v administraci sedí na hodinky
+    oblast: nastaveni
+    odkaz: /admin/audit
+    postup: |
+      1. Všimněte si, kolik je hodin.
+      2. Udělejte nějakou změnu (třeba uložte poznámku u poptávky).
+      3. Otevřete Audit a podívejte se na čas úplně prvního záznamu.
+      4. Otevřete E-maily a porovnejte čas u posledního e-mailu.
+    vysledek: |
+      Časy všude odpovídají hodinkám na minutu přesně - v Auditu, u poptávek,
+      u e-mailů i v exportu akceptace. Nikde není čas posunutý o hodinu
+      ani o dvě. (Uvnitř se časy ukládají v univerzálním čase a na náš
+      se přepočítávají až při zobrazení; kdyby se někde spletl, poznáte to
+      právě takhle.)

@@ -3,7 +3,7 @@
 
 import { api, dotaz } from '../api.js';
 import {
-  esc, pred, prazdno, hlaska, potvrd, formularModal, okamzik,
+  esc, pred, prazdno, hlaska, potvrd, formularModal, okamzik, vysledekEmailu,
 } from '../ui.js';
 import { stav as globalniStav } from '../admin.js';
 
@@ -167,6 +167,15 @@ async function novyUzivatel(koren) {
 
     if (u.pozvanka_odeslana) {
       hlaska(`${u.jmeno} je přidaný, pozvánka odešla na ${u.email}.`, 'ok');
+    } else if (u.email_do_schranky) {
+      // Na testu pozvánka nikam neodchází, ale dá se otevřít ve schránce
+      // a odkaz v ní funguje.
+      await vysledekEmailu({
+        zprava: `${u.jmeno} je přidaný. Pozvánka je v testovací schránce.`,
+        odeslano: false,
+        email_do_schranky: true,
+        email_id: u.email_id,
+      });
     } else {
       // E-mail neodešel - místo nepravdivého "odesláno" ukážeme odkaz,
       // který může správce předat rovnou.
@@ -236,7 +245,7 @@ async function posliOdkaz(koren, u) {
 
   try {
     const odpoved = await api.post(`/uzivatele/${u.id}/reset-hesla`);
-    if (odpoved.odeslano) hlaska(odpoved.zprava, 'ok');
+    if (odpoved.odeslano || odpoved.email_do_schranky) await vysledekEmailu(odpoved);
     else await ukazOdkaz(u.jmeno, u.email, odpoved.odkaz_na_heslo);
   } catch (err) {
     hlaska(err.message, 'chyba');

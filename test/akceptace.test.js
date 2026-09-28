@@ -63,6 +63,8 @@ async function zadani(ukoly, { kod = 'zkouska', nazev = 'Zkušební verze' } = {
       `    postup: ${JSON.stringify(u.postup ?? 'Udělej krok jeden, potom krok dva.')}`,
       `    vysledek: ${JSON.stringify(u.vysledek ?? 'Objeví se zelená hláška.')}`
     );
+    if (u.role) radky.push(`    role: ${u.role}`);
+    if (u.jen_admin) radky.push('    jen_admin: true');
   }
   await writeFile(path.join(adresar, `${kod}.yml`), radky.join('\n') + '\n');
   return adresar;
@@ -291,7 +293,8 @@ test('tester nevidí výsledky ostatních ani cizí obrazovky', async () => {
   assert.equal(verze.status, 200);
   const prvni = verze.data.ukoly[0];
   assert.deepEqual(prvni.vysledky, [], 'tester nevidí, jak hlasovali ostatní');
-  assert.equal(prvni.stav, 'nefunguje', 'souhrnný stav ale vidí');
+  assert.equal(prvni.muj_stav, 'neotestovano', 'cizí výsledek mu úkol nesplní');
+  assert.equal(prvni.stav_tymu, undefined, 'ani souhrn za tým mu nic neprozradí');
   assert.ok(!JSON.stringify(verze.data).includes('tajný komentář'));
 
   // A do ostatních modulů se nedostane.
@@ -403,7 +406,8 @@ test('verzi nejde schválit, dokud něco nefunguje nebo chybí test', async () =
 
   const brzy = await spravce.post('/api/admin/akceptace/verze/zkouska/schvalit');
   assert.equal(brzy.status, 409);
-  assert.match(chybaText(brzy), /Neotestovaných úkolů: 2/);
+  // Odmítnutí musí říct kdo a co, ne jen "podmínky nesplněny".
+  assert.match(chybaText(brzy), /Šéfka: 2 úkoly neotestované/);
 
   await spravce.put(`/api/admin/akceptace/ukoly/${ukoly[0].id}/vysledek`, {
     stav: 'nefunguje',
@@ -564,3 +568,146 @@ test('v testovacím prostředí API akceptace existuje a chce přihlášení', a
 function chybaText(odpoved) {
   return odpoved.data?.chyba ?? '';
 }
+
+// ------------------------------------------------- výsledky po testerech
+
+test('výsledek jednoho testera nesplní úkol ostatním', async () => {
+  const adresar = await zadani([{ kod: 'prvni', nazev: 'První úkol' }]);
+  await naimportuj(adresar);
+  const [[ukol]] = await pool.query('SELECT id FROM akceptace_ukoly WHERE kod = ?', ['prvni']);
+
+  const prvni = await prihlas('tester', 'tester1@example.invalid', 'Tester Jedna');
+  const druhy = await prihlas('tester', 'tester2@example.invalid', 'Tester Dva');
+
+  await prvni.put(`/api/admin/akceptace/ukoly/${ukol.id}/vysledek`, { stav: 'funguje' });
+
+  // Prvnímu zmizel ze seznamu, druhému ne.
+  assert.equal((await prvni.get('/api/admin/akceptace/pocty')).data.k_otestovani, 0);
+  assert.equal((await druhy.get('/api/admin/akceptace/pocty')).data.k_otestovani, 1);
+
+  const verzeDruhy = await druhy.get('/api/admin/akceptace/verze/zkouska');
+  assert.equal(verzeDruhy.data.ukoly[0].muj_stav, 'neotestovano');
+  assert.equal(verzeDruhy.data.muj_souhrn.hotovo, 0);
+  assert.equal(verzeDruhy.data.muj_souhrn.celkem, 1);
+
+  await rm(adresar, { recursive: true, force: true });
+});
+
+test('úkol jen pro admina se testerovi neukáže ani nezapíše', async () => {
+  const adresar = await zadani([
+    { kod: 'pro-vsechny', nazev: 'Pro všechny' },
+    { kod: 'schvaleni', nazev: 'Schválení verze', jen_admin: true },
+    { kod: 'jen-provoz', nazev: 'Jen pro provoz', role: 'provoz' },
+  ]);
+  await naimportuj(adresar);
+  const [ukoly] = await pool.query('SELECT id, kod FROM akceptace_ukoly ORDER BY poradi');
+  const podleKodu = Object.fromEntries(ukoly.map((u) => [u.kod, u.id]));
+
+  const tester = await prihlas('tester', 'tester@example.invalid', 'Tester');
+  const verze = await tester.get('/api/admin/akceptace/verze/zkouska');
+
+  assert.deepEqual(
+    verze.data.ukoly.map((u) => u.kod),
+    ['pro-vsechny'],
+    'testerovi se ukáže jen to, co má testovat'
+  );
+  assert.equal((await tester.get('/api/admin/akceptace/pocty')).data.k_otestovani, 1);
+
+  const pokus = await tester.put(`/api/admin/akceptace/ukoly/${podleKodu.schvaleni}/vysledek`, {
+    stav: 'funguje',
+  });
+  assert.equal(pokus.status, 403, 'cizí úkol nejde vyplnit ani přímo přes API');
+
+  // Admin má naopak svůj úkol i ten společný, ale ne ten pro provoz.
+  const spravce = await prihlas('admin', 'sef@example.invalid', 'Šéfka');
+  const proAdmina = await spravce.get('/api/admin/akceptace/verze/zkouska');
+  const mojeAdmina = proAdmina.data.ukoly.filter((u) => u.patri_mi).map((u) => u.kod);
+  assert.deepEqual(mojeAdmina.sort(), ['pro-vsechny', 'schvaleni']);
+
+  await rm(adresar, { recursive: true, force: true });
+});
+
+test('přiřazení testeři rozhodují, na koho se čeká', async () => {
+  const adresar = await zadani([{ kod: 'prvni', nazev: 'První úkol' }]);
+  await naimportuj(adresar);
+  const [[ukol]] = await pool.query('SELECT id FROM akceptace_ukoly WHERE kod = ?', ['prvni']);
+
+  const spravce = await prihlas('admin', 'sef@example.invalid', 'Šéfka');
+  const testerId = await vytvorUzivatele(pool, {
+    email: 'tester@example.invalid', jmeno: 'Tester', role: 'tester',
+  });
+
+  // Ve výchozím stavu se čeká na oba.
+  await spravce.put(`/api/admin/akceptace/ukoly/${ukol.id}/vysledek`, { stav: 'funguje' });
+  const prvniPokus = await spravce.post('/api/admin/akceptace/verze/zkouska/schvalit');
+  assert.equal(prvniPokus.status, 409);
+  assert.match(chybaText(prvniPokus), /Tester/);
+
+  // Když verzi testuje jen šéfka, na testera se nečeká.
+  const zmena = await spravce.put('/api/admin/akceptace/verze/zkouska/testeri', {
+    uzivatele: [(await pool.query('SELECT id FROM uzivatele WHERE email = ?', ['sef@example.invalid']))[0][0].id],
+  });
+  assert.equal(zmena.status, 200);
+
+  const druhyPokus = await spravce.post('/api/admin/akceptace/verze/zkouska/schvalit');
+  assert.equal(druhyPokus.status, 200, 'na nepřiřazeného testera se nečeká');
+
+  const [prirazeni] = await pool.query('SELECT uzivatel_id FROM akceptace_testeri');
+  assert.equal(prirazeni.length, 1);
+  assert.notEqual(prirazeni[0].uzivatel_id, testerId);
+
+  await rm(adresar, { recursive: true, force: true });
+});
+
+test('k přetestování se vrací jen tomu, komu to nefungovalo', async () => {
+  const adresar = await zadani([{ kod: 'prvni', nazev: 'První úkol' }]);
+  await naimportuj(adresar);
+  const [[ukol]] = await pool.query('SELECT id FROM akceptace_ukoly WHERE kod = ?', ['prvni']);
+
+  const spokojeny = await prihlas('tester', 'ok@example.invalid', 'Spokojený');
+  const nespokojeny = await prihlas('tester', 'problem@example.invalid', 'Nespokojený');
+  await spokojeny.put(`/api/admin/akceptace/ukoly/${ukol.id}/vysledek`, { stav: 'funguje' });
+  await nespokojeny.put(`/api/admin/akceptace/ukoly/${ukol.id}/vysledek`, {
+    stav: 'nefunguje',
+    komentar: 'spadlo to',
+  });
+
+  const spravce = await prihlas('admin', 'sef@example.invalid', 'Šéfka');
+  const vraceni = await spravce.post(`/api/admin/akceptace/ukoly/${ukol.id}/k-pretestovani`);
+  assert.equal(vraceni.data.prepnuto, 1, 'vrací se jen tomu, kdo hlásil problém');
+
+  assert.equal((await spokojeny.get('/api/admin/akceptace/pocty')).data.k_otestovani, 0);
+  assert.equal((await nespokojeny.get('/api/admin/akceptace/pocty')).data.k_otestovani, 1);
+
+  // Volba "všem" vrátí i toho, komu to fungovalo.
+  const vsem = await spravce.post(`/api/admin/akceptace/ukoly/${ukol.id}/k-pretestovani`, {
+    vsem: true,
+  });
+  assert.equal(vsem.data.prepnuto, 1, 'zbyl už jen ten spokojený');
+  assert.equal((await spokojeny.get('/api/admin/akceptace/pocty')).data.k_otestovani, 1);
+
+  await rm(adresar, { recursive: true, force: true });
+});
+
+test('export obsahuje tabulku úkoly × testeři i výsledky po lidech', async () => {
+  const adresar = await zadani([{ kod: 'prvni', nazev: 'První úkol' }]);
+  await naimportuj(adresar);
+  const [[ukol]] = await pool.query('SELECT id FROM akceptace_ukoly WHERE kod = ?', ['prvni']);
+
+  const tester = await prihlas('tester', 'tester@example.invalid', 'Tester');
+  await tester.put(`/api/admin/akceptace/ukoly/${ukol.id}/vysledek`, {
+    stav: 'funguje',
+    komentar: 'šlo to',
+  });
+
+  const spravce = await prihlas('admin', 'sef@example.invalid', 'Šéfka');
+  const export_ = await spravce.get('/api/admin/akceptace/verze/zkouska/export');
+
+  assert.match(export_.data.obsah, /## Kdo kolik otestoval/);
+  assert.match(export_.data.obsah, /\*\*Tester\*\* \(tester\): 1\/1/);
+  assert.match(export_.data.obsah, /## Přehled úkoly × testeři/);
+  assert.match(export_.data.obsah, /\| První úkol \|/);
+  assert.match(export_.data.obsah, /Tester: funguje/);
+
+  await rm(adresar, { recursive: true, force: true });
+});

@@ -56,12 +56,19 @@ a rollback neexistuje.
   Hlídá to test v `test/bezpecnost.test.js`.
 - **Nic natvrdo v kódu, co má spravovat majitelka.** Texty, ceny a lhůty patří do
   nastavení nebo do databáze, ne do zdrojáku.
-- **Datum a čas jen přes `src/cas.js`** — `datum()`, `cas()`, `datumCas()`, `pred()`,
-  `isoDatum()`, `okamzik()`. Vždy Europe/Prague, v administraci, e-mailech, exportech
-  i dokladech. Nikdy `toISOString()`, `toLocaleString()` ani vlastní skládání z `new Date()`:
-  tak vznikl export, kde čas vygenerování byl v UTC a časy testů v pražském čase.
-  Administrace si ten samý soubor načítá jako `/admin/assets/js/cas.js`, takže existuje
-  jedna implementace, ne dvě. DATETIME z databáze je pražský čas na hodinách, ne UTC.
+- **V databázi je čas vždy v UTC.** Spojení má `time_zone = '+00:00'` (src/db.js),
+  kontejnery běží s `TZ=UTC`. Pražský čas „na hodinách“ je nejednoznačný: poslední
+  říjnovou neděli proběhne hodina 2:00–3:00 dvakrát, takže by se rozbilo držení
+  rezervace na 48 h, splatnosti i pořadí plateb. `NOW()`, `DATE_ADD` a porovnání
+  v SQL proto počítají v UTC a jsou správně; nikdy nepřičítej ani neodečítej hodiny,
+  aby „to sedělo“.
+- **Na Europe/Prague se převádí až při zobrazení, a jen přes `src/cas.js`** —
+  `datum()`, `cas()`, `datumCas()`, `pred()`, `isoDatum()`, `okamzik()`, `proDb()`.
+  Platí pro administraci, e-maily, exporty i doklady. Nikdy `toISOString()`,
+  `toLocaleString()`, `new Date(retezecZDatabaze)` ani vlastní skládání data:
+  `new Date('2026-09-27 20:49:00')` si řetězec přečte jako místní čas stroje a výsledek
+  je posunutý. Administrace si ten samý soubor načítá jako `/admin/assets/js/cas.js`,
+  takže existuje jedna implementace, ne dvě.
 - Peníze v haléřích (`INT`), mazání měkké (`smazano_at`).
 - Administrace je česky a pro netechnického člověka: chybová hláška říká, co se stalo
   a co s tím, ne „Invalid input“.

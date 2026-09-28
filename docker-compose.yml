@@ -17,7 +17,7 @@ services:
       MARIADB_DATABASE: ${DB_NAME}
       MARIADB_USER: ${DB_USER}
       MARIADB_PASSWORD: ${DB_PASSWORD}
-      TZ: Europe/Prague
+      TZ: UTC
     volumes:
       - db_data:/var/lib/mysql
     networks:
@@ -40,7 +40,7 @@ services:
     environment:
       NODE_ENV: production
       DB_HOST: db
-      TZ: Europe/Prague
+      TZ: UTC
     volumes:
       # Nahrané fotky (fáze 5). Volume, ne bind mount - přežije přestavbu image
       # a je součástí zálohy na VPS.

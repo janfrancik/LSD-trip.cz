@@ -7,7 +7,7 @@ services:
       MARIADB_DATABASE: ${DB_NAME}
       MARIADB_USER: ${DB_USER}
       MARIADB_PASSWORD: ${DB_PASSWORD}
-      TZ: Europe/Prague
+      TZ: UTC
     ports:
       # DB dostupná jen z localhostu vývojářského stroje
       - "127.0.0.1:3306:3306"
@@ -27,7 +27,7 @@ services:
     environment:
       NODE_ENV: development
       DB_HOST: db
-      TZ: Europe/Prague
+      TZ: UTC
     ports:
       - "127.0.0.1:3000:3000"
     volumes:
