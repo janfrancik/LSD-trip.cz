@@ -438,6 +438,15 @@ select.pole { appearance: none; background-image: none; }
 .duvody { margin: 6px 0 0; padding-left: 18px; list-style: disc; color: var(--muted); font-size: 14px; }
 .duvody li { margin-bottom: 3px; }
 
+/* Lišta "je tu nová verze". Sedí nad spodní navigací, ať nepřekryje obsah. */
+.nova-verze {
+  position: fixed; left: 0; right: 0; bottom: var(--spodni-lista); z-index: 50;
+  display: flex; align-items: center; justify-content: center; flex-wrap: wrap; gap: 12px;
+  padding: 12px var(--gutter);
+  background: var(--raise); border-top: 2px solid var(--accent);
+  font-size: 14px; color: var(--text-2);
+}
+
 /* Prvek, nad kterým se právě táhne obrázek. */
 .nad-souborem { outline: 2px dashed var(--accent); outline-offset: 3px; }
 

@@ -13,6 +13,7 @@ import config from '../../config.js';
 import { nactiSession, prodluzSession } from '../../auth/session.js';
 import { overCsrf } from '../../auth/csrf.js';
 import { asyncHandler } from '../../chyby.js';
+import { verzeKlienta } from '../../verze.js';
 
 import auth from './auth.js';
 import uzivatele from './uzivatele.js';
@@ -24,6 +25,13 @@ import emaily from './emaily.js';
 import akceptace from './akceptace.js';
 
 const router = express.Router();
+
+// Otisk klientské části. Administrace si ho pamatuje z prvního požadavku;
+// když se změní, ví, že v záložce běží starý kód, a nabídne načtení znovu.
+router.use((req, res, next) => {
+  res.setHeader('X-Admin-Verze', verzeKlienta());
+  next();
+});
 
 // Kdo je přihlášený. Chybějící nebo prošlá session není chyba - jen prázdný req.uzivatel.
 router.use(

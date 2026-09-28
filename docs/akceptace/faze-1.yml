@@ -460,6 +460,26 @@ ukoly:
       (všichni, kdo na to mají právo).
 
   # ----------------------------------------------------------------- časy
+  - kod: cas-v-auditu
+    nazev: Čas v auditu sedí s hodinkami
+    oblast: audit
+    odkaz: /admin/audit
+    postup: |
+      1. Podívejte se na hodinky (nebo na hodiny v telefonu) a zapamatujte si čas.
+      2. Udělejte něco, co se zapisuje do auditu — třeba si na obrazovce
+         „Uživatelé“ nechte poslat odkaz na nové heslo, nebo změňte
+         interní poznámku u poptávky.
+      3. Otevřete Audit. Nový záznam je úplně nahoře.
+      4. Porovnejte jeho čas s hodinkami.
+    vysledek: |
+      Čas v auditu odpovídá hodinkám na minutu přesně. Nesmí být o hodinu
+      ani o dvě pozadu. (Uvnitř se časy ukládají v univerzálním čase, takže
+      právě tady se nejsnáz pozná, kdyby se někde zapomněl převod na náš čas.)
+
+      Kdyby čísla neseděla: nejdřív administraci načtěte znovu (Cmd+R / Ctrl+R).
+      Když v ní zůstala otevřená starší verze, měla by se sama ozvat lištou
+      „Administrace se mezitím aktualizovala“.
+
   - kod: casy-sedi
     nazev: Časy v administraci sedí na hodinky
     oblast: nastaveni

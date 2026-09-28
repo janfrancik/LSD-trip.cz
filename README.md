@@ -247,6 +247,22 @@ to je strojový výstup, ne čas pro člověka.
 
 Testy v `test/cas.test.js` hlídají přechody letního i zimního času, zápis a čtení proti
 skutečné databázi a to, že výsledek nezávisí na časové zóně stroje.
+`test/casy-moduly.test.js` jde po jednotlivých modulech: vloží záznam s časem v UTC
+(v létě i v zimě) a ověří, že audit, poptávky, e-maily, akceptace, hlášení, uživatelé,
+přihlášení i export ukážou pražský čas. Navíc hlídá, že si žádná obrazovka čas neformátuje
+sama — `new Date(<řetězec z databáze>)`, `toLocale*` a podobné v administraci neprojdou.
+
+### Otevřená záložka po nasazení
+
+Administrace je jednostránková aplikace: jednou načtené moduly zůstanou v paměti záložky.
+Po nasazení tak v otevřené záložce běží **starý kód nad novými daty** — takhle audit ukazoval
+časy o dvě hodiny pozadu, přestože server i databáze byly v pořádku.
+
+Server proto ke každé odpovědi administrace přidává hlavičku `X-Admin-Verze` s otiskem
+souborů administrace (`src/verze.js`). Když se od otisku, se kterým se záložka načetla, liší,
+objeví se lišta „Administrace se mezitím aktualizovala" s tlačítkem Načíst znovu. Soubory
+administrace se navíc servírují s `Cache-Control: no-cache`, takže se po načtení opravdu
+stáhne nová verze.
 
 ## Zabezpečení
 

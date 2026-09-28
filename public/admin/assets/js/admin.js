@@ -3,7 +3,7 @@
 // Administrace: router nad history API, layout a vykreslování obrazovek.
 // Bez build kroku - ES moduly načítá prohlížeč nativně.
 
-import { api, ChybaApi } from './api.js';
+import { api, ChybaApi, naNovouVerzi } from './api.js';
 import { esc, hlaska } from './ui.js';
 
 import * as prihlaseni from './obrazovky/prihlaseni.js';
@@ -322,6 +322,20 @@ function nastavOdznak(polozka, trida, pocet) {
 }
 
 // ------------------------------------------------------------------- start
+
+// Po nasazení nové verze běží v otevřené záložce pořád starý kód. Může pak
+// zobrazovat nesmysly (třeba časy podle starých pravidel), i když server
+// i data jsou v pořádku - proto to administrace řekne a nabídne načtení znovu.
+naNovouVerzi(() => {
+  if (document.querySelector('.nova-verze')) return;
+  const lista = document.createElement('div');
+  lista.className = 'nova-verze';
+  lista.innerHTML = `
+    <span>Administrace se mezitím aktualizovala. Načti ji znovu, ať pracuješ s aktuální verzí.</span>
+    <button type="button" class="btn btn--hlavni btn--maly">Načíst znovu</button>`;
+  lista.querySelector('button').addEventListener('click', () => location.reload());
+  document.body.appendChild(lista);
+});
 
 // Odkazy uvnitř administrace obsluhuje router, ne prohlížeč.
 document.addEventListener('click', (e) => {

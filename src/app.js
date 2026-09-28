@@ -64,15 +64,25 @@ export function vytvorApp() {
   // a v exportu by zase svítil čas z jiné zóny.
   app.get('/admin/assets/js/cas.js', (req, res) => {
     res.type('application/javascript; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-cache');
     res.sendFile(path.join(rootDir, 'src', 'cas.js'));
   });
 
   // Administrace je samostatná aplikace na /admin. Routuje se na cestě, takže
   // každá podcesta musí vrátit její shell - a CSRF cookie s ním, aby první
   // požadavek z prohlížeče už měl s čím pracovat.
-  app.use('/admin', express.static(adminDir));
+  // no-cache neznamená "necachovat", ale "před použitím se zeptej serveru".
+  // Bez toho může prohlížeč po nasazení chvíli používat staré moduly a míchat
+  // starý kód s novými daty.
+  app.use(
+    '/admin',
+    express.static(adminDir, {
+      setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+    })
+  );
   app.get(/^\/admin(\/.*)?$/, (req, res) => {
     zajistiCsrfToken(req, res);
+    res.setHeader('Cache-Control', 'no-store');
     res.sendFile(path.join(adminDir, 'index.html'));
   });
 

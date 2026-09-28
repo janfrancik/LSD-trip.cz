@@ -22,6 +22,30 @@ function cookie(nazev) {
   return nalez ? decodeURIComponent(nalez.slice(nazev.length + 1)) : null;
 }
 
+// Otisk klientské části, se kterou se tahle záložka načetla. Administrace je
+// jednostránková aplikace - po nasazení v ní běží starý kód dál, dokud ji
+// někdo nenačte znovu. Server posílá otisk v hlavičce, my hlídáme změnu.
+let verzeZalozky = null;
+let ohlasitNovouVerzi = null;
+
+export function naNovouVerzi(posluchac) {
+  ohlasitNovouVerzi = posluchac;
+}
+
+function zkontrolujVerzi(odpoved) {
+  const verze = odpoved.headers.get('X-Admin-Verze');
+  if (!verze) return;
+  if (!verzeZalozky) {
+    verzeZalozky = verze;
+    return;
+  }
+  if (verze !== verzeZalozky && ohlasitNovouVerzi) {
+    const oznam = ohlasitNovouVerzi;
+    ohlasitNovouVerzi = null; // ohlásíme jednou, ne při každém požadavku
+    oznam();
+  }
+}
+
 async function zavolej(metoda, cesta, telo) {
   const hlavicky = {};
   if (telo !== undefined) hlavicky['Content-Type'] = 'application/json';
@@ -41,6 +65,8 @@ async function zavolej(metoda, cesta, telo) {
   } catch {
     throw new ChybaApi(0, 'Nepodařilo se spojit se serverem. Zkontroluj připojení.');
   }
+
+  zkontrolujVerzi(odpoved);
 
   if (odpoved.status === 204) return null;
 

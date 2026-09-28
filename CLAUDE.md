@@ -41,6 +41,14 @@ Vedle toho platí, co je v README: migrace musí jít spustit **opakovaně**
 (`IF NOT EXISTS`, `DROP … IF EXISTS`), protože MariaDB u DDL commituje implicitně
 a rollback neexistuje.
 
+## Administrace je SPA — po nasazení může v záložce běžet starý kód
+
+Jednou načtené moduly zůstanou v paměti záložky. Změna, která rozbije starý klient nad
+novými daty (jiný formát času, jiný tvar odpovědi API), se proto neprojeví jen po nasazení,
+ale i u někoho, kdo má administraci celý den otevřenou. Server posílá otisk klienta
+v hlavičce `X-Admin-Verze` a administrace nabídne načtení znovu; u větších změn API
+na to spoléhej, ale mysli i na to, že starý klient chvíli poběží dál.
+
 ## Prostředí se pozná z PROSTREDI, ne z NODE_ENV
 
 V kontejneru je `NODE_ENV=production` i na testu. Cokoli, co se má chovat jinak v produkci
