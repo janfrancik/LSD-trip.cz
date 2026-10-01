@@ -212,125 +212,100 @@ async function novyKurz(koren) {
   jdiNa('kurzy/' + kurz.id);
 }
 
-// -------------------------------------------------------------------- karta
+// ==========================================================================
+// Karta kurzu
+//
+// Ne formulář, ale stránka: nahoře to podstatné, pod tím bloky podle témat
+// a vedle nich živý náhled, jak kurz uvidí návštěvník webu. Náhled se
+// překresluje při psaní, takže je hned vidět, co která věta udělá.
+//
+// Všechno ukládá jedno tlačítko - kurz, odrážky i průběh. Majitelka nemá
+// přemýšlet nad tím, který blok má vlastní "uložit".
+// ==========================================================================
+
+// Rozepsaný stav seznamů. Drží se mimo DOM, aby se při překreslení nepřišlo
+// o rozdělanou práci a aby šlo poznat, co se opravdu změnilo.
+let praceNaKurzu = null;
+
+// Oddělovače pro otisk seznamu. Znaky, které se do textu nedají napsat,
+// takže se otisk nerozbije na odrážce s čárkou nebo svislou čarou.
+const ODDELOVAC_POLOZEK = '\u0000';
+const ODDELOVAC_POLI = '\u0001';
 
 async function karta(koren, id) {
   const kurz = await api.get(`/produkty/${id}`);
   const sazby = (await api.get('/dph-sazby')).data;
   const muze = smiMenit();
 
+  praceNaKurzu = {
+    id,
+    pozadavky: kurz.pozadavky.map((p) => p.text),
+    kroky: kurz.kroky.map((k) => ({ nadpis: k.nadpis, text: k.text ?? '' })),
+    pozadavkyPuvodni: otiskPozadavku(kurz.pozadavky.map((p) => p.text)),
+    krokyPuvodni: otiskKroku(kurz.kroky.map((k) => ({ nadpis: k.nadpis, text: k.text ?? '' }))),
+  };
+
   koren.innerHTML = `
     <button type="button" class="btn btn--obrys btn--maly" data-zpet style="margin-bottom:14px">
       ← Zpátky na kurzy
     </button>
 
-    <div class="panel__hlava" style="margin-bottom:6px">
-      <h1 class="nadpis">${esc(kurz.nazev)}</h1>
-      <span class="stitek ${kurz.aktivni ? 'stitek--hotovo' : 'stitek--nova'}">
-        ${kurz.aktivni ? 'zveřejněný' : 'skrytý'}
-      </span>
-    </div>
-    <p class="text-faint" style="margin-bottom:18px">
-      Adresa na webu: <span class="mono">/kurz/${esc(kurz.slug)}</span>
-      ${kurz.smazano_at ? ' · <strong>smazaný</strong>' : ''}
-    </p>
+    ${hlavicka(kurz, muze)}
 
-    <form id="formular" novalidate>
-      ${sekce('Texty', `
-        ${pole({ klic: 'nazev', popisek: 'Název kurzu', hodnota: kurz.nazev, povinne: true })}
-        ${pole({ klic: 'stitek', popisek: 'Štítek na kartě', hodnota: kurz.stitek ?? '',
-                 napoveda: 'Krátké slovo navíc, například „Základní kurz“. Nechte prázdné, pokud žádný nechcete.' })}
-        ${pole({ klic: 'perex', popisek: 'Krátký popis do výpisu', typ: 'textarea', hodnota: kurz.perex ?? '',
-                 napoveda: 'Dvě věty, které se ukážou na kartě kurzu ve výpisu.' })}
-        ${pole({ klic: 'popis', popisek: 'Podrobný popis', typ: 'textarea', hodnota: kurz.popis ?? '',
-                 napoveda: 'Celý text na stránce kurzu. Odstavce oddělte prázdným řádkem.' })}
-        ${pole({ klic: 'co_je_v_cene', popisek: 'Co je v ceně', typ: 'textarea', hodnota: kurz.co_je_v_cene ?? '',
-                 napoveda: 'Každou položku na vlastní řádek.' })}
-        <div class="mrizka mrizka--2">
-          ${pole({ klic: 'delka_text', popisek: 'Jak dlouho trvá', hodnota: kurz.delka_text ?? '',
-                   napoveda: 'Například „48 hodin“ nebo „5 dní“.' })}
-          ${pole({ klic: 'uroven_text', popisek: 'Pro koho je', hodnota: kurz.uroven_text ?? '',
-                   napoveda: 'Například „Začátečník“.' })}
+    <div class="karta-rozvrzeni">
+      <div class="karta-rozvrzeni__nahled">
+        ${nahledObal(kurz)}
+      </div>
+
+      <form class="karta-rozvrzeni__editace" id="formular" novalidate>
+        ${sekceTexty(kurz)}
+        ${sekceCena(kurz, sazby)}
+        ${sekcePozadavky(kurz)}
+        ${sekceSeznam('pozadavky')}
+        ${sekceSeznam('kroky')}
+        ${sekceFotky()}
+        ${sekceZverejneni(kurz)}
+
+        ${muze ? `<div class="ulozit-lista">
+          <button type="submit" class="btn btn--hlavni btn--blok">Uložit změny</button>
+        </div>` : '<p class="text-dim">Kurzy můžeš jen prohlížet, ne měnit.</p>'}
+
+        <div class="sekce" style="margin-top:16px">
+          <div class="sekce__hlava">
+            <h2 class="sekce__nadpis">Historie cen</h2>
+            <p class="sekce__napoveda">Každá změna ceny i s tím, kdo ji udělal a proč.</p>
+          </div>
+          <div id="historie" class="text-faint">Načítám…</div>
         </div>
-      `)}
 
-      ${sekce('Cena a DPH', `
-        ${pole({ klic: 'cena_na_dotaz', popisek: 'Cena na dotaz', typ: 'prepinac',
-                 hodnota: kurz.cena_na_dotaz,
-                 napoveda: 'Zaškrtněte u kurzů, kde cena závisí na rozsahu. Na webu se místo částky ukáže „Cena na dotaz“.' })}
-        ${pole({ klic: 'cena_kc', popisek: 'Cena v korunách', hodnota: kurz.cena_hal == null ? '' : (kurz.cena_hal / 100),
-                 napoveda: 'Jen číslo, bez „Kč“. Haléře oddělte čárkou.' })}
-        ${pole({ klic: 'duvod_zmeny_ceny', popisek: 'Proč se cena mění', hodnota: '',
-                 napoveda: 'Nepovinné, uloží se do historie cen. Vyplňte, až budete cenu měnit.' })}
-        ${pole({ klic: 'dph_sazba_id', popisek: 'Sazba DPH', typ: 'vyber', hodnota: kurz.dph_sazba_id ?? '',
-                 moznosti: sazby.filter((s) => s.aktivni).map((s) => ({ hodnota: s.id, popis: s.nazev })),
-                 napoveda: 'Mění se jen u nově vystavených dokladů. Už vystavené zůstávají, jak jsou.' })}
-      `)}
-
-      ${sekce('Požadavky na účastníka', `
-        <div class="mrizka mrizka--2">
-          ${pole({ klic: 'min_vek', popisek: 'Nejnižší věk', typ: 'cislo', hodnota: kurz.min_vek ?? '', min: 0, max: 120 })}
-          ${pole({ klic: 'max_vek', popisek: 'Nejvyšší věk', typ: 'cislo', hodnota: kurz.max_vek ?? '', min: 0, max: 120,
-                   napoveda: 'Nechte prázdné, pokud horní hranice není.' })}
-        </div>
-        <div class="mrizka mrizka--2">
-          ${pole({ klic: 'max_vaha_kg', popisek: 'Nejvyšší hmotnost (kg)', typ: 'cislo',
-                   hodnota: kurz.max_vaha_kg ?? '', min: 0, max: 400 })}
-          ${pole({ klic: 'souhlas_zastupce_do_let', popisek: 'Souhlas zástupce do kolika let', typ: 'cislo',
-                   hodnota: kurz.souhlas_zastupce_do_let ?? '', min: 0, max: 26,
-                   napoveda: 'Do tohoto věku si přihláška vyžádá souhlas zákonného zástupce.' })}
-        </div>
-        ${pole({ klic: 'vyzaduje_lekarskou_prohlidku', popisek: 'Vyžaduje lékařskou prohlídku', typ: 'prepinac',
-                 hodnota: kurz.vyzaduje_lekarskou_prohlidku,
-                 napoveda: 'Účastník ji doloží papírově na místě. V přihlášce jen potvrdí, že ji přinese.' })}
-        ${pole({ klic: 'vyzaduje_zdravotni_prohlaseni', popisek: 'Vyžaduje zdravotní prohlášení', typ: 'prepinac',
-                 hodnota: kurz.vyzaduje_zdravotni_prohlaseni })}
-      `)}
-
-      ${sekce('Zveřejnění a SEO', `
-        ${pole({ klic: 'aktivni', popisek: 'Zveřejnit na webu', typ: 'prepinac', hodnota: kurz.aktivni,
-                 napoveda: 'Dokud není zaškrtnuté, kurz na webu nikdo neuvidí.' })}
-        ${pole({ klic: 'seo_title', popisek: 'Titulek pro vyhledávače', hodnota: kurz.seo_title ?? '',
-                 napoveda: 'Nechte prázdné a použije se název kurzu.' })}
-        ${pole({ klic: 'seo_description', popisek: 'Popis pro vyhledávače', typ: 'textarea',
-                 hodnota: kurz.seo_description ?? '',
-                 napoveda: 'Dvě věty, které se ukážou ve výsledcích vyhledávání.' })}
-      `)}
-
-      ${muze ? `<div class="ulozit-lista">
-        <button type="submit" class="btn btn--hlavni btn--blok">Uložit změny</button>
-      </div>` : '<p class="text-dim">Kurzy můžeš jen prohlížet.</p>'}
-    </form>
-
-    ${seznamPolozek({
-      id: 'pozadavky',
-      nadpis: 'Co si vzít a co doložit',
-      popis: 'Odrážky, které se ukážou na stránce kurzu. Každá na vlastním řádku.',
-      polozky: kurz.pozadavky,
-      muze,
-    })}
-
-    ${seznamKroku(kurz.kroky, muze)}
-
-    <div class="panel" style="margin-top:16px">
-      <h2 class="nadpis-" style="font-size:16px;margin-bottom:10px">Historie cen</h2>
-      <div id="historie" class="text-faint">Načítám…</div>
-    </div>
-
-    ${muze && !kurz.smazano_at ? `<div style="margin-top:20px">
-      <button type="button" class="btn btn--nebezpecny" data-smazat>Smazat kurz</button>
-    </div>` : ''}`;
+        ${muze && !kurz.smazano_at ? `<div style="margin-top:18px">
+          <button type="button" class="btn btn--nebezpecny" data-smazat>Smazat kurz</button>
+        </div>` : ''}
+      </form>
+    </div>`;
 
   koren.querySelector('[data-zpet]').addEventListener('click', () => jdiNa('kurzy'));
 
   nactiHistorii(koren, id);
   navazFormular(koren, kurz, id);
-  navazSeznamy(koren, kurz, id);
+  navazSeznamy(koren);
+  navazNahled(koren);
+
+  // Náhled je na telefonu nad formulářem, takže "Náhled" k němu jen vyjede.
+  // Až bude v E4 veřejná stránka kurzu, povede tlačítko rovnou na ni.
+  koren.querySelector('[data-nahled]')?.addEventListener('click', () => {
+    koren.querySelector('.karta-rozvrzeni__nahled')
+      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  });
+
+  koren.querySelector('[data-ulozit-nahore]')?.addEventListener('click', () => {
+    koren.querySelector('#formular')?.requestSubmit();
+  });
 
   koren.querySelector('[data-smazat]')?.addEventListener('click', async () => {
     const ano = await potvrd({
       nadpis: 'Smazat kurz?',
-      text: `Kurz „${kurz.nazev}“ zmizí z webu i ze seznamu. Nic se nemaže natrvalo — ` +
+      text: `Kurz „${esc(kurz.nazev)}“ zmizí z webu i ze seznamu. Nic se nemaže natrvalo — ` +
             'najdeš ho pod záložkou Smazané a můžeš ho vrátit zpátky.',
       potvrzeni: 'Smazat kurz',
     });
@@ -341,21 +316,372 @@ async function karta(koren, id) {
   });
 }
 
-function sekce(nadpis, vnitrek) {
-  return `<div class="panel" style="margin-bottom:16px">
-      <h2 class="nadpis-" style="font-size:16px;margin-bottom:12px">${esc(nadpis)}</h2>
-      ${vnitrek}
+function otiskPozadavku(polozky) {
+  return polozky.map((t) => t.trim()).filter(Boolean).join(ODDELOVAC_POLOZEK);
+}
+
+function otiskKroku(polozky) {
+  return polozky
+    .map((k) => ({ nadpis: k.nadpis.trim(), text: k.text.trim() }))
+    .filter((k) => k.nadpis || k.text)
+    .map((k) => k.nadpis + ODDELOVAC_POLI + k.text)
+    .join(ODDELOVAC_POLOZEK);
+}
+
+// ------------------------------------------------------------------ hlavička
+
+function hlavicka(kurz, muze) {
+  return `<div class="karta-hlavicka">
+      <div class="karta-hlavicka__vrch">
+        <h1 class="karta-hlavicka__nazev" data-zrcadlo="nazev">${esc(kurz.nazev)}</h1>
+        <span class="stitek ${kurz.aktivni ? 'stitek--hotovo' : 'stitek--nova'}" data-stav-stitek>
+          ${kurz.aktivni ? 'zveřejněný' : 'skrytý'}
+        </span>
+      </div>
+
+      <div class="karta-hlavicka__udaje">
+        <span>Cena <strong data-zrcadlo="cena">${esc(cenaPopis(kurz))}</strong></span>
+        <span>DPH <strong>${kurz.dph_procento != null ? esc(Number(kurz.dph_procento)) + ' %' : '—'}</strong></span>
+        <span>Na webu <strong class="mono">/kurz/${esc(kurz.slug)}</strong></span>
+        ${kurz.smazano_at ? '<span style="color:var(--varovani)">smazaný</span>' : ''}
+      </div>
+
+      <div class="karta-hlavicka__akce">
+        ${muze ? '<button type="button" class="btn btn--hlavni" data-ulozit-nahore>Uložit</button>' : ''}
+        <button type="button" class="btn btn--obrys" data-nahled>Náhled</button>
+      </div>
     </div>`;
 }
 
-// ------------------------------------------------- ukládání karty
+function cenaPopis(kurz) {
+  if (kurz.cena_na_dotaz) return 'na dotaz';
+  return kurz.cena_hal == null ? '—' : kc(kurz.cena_hal);
+}
+
+// -------------------------------------------------------------------- sekce
+
+function sekce(nadpis, napoveda, vnitrek) {
+  return `<section class="sekce">
+      <div class="sekce__hlava">
+        <h2 class="sekce__nadpis">${esc(nadpis)}</h2>
+        ${napoveda ? `<p class="sekce__napoveda">${napoveda}</p>` : ''}
+      </div>
+      ${vnitrek}
+    </section>`;
+}
+
+function sekceTexty(kurz) {
+  return sekce(
+    'Texty',
+    'Název a krátký popis se ukážou na kartě kurzu ve výpisu. Podrobný popis a „co je v ceně“ jsou až na stránce kurzu.',
+    `
+      ${pole({ klic: 'nazev', popisek: 'Název kurzu', hodnota: kurz.nazev, povinne: true,
+               napoveda: 'Podle názvu se vytvoří i adresa na webu.' })}
+      ${pole({ klic: 'stitek', popisek: 'Štítek v rohu fotky', hodnota: kurz.stitek ?? '',
+               napoveda: 'Krátké slovo navíc. Nechte prázdné, pokud žádný nechcete.' })}
+      ${pole({ klic: 'perex', popisek: 'Krátký popis do výpisu', typ: 'textarea', hodnota: kurz.perex ?? '',
+               napoveda: 'Dvě až tři věty. Tohle si člověk přečte, než se rozhodne kliknout.' })}
+      ${pole({ klic: 'popis', popisek: 'Podrobný popis', typ: 'textarea', hodnota: kurz.popis ?? '',
+               napoveda: 'Celý text na stránce kurzu. Odstavce oddělte prázdným řádkem.' })}
+      ${pole({ klic: 'co_je_v_cene', popisek: 'Co je v ceně', typ: 'textarea', hodnota: kurz.co_je_v_cene ?? '',
+               napoveda: 'Každou položku na vlastní řádek.' })}
+      <div class="mrizka mrizka--2">
+        ${pole({ klic: 'delka_text', popisek: 'Jak dlouho trvá', hodnota: kurz.delka_text ?? '' })}
+        ${pole({ klic: 'uroven_text', popisek: 'Pro koho je', hodnota: kurz.uroven_text ?? '' })}
+      </div>
+      <p class="sekce__napoveda">Délka a úroveň se na kartě ukážou jako dvojice drobných údajů nad cenou.</p>
+    `
+  );
+}
+
+function sekceCena(kurz, sazby) {
+  return sekce(
+    'Cena a DPH',
+    'Cena se ukáže velkým písmem na kartě i na stránce kurzu. Sazba DPH se projeví jen na nově vystavených dokladech — ty už vystavené zůstanou, jak jsou.',
+    `
+      ${pole({ klic: 'cena_na_dotaz', popisek: 'Cena na dotaz', typ: 'prepinac',
+               hodnota: kurz.cena_na_dotaz,
+               napoveda: 'Pro kurzy, kde cena závisí na rozsahu. Místo částky se na webu ukáže „Cena na dotaz“.' })}
+      ${pole({ klic: 'cena_kc', popisek: 'Cena v korunách',
+               hodnota: kurz.cena_hal == null ? '' : (kurz.cena_hal / 100),
+               napoveda: 'Jen číslo, bez „Kč“. Haléře oddělte čárkou.' })}
+      ${pole({ klic: 'duvod_zmeny_ceny', popisek: 'Proč se cena mění', hodnota: '',
+               napoveda: 'Nepovinné. Uloží se do historie cen dole, ať je za rok jasné, co se tehdy stalo.' })}
+      ${pole({ klic: 'dph_sazba_id', popisek: 'Sazba DPH', typ: 'vyber', hodnota: kurz.dph_sazba_id ?? '',
+               moznosti: sazby.filter((s) => s.aktivni).map((s) => ({ hodnota: s.id, popis: s.nazev })) })}
+    `
+  );
+}
+
+function sekcePozadavky(kurz) {
+  return sekce(
+    'Požadavky na účastníka',
+    'Podle těchhle údajů se přihláška zeptá na věk a váhu a soupiska zvýrazní toho, kdo je mimo limit. Nevyplněné pole znamená „neřešíme“.',
+    `
+      <div class="mrizka mrizka--2">
+        ${pole({ klic: 'min_vek', popisek: 'Nejnižší věk', typ: 'cislo', hodnota: kurz.min_vek ?? '', min: 0, max: 120 })}
+        ${pole({ klic: 'max_vek', popisek: 'Nejvyšší věk', typ: 'cislo', hodnota: kurz.max_vek ?? '', min: 0, max: 120 })}
+      </div>
+      <div class="mrizka mrizka--2">
+        ${pole({ klic: 'max_vaha_kg', popisek: 'Nejvyšší hmotnost (kg)', typ: 'cislo',
+                 hodnota: kurz.max_vaha_kg ?? '', min: 0, max: 400 })}
+        ${pole({ klic: 'souhlas_zastupce_do_let', popisek: 'Souhlas zástupce do kolika let', typ: 'cislo',
+                 hodnota: kurz.souhlas_zastupce_do_let ?? '', min: 0, max: 26 })}
+      </div>
+      ${pole({ klic: 'vyzaduje_lekarskou_prohlidku', popisek: 'Vyžaduje lékařskou prohlídku', typ: 'prepinac',
+               hodnota: kurz.vyzaduje_lekarskou_prohlidku,
+               napoveda: 'Účastník ji doloží papírově na místě. V přihlášce jen potvrdí, že ji přinese.' })}
+      ${pole({ klic: 'vyzaduje_zdravotni_prohlaseni', popisek: 'Vyžaduje zdravotní prohlášení', typ: 'prepinac',
+               hodnota: kurz.vyzaduje_zdravotni_prohlaseni })}
+    `
+  );
+}
+
+function sekceFotky() {
+  return sekce(
+    'Fotky',
+    'Titulní fotka je ta velká na kartě kurzu, ostatní se ukážou v galerii na stránce kurzu. ' +
+      '<strong>Nahrávání přibude v příští etapě</strong> — do té doby je místo fotky tmavá plocha ' +
+      'a kurz se bez ní obejde.',
+    `<div class="fotky-misto">
+        <div class="fotky-misto__ram fotky-misto__ram--titulni">Titulní fotka<br />na šířku, poměr 3:2</div>
+        <div class="fotky-misto__ram">Galerie</div>
+        <div class="fotky-misto__ram">Galerie</div>
+      </div>`
+  );
+}
+
+function sekceZverejneni(kurz) {
+  return sekce(
+    'Zveřejnění a vyhledávače',
+    'Dokud není kurz zveřejněný, na webu ho nikdo neuvidí — ani přes přímou adresu. Texty pro vyhledávače se ukážou ve výsledcích na Googlu.',
+    `
+      ${pole({ klic: 'aktivni', popisek: 'Zveřejnit kurz na webu', typ: 'prepinac', hodnota: kurz.aktivni })}
+      ${pole({ klic: 'seo_title', popisek: 'Titulek pro vyhledávače', hodnota: kurz.seo_title ?? '',
+               napoveda: 'Nechte prázdné a použije se název kurzu.' })}
+      ${pole({ klic: 'seo_description', popisek: 'Popis pro vyhledávače', typ: 'textarea',
+               hodnota: kurz.seo_description ?? '',
+               napoveda: 'Dvě věty, které se ukážou pod odkazem ve výsledcích vyhledávání.' })}
+    `
+  );
+}
+
+// ------------------------------------------------- seznamy (odrážky a kroky)
+
+// Dva seznamy se stejným chováním: přidat, upravit, přesunout šipkami, smazat.
+// Šipky schválně místo přetahování - stejně jako pořadí kurzů v seznamu.
+const SEZNAMY = {
+  pozadavky: {
+    nadpis: 'Co si vzít a co doložit',
+    napoveda: 'Odrážky na stránce kurzu. Jedna věc na řádek, ať se to dá přelétnout očima.',
+    prazdno: 'Zatím žádná odrážka.',
+    pridat: 'Přidat odrážku',
+    priklad: 'Lékařské potvrzení o způsobilosti (stačí praktický lékař).',
+    prazdnaPolozka: () => '',
+  },
+  kroky: {
+    nadpis: 'Jak kurz probíhá',
+    napoveda: 'Kroky za sebou, jak jdou po sobě. Čísla doplníme sami, takže když krok přibude doprostřed, nemusíte nic přepisovat.',
+    prazdno: 'Zatím žádný krok.',
+    pridat: 'Přidat krok',
+    priklad: 'Teorie na hangáru',
+    prikladText: 'Pátek od 10:00, výuka podle osnov V-PARA 1.',
+    prazdnaPolozka: () => ({ nadpis: '', text: '' }),
+  },
+};
+
+function sekceSeznam(druh) {
+  const popis = SEZNAMY[druh];
+  return sekce(
+    popis.nadpis,
+    popis.napoveda,
+    `<div data-seznam="${druh}">
+        <div class="polozky" data-polozky></div>
+        ${smiMenit() ? `<div class="polozky__pridat">
+          <button type="button" class="btn btn--obrys btn--blok" data-pridat>+ ${esc(popis.pridat)}</button>
+        </div>` : ''}
+      </div>`
+  );
+}
+
+function vykresliSeznam(koren, druh) {
+  const obal = koren.querySelector(`[data-seznam="${druh}"] [data-polozky]`);
+  if (!obal) return;
+
+  const polozky = praceNaKurzu[druh];
+  const muze = smiMenit();
+  const popis = SEZNAMY[druh];
+
+  if (!polozky.length) {
+    obal.innerHTML = `<p class="polozky__prazdno">${esc(popis.prazdno)}</p>`;
+    return;
+  }
+
+  obal.innerHTML = polozky.map((p, i) => {
+    const akce = muze ? `<div class="polozka__akce">
+        <button type="button" class="btn btn--obrys btn--maly" data-posun="${i}" data-smer="-1"
+                ${i === 0 ? 'disabled' : ''} aria-label="Posunout nahoru">↑</button>
+        <button type="button" class="btn btn--obrys btn--maly" data-posun="${i}" data-smer="1"
+                ${i === polozky.length - 1 ? 'disabled' : ''} aria-label="Posunout dolů">↓</button>
+        <button type="button" class="btn btn--obrys btn--maly" data-smazat-polozku="${i}"
+                aria-label="Smazat řádek">✕</button>
+      </div>` : '';
+
+    if (druh === 'kroky') {
+      return `<div class="polozka">
+          <div class="polozka__cislo">Krok ${String(i + 1).padStart(2, '0')}</div>
+          <input class="pole" type="text" data-polozka="${i}" data-klic="nadpis"
+                 value="${esc(p.nadpis)}" placeholder="${esc(popis.priklad)}"
+                 aria-label="Nadpis kroku ${i + 1}" ${muze ? '' : 'readonly'} />
+          <textarea class="pole" rows="2" data-polozka="${i}" data-klic="text"
+                    placeholder="${esc(popis.prikladText)}"
+                    aria-label="Popis kroku ${i + 1}" ${muze ? '' : 'readonly'}>${esc(p.text)}</textarea>
+          ${akce}
+        </div>`;
+    }
+
+    return `<div class="polozka polozka--radek">
+        <input class="pole" type="text" data-polozka="${i}"
+               value="${esc(p)}" placeholder="${esc(popis.priklad)}"
+               aria-label="Odrážka ${i + 1}" ${muze ? '' : 'readonly'} />
+        ${akce}
+      </div>`;
+  }).join('');
+}
+
+function navazSeznamy(koren) {
+  for (const druh of Object.keys(SEZNAMY)) {
+    vykresliSeznam(koren, druh);
+
+    const blok = koren.querySelector(`[data-seznam="${druh}"]`);
+    if (!blok) continue;
+
+    blok.addEventListener('click', (e) => {
+      const posun = e.target.closest('[data-posun]');
+      const smazat = e.target.closest('[data-smazat-polozku]');
+      const pridat = e.target.closest('[data-pridat]');
+      const polozky = praceNaKurzu[druh];
+
+      if (posun) {
+        const odkud = Number(posun.dataset.posun);
+        const kam = odkud + Number(posun.dataset.smer);
+        if (kam < 0 || kam >= polozky.length) return;
+        polozky.splice(kam, 0, polozky.splice(odkud, 1)[0]);
+      } else if (smazat) {
+        polozky.splice(Number(smazat.dataset.smazatPolozku), 1);
+      } else if (pridat) {
+        polozky.push(SEZNAMY[druh].prazdnaPolozka());
+      } else {
+        return;
+      }
+
+      vykresliSeznam(koren, druh);
+
+      // Po přidání rovnou kurzor do nového řádku, ať se neklikalo dvakrát.
+      if (pridat) {
+        const vstupy = blok.querySelectorAll('input[data-polozka]');
+        vstupy[vstupy.length - 1]?.focus();
+      }
+    });
+
+    // Psaní se rovnou promítá do stavu, překreslovat se kvůli tomu nemusí.
+    blok.addEventListener('input', (e) => {
+      const vstup = e.target.closest('[data-polozka]');
+      if (!vstup) return;
+      const index = Number(vstup.dataset.polozka);
+      if (druh === 'kroky') praceNaKurzu.kroky[index][vstup.dataset.klic] = vstup.value;
+      else praceNaKurzu.pozadavky[index] = vstup.value;
+    });
+  }
+}
+
+// ------------------------------------------------------------------- náhled
+
+function nahledObal(kurz) {
+  return `<div class="nahled-obal${kurz.aktivni ? '' : ' nahled-obal--skryty'}" data-nahled-obal>
+      <div class="nahled-obal__popisek">Takhle kurz uvidí návštěvník</div>
+      ${nahledKarty(kurz)}
+      <div class="nahled-obal__skryto" data-skryto ${kurz.aktivni ? 'hidden' : ''}>
+        Kurz je skrytý — na webu se zatím neukáže.
+      </div>
+    </div>`;
+}
+
+function nahledKarty(k) {
+  const cena = k.cena_na_dotaz ? 'Cena na dotaz' : (k.cena_hal == null ? '—' : kc(k.cena_hal));
+  const meta = [k.delka_text, k.uroven_text].filter(Boolean);
+
+  return `<article class="nk" data-nk>
+      <div class="nk__media">
+        ${k.stitek ? `<span class="nk__stitek">${esc(k.stitek)}</span>` : ''}
+        Fotka přibude v příští etapě
+      </div>
+      <div class="nk__telo">
+        <h3 class="nk__nazev">${esc(k.nazev || 'Název kurzu')}</h3>
+        <p class="nk__text">${esc(k.perex || 'Krátký popis se ukáže tady.')}</p>
+        ${meta.length ? `<div class="nk__meta">${meta.map((m) => `<span>${esc(m)}</span>`).join('')}</div>` : ''}
+        <div class="nk__pata">
+          <span class="nk__cena">${esc(cena)}</span>
+          <span class="nk__cta">Mám zájem →</span>
+        </div>
+      </div>
+    </article>`;
+}
+
+// Náhled se překresluje při psaní. Čte se rovnou z formuláře, ne ze serveru -
+// smysl má právě to, co ještě není uložené.
+function navazNahled(koren) {
+  const formular = koren.querySelector('#formular');
+  const obal = koren.querySelector('[data-nahled-obal]');
+  if (!formular || !obal) return;
+
+  const prekresli = () => {
+    const hod = (klic) => formular.querySelector(`[name="${klic}"]`)?.value.trim() ?? '';
+    const zaskrtnuto = (klic) => Boolean(formular.querySelector(`[name="${klic}"]`)?.checked);
+
+    const naDotaz = zaskrtnuto('cena_na_dotaz');
+    const kurz = {
+      nazev: hod('nazev'),
+      stitek: hod('stitek'),
+      perex: hod('perex'),
+      delka_text: hod('delka_text'),
+      uroven_text: hod('uroven_text'),
+      cena_na_dotaz: naDotaz,
+      cena_hal: naDotaz ? null : naHalere(hod('cena_kc')),
+      aktivni: zaskrtnuto('aktivni'),
+    };
+
+    obal.querySelector('[data-nk]').outerHTML = nahledKarty(kurz);
+    obal.classList.toggle('nahled-obal--skryty', !kurz.aktivni);
+    obal.querySelector('[data-skryto]').hidden = kurz.aktivni;
+
+    // Hlavička drží tytéž údaje, ať nesvítí stará cena nad novým náhledem.
+    const zrcadloNazev = koren.querySelector('[data-zrcadlo="nazev"]');
+    if (zrcadloNazev) zrcadloNazev.textContent = kurz.nazev || 'Název kurzu';
+
+    const zrcadloCena = koren.querySelector('[data-zrcadlo="cena"]');
+    if (zrcadloCena) zrcadloCena.textContent = cenaPopis(kurz);
+
+    const stitek = koren.querySelector('[data-stav-stitek]');
+    if (stitek) {
+      stitek.textContent = kurz.aktivni ? 'zveřejněný' : 'skrytý';
+      stitek.className = 'stitek ' + (kurz.aktivni ? 'stitek--hotovo' : 'stitek--nova');
+    }
+  };
+
+  formular.addEventListener('input', prekresli);
+  formular.addEventListener('change', prekresli);
+  prekresli();
+}
+
+// ------------------------------------------------------------ ukládání karty
 
 function navazFormular(koren, kurz, id) {
   const formular = koren.querySelector('#formular');
   if (!formular || !smiMenit()) return;
 
-  // Cena a „na dotaz“ se vylučují - pole se podle přepínače zamkne, ať není
-  // potřeba uhodnout, co platí.
+  // Cena a "na dotaz" se vylučují - pole se podle přepínače zamkne, ať není
+  // potřeba hádat, co platí.
   const naDotaz = formular.querySelector('[name="cena_na_dotaz"]');
   const cenaPole = formular.querySelector('[name="cena_kc"]');
   const srovnejCenu = () => {
@@ -367,6 +693,7 @@ function navazFormular(koren, kurz, id) {
 
   formular.addEventListener('submit', async (e) => {
     e.preventDefault();
+
     const data = new FormData(formular);
     const hodnota = (klic) => String(data.get(klic) ?? '').trim();
     const prepinac = (klic) => formular.querySelector(`[name="${klic}"]`).checked;
@@ -396,8 +723,37 @@ function navazFormular(koren, kurz, id) {
     const duvod = hodnota('duvod_zmeny_ceny');
     if (duvod) telo.duvod_zmeny_ceny = duvod;
 
+    // Prázdné řádky v seznamech jsou překlep, ne obsah.
+    const pozadavky = praceNaKurzu.pozadavky.map((t) => t.trim()).filter(Boolean);
+    const kroky = praceNaKurzu.kroky
+      .map((k) => ({ nadpis: k.nadpis.trim(), text: k.text.trim() }))
+      .filter((k) => k.nadpis || k.text);
+
+    const bezNadpisu = kroky.findIndex((k) => !k.nadpis);
+    if (bezNadpisu >= 0) {
+      hlaska(`Krok ${bezNadpisu + 1} nemá nadpis. Doplň ho, nebo celý krok smaž.`, 'chyba');
+      return;
+    }
+
     try {
       await api.patch(`/produkty/${id}`, telo);
+
+      // Odrážky a kroky se posílají jen když se s nimi opravdu hýbalo.
+      if (otiskPozadavku(pozadavky) !== praceNaKurzu.pozadavkyPuvodni) {
+        await api.put(`/produkty/${id}/pozadavky`, {
+          polozky: pozadavky.map((text) => ({ text })),
+        });
+      }
+      if (otiskKroku(kroky) !== praceNaKurzu.krokyPuvodni) {
+        await api.put(`/produkty/${id}/kroky`, {
+          polozky: kroky.map((k, i) => ({
+            cislo: String(i + 1).padStart(2, '0'),
+            nadpis: k.nadpis,
+            text: k.text || null,
+          })),
+        });
+      }
+
       hlaska('Uloženo.');
       karta(koren, id);
     } catch (chyba) {
@@ -426,71 +782,6 @@ export function naHalere(text) {
   const cislo = Number(cisty);
   if (!Number.isFinite(cislo)) return null;
   return Math.round(cislo * 100);
-}
-
-// --------------------------------------------- požadavky a průběh
-
-function seznamPolozek({ id, nadpis, popis, polozky, muze }) {
-  return `<div class="panel" style="margin-bottom:16px" data-seznam="${id}">
-      <h2 class="nadpis-" style="font-size:16px;margin-bottom:6px">${esc(nadpis)}</h2>
-      <p class="text-faint" style="margin-bottom:10px">${esc(popis)}</p>
-      <textarea class="pole" rows="6" data-radky
-        ${muze ? '' : 'readonly'}>${esc(polozky.map((p) => p.text).join('\n'))}</textarea>
-      ${muze ? '<div style="margin-top:10px"><button type="button" class="btn btn--obrys" data-ulozit>Uložit odrážky</button></div>' : ''}
-    </div>`;
-}
-
-function seznamKroku(kroky, muze) {
-  // Průběh je textové pole ve tvaru "Nadpis | text" na řádek. Vlastní formulář
-  // s dvěma poli na krok by na telefonu zabral celou obrazovku.
-  const text = kroky.map((k) => `${k.nadpis} | ${k.text ?? ''}`.trim().replace(/\s\|\s*$/, '')).join('\n');
-  return `<div class="panel" style="margin-bottom:16px" data-seznam="kroky">
-      <h2 class="nadpis-" style="font-size:16px;margin-bottom:6px">Jak kurz probíhá</h2>
-      <p class="text-faint" style="margin-bottom:10px">
-        Jeden krok na řádek. Nadpis a popis oddělte svislou čarou:
-        <span class="mono">Teorie | Pátek od 10:00 na hangáru.</span>
-        Čísla kroků doplníme sami.
-      </p>
-      <textarea class="pole" rows="6" data-radky ${muze ? '' : 'readonly'}>${esc(text)}</textarea>
-      ${muze ? '<div style="margin-top:10px"><button type="button" class="btn btn--obrys" data-ulozit>Uložit průběh</button></div>' : ''}
-    </div>`;
-}
-
-function navazSeznamy(koren, kurz, id) {
-  koren.querySelectorAll('[data-seznam]').forEach((panel) => {
-    const druh = panel.dataset.seznam;
-    panel.querySelector('[data-ulozit]')?.addEventListener('click', async () => {
-      const radky = panel.querySelector('[data-radky]').value
-        .split('\n').map((r) => r.trim()).filter(Boolean);
-
-      const polozky = druh === 'kroky'
-        ? radky.map((r) => {
-            const [nadpis, ...zbytek] = r.split('|');
-            return {
-              cislo: null,
-              nadpis: nadpis.trim(),
-              text: zbytek.join('|').trim() || null,
-            };
-          })
-        : radky.map((text) => ({ text }));
-
-      // Čísla kroků se dopočítají, ať je majitelka nemusí přepisovat,
-      // když krok přibude doprostřed.
-      if (druh === 'kroky') {
-        polozky.forEach((p, i) => { p.cislo = String(i + 1).padStart(2, '0'); });
-      }
-
-      const prazdnyNadpis = druh === 'kroky' && polozky.some((p) => !p.nadpis);
-      if (prazdnyNadpis) {
-        hlaska('Každý krok musí mít nadpis před svislou čarou.', 'chyba');
-        return;
-      }
-
-      await api.put(`/produkty/${id}/${druh}`, { polozky });
-      hlaska('Uloženo.');
-      karta(koren, id);
-    });
-  });
 }
 
 // ------------------------------------------------------------- historie cen

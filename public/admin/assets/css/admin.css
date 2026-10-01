@@ -143,7 +143,7 @@ table { border-collapse: collapse; width: 100%; }
    a tlačítko Uložit by nešlo zmáčknout. Na desktopu je --spodni-lista 0. */
 .ulozit-lista {
   position: sticky; bottom: var(--spodni-lista); z-index: 20;
-  padding: 14px 0;
+  padding: 14px 0 16px;
   background: linear-gradient(to top, var(--bg) 72%, transparent);
 }
 
@@ -233,6 +233,8 @@ table { border-collapse: collapse; width: 100%; }
 .pole:focus { border-color: var(--accent); outline: none; }
 .pole--chyba { border-color: var(--chyba); }
 .pole::placeholder { color: var(--ghost); opacity: 1; }
+textarea.pole { min-height: 110px; resize: vertical; line-height: 1.5; }
+select.pole { appearance: none; background-image: none; }
 
 /* Chrome u automaticky vyplněných polí (přihlášení) přebíjí pozadí i barvu
    písma vlastním světlým a kurzor s nimi zčerná. Vnitřní stín je jediná
@@ -244,9 +246,6 @@ table { border-collapse: collapse; width: 100%; }
   caret-color: var(--text);
   box-shadow: inset 0 0 0 1000px var(--panel-2);
 }
-
-textarea.pole { min-height: 110px; resize: vertical; line-height: 1.5; }
-select.pole { appearance: none; background-image: none; }
 
 .prepinac { display: flex; align-items: center; gap: 10px; cursor: pointer; }
 .prepinac__box {
@@ -567,4 +566,194 @@ select.pole { appearance: none; background-image: none; }
 
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; animation: none !important; }
+}
+
+/* ==========================================================================
+   Karta kurzu
+   Ne formulář, ale stránka: hlavička s tím podstatným, bloky podle témat
+   a vedle nich živý náhled, jak kurz uvidí návštěvník webu.
+   Mobile-first — náhled je na telefonu nahoře, sloupce až od 900 px.
+   ========================================================================== */
+
+.karta-hlavicka {
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.karta-hlavicka__vrch {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 12px; margin-bottom: 10px;
+}
+
+.karta-hlavicka__nazev {
+  font-family: var(--font-display);
+  font-size: clamp(22px, 4.5vw, 30px);
+  line-height: 1.1; text-transform: uppercase; margin: 0;
+  /* Dlouhý název bez mezer nesmí roztáhnout layout do strany. */
+  overflow-wrap: anywhere;
+}
+
+/* Řádek drobných údajů pod názvem: cena, délka, adresa na webu. */
+.karta-hlavicka__udaje {
+  display: flex; flex-wrap: wrap; gap: 6px 16px;
+  font-family: var(--font-mono); font-size: 11.5px;
+  letter-spacing: 0.06em; color: var(--faint);
+}
+.karta-hlavicka__udaje strong { color: var(--text-2); font-weight: 500; }
+
+.karta-hlavicka__akce { display: flex; gap: 8px; margin-top: 14px; }
+.karta-hlavicka__akce .btn { flex: 1; }
+
+/* ------------------------------------------------------------- rozvržení */
+
+.karta-rozvrzeni { display: grid; gap: 16px; }
+/* Na telefonu je náhled první — je to odpověď na „jak to bude vypadat“,
+   kvůli které se karta otevírá nejčastěji. */
+.karta-rozvrzeni__nahled { order: -1; }
+
+@media (min-width: 900px) {
+  .karta-rozvrzeni {
+    grid-template-columns: minmax(0, 1fr) 330px;
+    align-items: start;
+  }
+  .karta-rozvrzeni__editace { grid-column: 1; grid-row: 1; }
+  .karta-rozvrzeni__nahled {
+    grid-column: 2; grid-row: 1; order: 0;
+    position: sticky; top: 14px;
+  }
+}
+
+/* ----------------------------------------------------------------- sekce */
+
+.sekce {
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  padding: 16px;
+  margin-bottom: 14px;
+}
+.sekce__hlava { margin-bottom: 14px; }
+.sekce__nadpis {
+  font-family: var(--font-display); font-size: 17px;
+  text-transform: uppercase; letter-spacing: 0.03em; margin: 0;
+}
+.sekce__napoveda {
+  font-size: 12.5px; color: var(--faint); line-height: 1.5; margin-top: 5px;
+}
+
+/* ------------------------------------------------- seznam položek (odrážky) */
+
+.polozky { display: grid; gap: 10px; }
+
+.polozka {
+  display: grid; gap: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  padding: 10px;
+}
+/* Krok má dvě pole pod sebou, popis z nich nemusí být vysoký jako celý
+   formulář - textarea.pole má jinak min-height 110px. */
+.polozka textarea.pole { min-height: 62px; }
+
+/* Jednořádková odrážka: na telefonu tlačítka pod polem (ať je pole široké),
+   od tabletu vedle něj, kde je místa dost. */
+@media (min-width: 600px) {
+  .polozka--radek { grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+}
+.polozka__cislo {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.1em;
+  color: var(--accent);
+}
+/* Šipky a koš vedle sebe, dost velké na prst. */
+.polozka__akce { display: flex; gap: 6px; justify-content: flex-end; }
+.polozka__akce .btn { min-width: 44px; }
+
+.polozky__pridat { margin-top: 10px; }
+
+.polozky__prazdno {
+  font-size: 13px; color: var(--faint); padding: 10px 0;
+}
+
+/* ----------------------------------------------------------------- fotky */
+
+.fotky-misto {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+}
+.fotky-misto__ram {
+  aspect-ratio: 3 / 2;
+  border: 1px dashed var(--line-strong);
+  background: var(--panel-2);
+  display: flex; align-items: center; justify-content: center;
+  text-align: center; padding: 8px;
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--ghost);
+}
+.fotky-misto__ram--titulni { grid-column: 1 / -1; aspect-ratio: 3 / 2; }
+
+@media (min-width: 600px) {
+  .fotky-misto__ram--titulni { grid-column: span 2; }
+}
+
+/* ----------------------------------------------------------------- náhled */
+
+.nahled-obal__popisek {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--faint); margin-bottom: 8px;
+}
+
+/* Vizuálně shodné s .card na veřejném webu (public/assets/css/style.css).
+   Tokeny jsou v obou souborech stejné, takže se to nerozchází na barvách,
+   jen na tom, kdyby se změnila struktura karty na webu. */
+.nk {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  display: flex; flex-direction: column;
+}
+.nk__media {
+  aspect-ratio: 3 / 2;
+  background: var(--panel-2) center / cover no-repeat;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--ghost);
+  position: relative;
+}
+.nk__stitek {
+  position: absolute; top: 0; left: 0;
+  background: var(--bg); color: var(--text);
+  padding: 7px 12px;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+.nk__telo { padding: 18px; display: flex; flex-direction: column; gap: 9px; flex: 1; }
+.nk__nazev {
+  font-family: var(--font-display); font-weight: 500; font-size: 21px;
+  text-transform: uppercase; margin: 0; line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+.nk__text { margin: 0; color: var(--dim); font-size: 13.5px; line-height: 1.55; flex: 1; }
+.nk__meta {
+  display: flex; gap: 16px; flex-wrap: wrap;
+  border-top: 1px solid var(--line); padding-top: 12px;
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
+}
+.nk__pata { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.nk__cena { font-family: var(--font-display); font-size: 23px; line-height: 1.2; }
+.nk__cta {
+  font-family: var(--font-mono); font-size: 10.5px; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--accent); white-space: nowrap;
+}
+@media (max-width: 899px) {
+  /* Na telefonu je náhled nad formulářem. Kdyby si plocha pro fotku vzala
+     celou obrazovku, ke každé úpravě by se muselo dlouho rolovat - karta
+     zůstane čitelná i nižší. */
+  .nk__media { max-height: 150px; }
+}
+
+/* Skrytý kurz: náhled zůstane, ale je jasné, že ho zatím nikdo neuvidí. */
+.nahled-obal--skryty .nk { opacity: 0.55; }
+.nahled-obal__skryto {
+  margin-top: 8px; font-size: 12px; color: var(--varovani); line-height: 1.45;
 }
