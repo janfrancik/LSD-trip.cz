@@ -10,6 +10,7 @@ import config from './config.js';
 import { uklidProslychSession } from './auth/session.js';
 import { uklidStarePokusy } from './auth/limit.js';
 import { uklidNepouzitePrilohy } from './akceptace/prilohy.js';
+import { uklidOsireleSoubory } from './soubory.js';
 
 const HODINA_MS = 60 * 60 * 1000;
 
@@ -19,10 +20,15 @@ async function uklid() {
     const pokusy = await uklidStarePokusy();
     // Snímky obrazovky, které někdo nahrál a formulář pak neodeslal.
     const prilohy = config.akceptaceZapnuta ? await uklidNepouzitePrilohy() : 0;
-    if (session || pokusy || prilohy) {
+    // Fotky smazané v administraci, na kterých už nic nevisí. Z disku zmizí
+    // až den po smazání - do té doby je šance říct si, že to byl omyl.
+    const fotky = await uklidOsireleSoubory();
+
+    if (session || pokusy || prilohy || fotky) {
       console.log(
         `[údržba] smazáno ${session} prošlých přihlášení, ${pokusy} starých pokusů` +
-          (prilohy ? `, ${prilohy} nepoužitých příloh` : '')
+          (prilohy ? `, ${prilohy} nepoužitých příloh` : '') +
+          (fotky ? `, ${fotky} osiřelých souborů` : '')
       );
     }
   } catch (err) {

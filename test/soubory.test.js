@@ -7,7 +7,7 @@
 
 import test, { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { stat } from 'node:fs/promises';
+import { stat, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import {
   pripravDatabazi, vycistiData, spustServer, vytvorKlienta, vytvorUzivatele, testovaciHeslo,
@@ -253,6 +253,42 @@ test('neexistující ani smazaný obrázek se nezobrazí', async () => {
 
   await klient.del(`/api/admin/soubory/${fotka.id}`);
   assert.equal((await fetch(server.url + fotka.url)).status, 404, 'smazaná fotka se přestane zobrazovat');
+});
+
+// ------------------------------------------------------------------- úklid
+
+test('smazaná fotka, na které nic nevisí, zmizí den po smazání i z disku', async () => {
+  const klient = await prihlas();
+  const { data: fotka } = await nahraj(klient);
+
+  const [pred] = await pool.query('SELECT cesta FROM soubory WHERE id = ?', [fotka.id]);
+  const config = (await import('../src/config.js')).default;
+  const naDisku = path.join(config.uploadDir, pred[0].cesta);
+  await stat(naDisku); // existuje
+
+  const { uklidOsireleSoubory } = await import('../src/soubory.js');
+
+  // Čerstvě smazaná se ještě neuklízí - je den na rozmyšlenou.
+  await klient.del(`/api/admin/soubory/${fotka.id}`);
+  assert.equal(await uklidOsireleSoubory(), 0);
+  await stat(naDisku);
+
+  // Po dni ano.
+  await pool.query('UPDATE soubory SET smazano_at = DATE_SUB(NOW(), INTERVAL 2 DAY) WHERE id = ?', [
+    fotka.id,
+  ]);
+  assert.equal(await uklidOsireleSoubory(), 1);
+
+  const [po] = await pool.query('SELECT COUNT(*) AS pocet FROM soubory WHERE id = ?', [fotka.id]);
+  assert.equal(po[0].pocet, 0);
+  await assert.rejects(() => stat(naDisku), 'soubor zmizí i z disku');
+});
+
+test('úklid se opravdu spouští, nejen existuje', async () => {
+  // Napsat úklidovou funkci a zapomenout ji zavolat je snadné a nikdo si
+  // toho nevšimne - projeví se to až plným diskem za půl roku.
+  const udrzba = await readFile(new URL('../src/udrzba.js', import.meta.url), 'utf8');
+  assert.match(udrzba, /uklidOsireleSoubory/, 'src/udrzba.js musí osiřelé soubory uklízet');
 });
 
 test('cesta k souboru nevede mimo adresář s uploady', async () => {
