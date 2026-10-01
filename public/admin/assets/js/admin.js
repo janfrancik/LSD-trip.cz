@@ -10,6 +10,7 @@ import * as prihlaseni from './obrazovky/prihlaseni.js';
 import * as noveHeslo from './obrazovky/nove-heslo.js';
 import * as dashboard from './obrazovky/dashboard.js';
 import * as poptavky from './obrazovky/poptavky.js';
+import * as kurzy from './obrazovky/kurzy.js';
 import * as uzivatele from './obrazovky/uzivatele.js';
 import * as emaily from './obrazovky/emaily.js';
 import * as audit from './obrazovky/audit.js';
@@ -25,6 +26,7 @@ const ZAKLAD = '/admin';
 const OBRAZOVKY = [
   { cesta: '', nazev: 'Přehled', ikona: '◆', oblast: 'dashboard', modul: dashboard, vMenu: true },
   { cesta: 'poptavky', nazev: 'Poptávky', ikona: '✉', oblast: 'poptavky', modul: poptavky, vMenu: true },
+  { cesta: 'kurzy', nazev: 'Kurzy', ikona: '▲', oblast: 'produkty', modul: kurzy, vMenu: true },
   { cesta: 'emaily', nazev: 'E-maily', ikona: '▤', oblast: 'emaily_log', modul: emaily, vMenu: true },
   { cesta: 'uzivatele', nazev: 'Uživatelé', ikona: '☺', oblast: 'uzivatele', modul: uzivatele, vMenu: true },
   { cesta: 'nastaveni', nazev: 'Nastavení', ikona: '⚙', oblast: 'nastaveni', modul: nastaveni, vMenu: true },

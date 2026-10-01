@@ -90,8 +90,15 @@ export async function vycistiData(pool) {
     'sessions',
     'nastaveni',
     'poptavky',
+    'cenik_historie',
+    'produkt_kroky',
+    'produkt_pozadavky',
+    'produkty',
     'uzivatele',
   ];
+  // `dph_sazby` se schválně NEmaže: je to číselník, který naplnila migrace.
+  // Bez něj by nový produkt neměl co dostat jako výchozí sazbu a testy by
+  // padaly na něčem, co s nimi nesouvisí.
   await pool.query('SET FOREIGN_KEY_CHECKS = 0');
   for (const t of tabulky) await pool.query(`TRUNCATE TABLE \`${t}\``);
   await pool.query('SET FOREIGN_KEY_CHECKS = 1');

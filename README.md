@@ -11,7 +11,10 @@ Administrace na `/admin` se staví po fázích podle [docs/plan-administrace.md]
 
 Modul **Kurzy** má vlastní schválené zadání v [docs/plan-kurzy.md](docs/plan-kurzy.md)
 (datový model, API, obrazovky, etapy E1–E5, rozhodnutí). Staví se jako první nad
-modelem produktů a termínů z plánu administrace.
+modelem produktů a termínů z plánu administrace. **Hotová je etapa E1** — sazby DPH
+a kurzy v administraci (`/admin/kurzy`): texty, cena, DPH, požadavky na účastníka,
+průběh kurzu, zveřejnění, pořadí a historie cen. Veřejný web zatím kurzy bere
+z `data.js`, napojí se v E4.
 
 ## Struktura
 
@@ -177,6 +180,11 @@ středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >
 | `001_init.sql` | poptávky z kontaktního formuláře |
 | `002_uzivatele_role_audit.sql` | uživatelé, přihlášení, reset hesla, audit, nastavení |
 | `003_emaily_poptavky.sql` | log e-mailů, rozšíření poptávek o stavy a vazby |
+| `004_akceptace.sql` | modul Ke schválení: verze, úkoly, výsledky, hlášení, přílohy |
+| `005_casy_v_utc.sql` | převod časů na UTC |
+| `006_schranka_emailu.sql` | testovací schránka e-mailů |
+| `007_akceptace_testeri.sql` | přiřazení testerů k verzi, výsledky po lidech |
+| `008_produkty_a_cenik.sql` | sazby DPH, produkty (kurzy), požadavky, průběh, historie cen |
 
 ## API
 
@@ -198,6 +206,8 @@ povinná hlavička `X-CSRF-Token` shodná s cookie `lsd_csrf`.
 | Přehled | `GET /dashboard` |
 | Uživatelé | `GET|POST /uzivatele`, `GET|PATCH|DELETE /uzivatele/:id`, `POST /uzivatele/:id/obnovit`, `POST /uzivatele/:id/reset-hesla` |
 | Poptávky | `GET /poptavky`, `GET|PATCH|DELETE /poptavky/:id`, `POST /poptavky/:id/odpovedet`, `POST /poptavky/:id/obnovit` |
+| Produkty (kurzy) | `GET|POST /produkty`, `GET|PATCH|DELETE /produkty/:id`, `POST /produkty/:id/obnovit`, `POST /produkty/poradi`, `PUT /produkty/:id/pozadavky`, `PUT /produkty/:id/kroky`, `GET /produkty/:id/cenik-historie` |
+| Sazby DPH | `GET /dph-sazby`, `PATCH /dph-sazby/:id` |
 | Audit | `GET /audit` |
 | Nastavení | `GET|PATCH /nastaveni`, `GET /nastaveni/integrace` |
 | E-maily | `GET /emaily`, `GET /emaily/:id`, `GET /emaily/:id/telo`, `GET /emaily/:id/priloha/:prilohaId` |

@@ -132,6 +132,15 @@ table { border-collapse: collapse; width: 100%; }
   max-width: 1180px; width: 100%; margin: 0 auto;
 }
 
+/* Ukládací lišta u dlouhých formulářů (karta kurzu). Drží se u spodního
+   okraje, ale nad spodní navigací — na mobilu by se jinak schovala pod ni
+   a tlačítko Uložit by nešlo zmáčknout. Na desktopu je --spodni-lista 0. */
+.ulozit-lista {
+  position: sticky; bottom: var(--spodni-lista); z-index: 20;
+  padding: 14px 0;
+  background: linear-gradient(to top, var(--bg) 72%, transparent);
+}
+
 /* Spodní lišta na mobilu — hlavní navigace pro použití jednou rukou. */
 .spodni-lista {
   position: fixed; bottom: 0; left: 0; right: 0; z-index: 30;

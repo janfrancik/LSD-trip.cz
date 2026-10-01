@@ -7,6 +7,8 @@ const ENTITY = [
   { hodnota: '', popis: 'Všechno' },
   { hodnota: 'uzivatel', popis: 'Uživatelé' },
   { hodnota: 'poptavka', popis: 'Poptávky' },
+  { hodnota: 'produkt', popis: 'Kurzy a produkty' },
+  { hodnota: 'dph_sazba', popis: 'Sazby DPH' },
   { hodnota: 'nastaveni', popis: 'Nastavení' },
 ];
 
