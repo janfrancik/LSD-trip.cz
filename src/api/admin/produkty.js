@@ -183,6 +183,7 @@ async function nactiDetail(id) {
   // na kterou narazí dřív, a nemají se o pořadí starat.
   const [fotky] = await pool.query(
     `SELECT s.id, s.kod, s.puvodni_nazev, s.mime, s.velikost_b, s.alt, s.created_at,
+            s.cesta, s.sirka, s.vyska, s.varianty,
             f.poradi, f.titulni
        FROM produkt_fotky f
        JOIN soubory s ON s.id = f.soubor_id

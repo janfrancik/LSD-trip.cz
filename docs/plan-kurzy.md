@@ -37,7 +37,7 @@ a `sloty_letadla` — u kurzů nedávají smysl a doplní se později `ADD COLUM
 
 ---
 
-## 2. Migrace 008–011
+## 2. Migrace 008–012
 
 Všechny tabulky zavádí tatáž verze, která je používá, takže platí výjimka
 z pravidla expand/contract v [CLAUDE.md](../CLAUDE.md): **žádný `DROP`, žádný
@@ -75,14 +75,23 @@ cenik_historie     id, entita, entita_id, cena_hal_pred NULL, cena_hal_po,
 
 ### `009_soubory_a_fotky.sql`
 ```
-soubory            id, cesta UNIQUE, puvodni_nazev, mime, velikost_b, sirka, vyska,
+soubory            id, kod UNIQUE, cesta UNIQUE, puvodni_nazev, mime, velikost_b, sirka, vyska,
                    varianty JSON, alt, zdroj ENUM('upload','import'), zdroj_url NULL,
                    hash_sha256 CHAR(64), nahral_id, smazano_at, created_at
                    KEY (hash_sha256)
 produkt_fotky      produkt_id, soubor_id, poradi, titulni    PK (produkt_id, soubor_id)
 ```
 
-### `010_mista_a_terminy.sql`
+### `010_soubory_kod.sql` (doplněno po E2)
+```
+soubory.kod CHAR(24) UNIQUE   -- náhodný kód do veřejné adresy /media/<kod>
+```
+Pořadové číslo v adrese se dalo projít po řadě, a tím i prohlédnout fotky
+kurzu, který ještě není zveřejněný. Ve stejné dávce přibylo zmenšování na
+1600 px pro web (`sharp`, sloupce `sirka`/`vyska`/`varianty` už z `009`) —
+proto má E3 migraci `011`, ne `010`.
+
+### `011_mista_a_terminy.sql`
 ```
 mista              id, nazev, adresa, gps_lat, gps_lon, aktivni
 termin_serie       id, nazev, pravidlo JSON, vytvoril_id, created_at
@@ -100,7 +109,7 @@ termin_instruktori termin_id, uzivatel_id, role ENUM('tandem','aff','kamera','ba
 `obsazeno_mist` je **cache pro výpisy**. Autoritativní je součet z `rezervace`
 uvnitř transakce (§5), cache se přepočítá v téže transakci.
 
-### `011_zakaznici_a_prihlasky.sql`
+### `012_zakaznici_a_prihlasky.sql`
 ```
 zakaznici          id, email, jmeno, telefon, mesto, ulice, psc, ico NULL, dic NULL,
                    poznamka, gdpr_souhlas_at, marketing_souhlas_at,
@@ -211,9 +220,9 @@ jejím potvrzení. Do `main` nic bez výslovného souhlasu.**
 | --- | --- | --- |
 | **E1** | DPH číselník + kurzy v administraci: texty, cena, DPH, požadavky, průběh, aktivní/skrytý, pořadí, historie cen. Veřejný web beze změny. | `008` |
 | **E2** | Fotky: `soubory` + `produkt_fotky`, upload z mobilu, alt texty, titulní foto. Hlídač natvrdo napsaných domén nad `public/` se **přepne z varování na tvrdý assert** — viz poznámku pod tabulkou. | `009` |
-| **E3** | Místa + termíny kurzů: kapacita, stav, hromadné vytvoření, kopie dne, zrušení s důvodem, instruktoři. Soupiska zatím prázdná. | `010` |
+| **E3** | Místa + termíny kurzů: kapacita, stav, hromadné vytvoření, kopie dne, zrušení s důvodem, instruktoři. Soupiska zatím prázdná. | `011` |
 | **E4** | **Veřejná část kurzů z API** + **SSR pilot** pro `/kurzy` a `/kurz/:slug` (normální URL, history API). Odstřihnutí `COURSES` a `COURSE_CHECKLIST` z `data.js`. | — |
-| **E5** | Přihlášky: zákazníci, transakční kapacita, veřejný formulář, e-maily, stavy, soupiska naostro, export CSV. | `011` |
+| **E5** | Přihlášky: zákazníci, transakční kapacita, veřejný formulář, e-maily, stavy, soupiska naostro, export CSV. | `012` |
 
 **Hlídač domén nad `public/` (upřesněno při E2).** Úplně prázdný být ještě nemůže:
 třináct zbylých adres jsou fotky na titulce (hero, produkty, aktuality, tým, galerie)

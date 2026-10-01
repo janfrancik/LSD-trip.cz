@@ -18,7 +18,7 @@
 
 import express from 'express';
 import { asyncHandler, chybaNenalezeno } from '../chyby.js';
-import { nactiSouborPodleKodu, cestaKSouboru, DELKA_KODU } from '../soubory.js';
+import { nactiSouborPodleKodu, cestaKSouboru, verzeProWeb, DELKA_KODU } from '../soubory.js';
 
 const router = express.Router();
 
@@ -28,7 +28,9 @@ router.get(
     const soubor = await nactiSouborPodleKodu(req.params.kod);
     if (!soubor) throw chybaNenalezeno('Obrázek nenalezen.');
 
-    const cesta = cestaKSouboru(soubor.cesta);
+    // Ven jde webová verze (delší strana 1600 px), ne originál z mobilu.
+    // Originál zůstává ve volume jako záloha a zdroj pro další velikosti.
+    const cesta = cestaKSouboru(verzeProWeb(soubor).cesta);
     if (!cesta) throw chybaNenalezeno('Obrázek nenalezen.');
 
     // Obsah souboru se nikdy nemění, takže se smí cachovat natvrdo.

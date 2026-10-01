@@ -456,11 +456,28 @@ function sekceFotky() {
               + Přidat fotku
             </button>
             <p class="sekce__napoveda" style="margin-top:8px">
-              Z telefonu můžeš fotit rovnou. Maximum ${MAX_BAJTU_FOTKA / 1024 / 1024} MB na fotku —
-              zmenšování na serveru přijde s fotogalerií.
+              Z telefonu můžeš fotit rovnou. Maximum ${MAX_BAJTU_FOTKA / 1024 / 1024} MB na fotku.
+              Pro web se fotka zmenší sama, originál zůstane uložený.
             </p>
           </div>` : ''}
       </div>`
+  );
+}
+
+// Co se opravdu posílá na web, a u zmenšené fotky i kolik se tím ušetřilo.
+// Není to ozdoba: majitelka tak vidí, že se s fotkou z mobilu něco stalo,
+// a nemusí se bát, že web stahuje pětimegový originál.
+function popisVelikosti(f) {
+  const velikost = (b) =>
+    b >= 1024 * 1024
+      ? `${(b / 1024 / 1024).toFixed(1).replace('.', ',')} MB` // česky s desetinnou čárkou
+      : `${Math.round(b / 1024)} kB`;
+  const rozmer = f.sirka && f.vyska ? `${f.sirka} × ${f.vyska} px, ` : '';
+  const zmensena = f.puvodni_velikost_b && f.puvodni_velikost_b > f.velikost_b;
+  return esc(
+    rozmer +
+      velikost(f.velikost_b ?? 0) +
+      (zmensena ? ` (zmenšeno z ${velikost(f.puvodni_velikost_b)})` : '')
   );
 }
 
@@ -488,6 +505,7 @@ function vykresliFotky(koren) {
                placeholder="Co je na fotce — např. „Instruktor s účastníkem po přistání“"
                aria-label="Popis fotky ${i + 1}" ${muze ? '' : 'readonly'} />
         ${!f.alt ? '<p class="fotka__chybi-popis">Bez popisu. Doplň ho, ať fotce rozumí i čtečka.</p>' : ''}
+        <p class="fotka__rozmery">${popisVelikosti(f)}</p>
         ${muze ? `<div class="polozka__akce">
           <button type="button" class="btn btn--obrys btn--maly" data-fotka-posun="${i}" data-smer="-1"
                   ${i === 0 ? 'disabled' : ''} aria-label="Posunout dopředu">↑</button>

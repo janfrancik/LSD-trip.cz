@@ -729,6 +729,7 @@ select.pole { appearance: none; background-image: none; }
 }
 
 .fotka__chybi-popis { font-size: 12px; color: var(--varovani); line-height: 1.45; }
+.fotka__rozmery { font-size: 12px; color: var(--faint); line-height: 1.45; }
 
 .fotky__pridat { margin-top: 12px; }
 

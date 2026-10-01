@@ -11,7 +11,7 @@ import { asyncHandler, chybaNenalezeno } from '../../chyby.js';
 import { zvaliduj, schemaSeznam } from '../../validace.js';
 import { vyzaduje } from '../../auth/opravneni.js';
 import { zapisAudit } from '../../audit.js';
-import { ulozSoubor, srovnejFotkyProduktu, MAX_BAJTU } from '../../soubory.js';
+import { ulozSoubor, srovnejFotkyProduktu, verzeProWeb, MAX_BAJTU } from '../../soubory.js';
 
 const router = express.Router();
 
@@ -162,12 +162,19 @@ router.delete(
 // vyzvedne, a údaje pro zobrazení. V adrese je náhodný kód, ne id: podle
 // pořadových čísel se dalo projít i fotky nezveřejněného kurzu.
 export function prosit(soubor) {
+  // Rozměry a velikost jsou toho, co se opravdu posílá na web - u fotky
+  // z mobilu je to zmenšená verze, ne originál. Majitelka tak v administraci
+  // vidí, co návštěvník stahuje.
+  const web = verzeProWeb(soubor);
   return {
     id: soubor.id,
     url: `/media/${soubor.kod}`,
     nazev: soubor.puvodni_nazev,
     mime: soubor.mime,
-    velikost_b: soubor.velikost_b,
+    sirka: web.sirka,
+    vyska: web.vyska,
+    velikost_b: web.velikost_b,
+    puvodni_velikost_b: soubor.velikost_b,
     alt: soubor.alt,
     created_at: soubor.created_at,
     ...(soubor.uzJeNahrany !== undefined ? { uz_je_nahrany: soubor.uzJeNahrany } : {}),

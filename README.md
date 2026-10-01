@@ -42,6 +42,7 @@ docs/akceptace/*.yml         zadání akceptačních testů (importuje se při n
 
 scripts/migrate.js           spouštěč migrací, stav v tabulce _migrace
 scripts/vytvor-uzivatele.js  založení uživatele administrace
+scripts/prepocitej-fotky.js  dopočet webových verzí u fotek nahraných dřív
 scripts/zaloha.sh            denní záloha databáze a fotek (cron na VPS)
 migrations/*.sql             číslované migrace schématu
 test/                        testy (node:test) proti skutečné databázi
@@ -492,8 +493,34 @@ U produktu je první fotka v pořadí **titulní** — ta velká na kartě. Že 
 hlídá aplikace v transakci; unikátní index by to neuhlídal, protože MariaDB bere každou
 `NULL` jako jinou hodnotu. Po smazání titulní se pořadí srovná a titulní se stane další.
 
-Zmenšování, převod na WebP a náhledy přijdou s fotogalerií (fáze 5). Do té doby se
-obrázek ukládá tak, jak přišel, a limit je 10 MB na fotku.
+### Zmenšení pro web
+
+Originál se ukládá tak, jak přišel, a vedle něj vzniká **webová verze zmenšená na
+1600 px na delší straně** (`sharp`). `/media/:kod` posílá tuhle verzi; originál zůstává
+ve volume jako záloha a zdroj pro další velikosti. Fotka z mobilu má klidně 4000 px
+a 5 MB — posílat ji návštěvníkovi v původní velikosti je plýtvání jeho daty, a přitom
+se originál hodí, aby se při další změně nemusel nahrávat znovu.
+
+Formát se zachovává (JPEG → JPEG). Převod na WebP a malé náhledy přijdou s fotogalerií
+(fáze 5) — znamenají druhou adresu a `<picture>` na webu, ne jen jiný zápis souboru.
+
+Zmenšení **narovnává fotku podle EXIF** (`autoOrient`). Fotka z mobilu bývá uložená
+naležato s příznakem „otoč o 90°“ a zmenšením se EXIF zahodí — bez narovnání by na webu
+ležela na boku. V `soubory.sirka`/`vyska` jsou proto rozměry tak, jak je člověk vidí.
+
+Obrázek, který projde kontrolou magických bajtů, ale nedá se přečíst (nenahrál se celý),
+se odmítne ještě **před** uložením — na disku po něm nic nezůstane.
+
+Ve `varianty` je `{"web": {"cesta": …, "sirka": …, "vyska": …, "velikost_b": …}}`, nebo
+`{"web": null, "proc": "…"}` u fotky, která zmenšení nepotřebuje nebo u které selhalo.
+Nikdy tam není `NULL` po pokusu, aby se údržba nepokoušela pořád znovu o totéž.
+
+Fotky **bez** webové verze (nahrané dřív, přinesené importem) dopočítává hodinová údržba
+po dávkách; `node scripts/prepocitej-fotky.js` je totéž hned a s výpisem. Opakované
+spuštění nic nezkazí, originály zůstávají nedotčené.
+
+Limit je 10 MB na fotku — ne kvůli místu na disku, ale kvůli tomu, že obrázek chodí
+jako base64 v JSON a tělo požadavku má strop 14 MB.
 
 ## Doména v kódu
 

@@ -9,6 +9,7 @@ import test, { before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { stat, readFile } from 'node:fs/promises';
 import path from 'node:path';
+import sharp from 'sharp';
 import {
   pripravDatabazi, vycistiData, spustServer, vytvorKlienta, vytvorUzivatele, testovaciHeslo,
 } from './pomocnik.js';
@@ -282,6 +283,161 @@ test('každá fotka má svůj vlastní kód', async () => {
   for (const { kod } of rows) assert.match(kod, /^[0-9a-f]{24}$/);
 });
 
+// ------------------------------------------------------ zmenšení pro web
+
+// Fotka z mobilu má klidně 4000 px na delší straně. Ty tady vyrábíme menší,
+// ať testy netrvají, ale pořád nad hranicí 1600 px.
+async function velkaFotka({ sirka = 2400, vyska = 1200, orientace = null, barva = 40 } = {}) {
+  let obraz = sharp({
+    create: { width: sirka, height: vyska, channels: 3, background: { r: barva, g: 90, b: 160 } },
+  }).jpeg();
+  if (orientace) obraz = obraz.withMetadata({ orientation: orientace });
+  return (await obraz.toBuffer()).toString('base64');
+}
+
+async function nactiVarianty(pool, id) {
+  const [rows] = await pool.query('SELECT sirka, vyska, varianty FROM soubory WHERE id = ?', [id]);
+  const v = rows[0].varianty;
+  return { ...rows[0], varianty: typeof v === 'string' ? JSON.parse(v) : v };
+}
+
+test('velká fotka se pro web zmenší na 1600 px a originál zůstane', async () => {
+  const klient = await prihlas();
+  const obsah = await velkaFotka();
+
+  const odpoved = await klient.post('/api/admin/soubory', {
+    obsah: `data:image/jpeg;base64,${obsah}`,
+    nazev: 'z-mobilu.jpg',
+  });
+  assert.equal(odpoved.status, 201);
+
+  // Administrace ukazuje rozměry a velikost toho, co se opravdu posílá na web.
+  assert.equal(odpoved.data.sirka, 1600);
+  assert.equal(odpoved.data.vyska, 800);
+  assert.ok(
+    odpoved.data.velikost_b < odpoved.data.puvodni_velikost_b,
+    'webová verze musí být menší než originál'
+  );
+
+  const ulozene = await nactiVarianty(pool, odpoved.data.id);
+  assert.equal(ulozene.sirka, 2400, 'u originálu zůstávají jeho rozměry');
+  assert.equal(ulozene.vyska, 1200);
+  assert.equal(ulozene.varianty.web.sirka, 1600);
+
+  // Na disku leží obojí.
+  const config = (await import('../src/config.js')).default;
+  const [rows] = await pool.query('SELECT cesta FROM soubory WHERE id = ?', [odpoved.data.id]);
+  const original = await stat(path.join(config.uploadDir, rows[0].cesta));
+  const webova = await stat(path.join(config.uploadDir, ulozene.varianty.web.cesta));
+  assert.ok(original.size > webova.size, 'originál se nepřepsal');
+
+  // A /media posílá tu zmenšenou.
+  const stazene = await fetch(server.url + odpoved.data.url);
+  const bajty = Buffer.from(await stazene.arrayBuffer());
+  assert.equal(bajty.length, webova.size);
+  const popis = await sharp(bajty).metadata();
+  assert.equal(popis.width, 1600);
+});
+
+test('fotka, která je už dost malá, se znovu nepřepisuje', async () => {
+  const klient = await prihlas();
+  const { data: fotka } = await nahraj(klient); // 1×1 PNG
+
+  assert.equal(fotka.sirka, 1);
+  assert.equal(fotka.velikost_b, fotka.puvodni_velikost_b);
+
+  const ulozene = await nactiVarianty(pool, fotka.id);
+  assert.equal(ulozene.varianty.web, null);
+  assert.match(ulozene.varianty.proc, /dost malý/);
+
+  // Posílá se originál, bit po bitu.
+  const stazene = Buffer.from(await (await fetch(server.url + fotka.url)).arrayBuffer());
+  assert.equal(stazene.toString('base64'), PNG_1X1);
+});
+
+test('fotka vyfocená na boku je na webu narovnaná', async () => {
+  // Mobil fotku uloží naležato a připíše do EXIF, že se má otočit. Zmenšením
+  // se EXIF zahodí, takže se otočení musí propsat do pixelů - jinak by
+  // na webu ležela na boku.
+  const klient = await prihlas();
+  const obsah = await velkaFotka({ orientace: 6, barva: 70 });
+
+  const { data: fotka } = await klient.post('/api/admin/soubory', {
+    obsah: `data:image/jpeg;base64,${obsah}`,
+  });
+
+  // Administrace ukazuje rozměry webové verze - tedy už narovnané, na výšku.
+  assert.equal(fotka.sirka, 800);
+  assert.equal(fotka.vyska, 1600);
+
+  const ulozene = await nactiVarianty(pool, fotka.id);
+  assert.equal(ulozene.sirka, 1200, 'u originálu jsou rozměry prohozené, jak ho člověk uvidí');
+  assert.equal(ulozene.vyska, 2400);
+
+  const bajty = Buffer.from(await (await fetch(server.url + fotka.url)).arrayBuffer());
+  const popis = await sharp(bajty).metadata();
+  assert.equal(popis.width, 800);
+  assert.equal(popis.height, 1600);
+  assert.ok(!popis.orientation || popis.orientation === 1, 'otočení je v pixelech, ne v EXIF');
+});
+
+test('torzo obrázku se odmítne, i když má správnou hlavičku', async () => {
+  const klient = await prihlas();
+  // Začátek JPEG, zbytek nesmysl - magické bajty projdou, obrázek ne.
+  const torzo = Buffer.concat([
+    Buffer.from([0xff, 0xd8, 0xff, 0xe0]),
+    Buffer.alloc(200, 0x41),
+  ]).toString('base64');
+
+  const odpoved = await klient.post('/api/admin/soubory', {
+    obsah: `data:image/jpeg;base64,${torzo}`,
+  });
+
+  assert.equal(odpoved.status, 400);
+  assert.match(odpoved.data.chyba, /nepodařilo přečíst/i);
+
+  const [rows] = await pool.query('SELECT COUNT(*) AS pocet FROM soubory');
+  assert.equal(rows[0].pocet, 0, 'po odmítnutí nesmí zůstat ani záznam, ani soubor');
+});
+
+test('fotce bez webové verze se dopočítá', async () => {
+  // Takhle jsou na tom fotky nahrané dřív, než se zmenšování zavedlo,
+  // a tak přijdou i fotky z importu starého webu (fáze 5).
+  const klient = await prihlas();
+  const { data: fotka } = await klient.post('/api/admin/soubory', {
+    obsah: `data:image/jpeg;base64,${await velkaFotka({ barva: 120 })}`,
+  });
+  await pool.query('UPDATE soubory SET sirka = NULL, vyska = NULL, varianty = NULL WHERE id = ?', [
+    fotka.id,
+  ]);
+
+  const { dopocitejChybejiciVarianty } = await import('../src/soubory.js');
+  assert.equal(await dopocitejChybejiciVarianty(), 1);
+
+  const ulozene = await nactiVarianty(pool, fotka.id);
+  assert.equal(ulozene.sirka, 2400);
+  assert.equal(ulozene.varianty.web.sirka, 1600);
+
+  // Druhé spuštění už nemá co dělat.
+  assert.equal(await dopocitejChybejiciVarianty(), 0);
+});
+
+test('fotka, kterou se nepodařilo přečíst, se nezkouší pořád znovu', async () => {
+  const klient = await prihlas();
+  const { data: fotka } = await nahraj(klient);
+  await pool.query(
+    "UPDATE soubory SET varianty = NULL, cesta = 'produkty/2026-10/neexistuje.png' WHERE id = ?",
+    [fotka.id]
+  );
+
+  const { dopocitejChybejiciVarianty } = await import('../src/soubory.js');
+  assert.equal(await dopocitejChybejiciVarianty(), 0);
+
+  const ulozene = await nactiVarianty(pool, fotka.id);
+  assert.equal(ulozene.varianty.web, null, 'zapíše se pokus, ne NULL');
+  assert.equal(await dopocitejChybejiciVarianty(), 0, 'podruhé už se o ni nepokouší');
+});
+
 // ------------------------------------------------------------------- úklid
 
 test('smazaná fotka, na které nic nevisí, zmizí den po smazání i z disku', async () => {
@@ -311,11 +467,42 @@ test('smazaná fotka, na které nic nevisí, zmizí den po smazání i z disku',
   await assert.rejects(() => stat(naDisku), 'soubor zmizí i z disku');
 });
 
-test('úklid se opravdu spouští, nejen existuje', async () => {
+test('z disku zmizí i webová verze, ne jen originál', async () => {
+  const klient = await prihlas();
+  const { data: fotka } = await klient.post('/api/admin/soubory', {
+    obsah: `data:image/jpeg;base64,${await velkaFotka({ barva: 200 })}`,
+  });
+
+  const config = (await import('../src/config.js')).default;
+  const ulozene = await nactiVarianty(pool, fotka.id);
+  const [rows] = await pool.query('SELECT cesta FROM soubory WHERE id = ?', [fotka.id]);
+  const cesty = [rows[0].cesta, ulozene.varianty.web.cesta].map((c) =>
+    path.join(config.uploadDir, c)
+  );
+  for (const cesta of cesty) await stat(cesta);
+
+  await klient.del(`/api/admin/soubory/${fotka.id}`);
+  await pool.query('UPDATE soubory SET smazano_at = DATE_SUB(NOW(), INTERVAL 2 DAY) WHERE id = ?', [
+    fotka.id,
+  ]);
+  const { uklidOsireleSoubory } = await import('../src/soubory.js');
+  assert.equal(await uklidOsireleSoubory(), 1);
+
+  for (const cesta of cesty) {
+    await assert.rejects(() => stat(cesta), `${path.basename(cesta)} má zmizet`);
+  }
+});
+
+test('úklid i dopočet webových verzí se opravdu spouští, nejen existují', async () => {
   // Napsat úklidovou funkci a zapomenout ji zavolat je snadné a nikdo si
   // toho nevšimne - projeví se to až plným diskem za půl roku.
   const udrzba = await readFile(new URL('../src/udrzba.js', import.meta.url), 'utf8');
   assert.match(udrzba, /uklidOsireleSoubory/, 'src/udrzba.js musí osiřelé soubory uklízet');
+  assert.match(
+    udrzba,
+    /dopocitejChybejiciVarianty/,
+    'src/udrzba.js musí dopočítávat chybějící webové verze'
+  );
 });
 
 test('cesta k souboru nevede mimo adresář s uploady', async () => {
