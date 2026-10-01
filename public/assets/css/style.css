@@ -4,6 +4,11 @@
    ========================================================================== */
 
 :root {
+  /* Web je tmavý, ale prohlížeč to sám nepozná. Bez tohohle řádku kreslí
+     nativní části formulářů ve světlém režimu - kurzor je v polích černý
+     na černém. Týká se poptávky i kontaktního formuláře. */
+  color-scheme: dark;
+
   --bg:        #0B0B0C;
   --panel:     #101012;
   --panel-2:   #16161A;
@@ -1264,6 +1269,16 @@ ul { margin: 0; padding: 0; list-style: none; }
 .field:hover { border-color: rgba(255, 255, 255, 0.32); }
 .field:focus { border-color: var(--accent); }
 .field::placeholder { color: var(--ghost); }
+/* Výslovně, i když to color-scheme: dark řeší — kurzor je to jediné,
+   co člověk v poli hledá očima, a nesmí zmizet ani ve starším prohlížeči. */
+.field { caret-color: var(--text); }
+.field:-webkit-autofill,
+.field:-webkit-autofill:hover,
+.field:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  box-shadow: inset 0 0 0 1000px var(--panel);
+}
 
 .field--onpanel { background: var(--panel); }
 

@@ -8,6 +8,12 @@
    ========================================================================== */
 
 :root {
+  /* Administrace je tmavá, ale prohlížeč to sám nepozná. Bez tohohle řádku
+     kreslí nativní části formulářů ve světlém režimu - textový kurzor je
+     v polích černý na černém a není ho vidět, stejně tak rozbalený seznam
+     u <select>, kalendář u data, šipky u čísel a posuvníky. */
+  color-scheme: dark;
+
   --bg:        #0B0B0C;
   --panel:     #101012;
   --panel-2:   #16161A;
@@ -220,9 +226,25 @@ table { border-collapse: collapse; width: 100%; }
   background: var(--panel-2); color: var(--text);
   border: 1px solid var(--line); border-radius: var(--radius);
   font-size: 16px; /* 16px, aby iOS při zaostření nezvětšoval stránku */
+  /* Výslovně, i když color-scheme: dark to řeší - kurzor je to jediné,
+     co uživatel hledá očima, a nesmí zmizet ani ve starším prohlížeči. */
+  caret-color: var(--text);
 }
 .pole:focus { border-color: var(--accent); outline: none; }
 .pole--chyba { border-color: var(--chyba); }
+.pole::placeholder { color: var(--ghost); opacity: 1; }
+
+/* Chrome u automaticky vyplněných polí (přihlášení) přebíjí pozadí i barvu
+   písma vlastním světlým a kurzor s nimi zčerná. Vnitřní stín je jediná
+   cesta, jak to přebít zpátky - background-color prohlížeč ignoruje. */
+.pole:-webkit-autofill,
+.pole:-webkit-autofill:hover,
+.pole:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+  box-shadow: inset 0 0 0 1000px var(--panel-2);
+}
+
 textarea.pole { min-height: 110px; resize: vertical; line-height: 1.5; }
 select.pole { appearance: none; background-image: none; }
 
