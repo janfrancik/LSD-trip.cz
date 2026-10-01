@@ -186,6 +186,7 @@ středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >
 | `007_akceptace_testeri.sql` | přiřazení testerů k verzi, výsledky po lidech |
 | `008_produkty_a_cenik.sql` | sazby DPH, produkty (kurzy), požadavky, průběh, historie cen |
 | `009_soubory_a_fotky.sql` | nahrané soubory a jejich napojení na produkty |
+| `010_soubory_kod.sql` | náhodný kód souboru do veřejné adresy fotky |
 
 ## API
 
@@ -194,7 +195,7 @@ středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >
 | --- | --- | --- |
 | `POST` | `/api/poptavky` | Odeslání kontaktního formuláře (rate limit 5/h, past na roboty) |
 | `GET` | `/api/health` | Stav aplikace, databáze a počet migrací |
-| `GET` | `/media/:id` | Nahraná fotka. Mimo `/api` schválně — adresa má být krátká a stálá a obrázky nesmí spadnout pod rate limit veřejného API. |
+| `GET` | `/media/:kod` | Nahraná fotka. Mimo `/api` schválně — adresa má být krátká a stálá a obrázky nesmí spadnout pod rate limit veřejného API. |
 
 Čtení obsahu z databáze (`/api/bootstrap`, produkty, termíny) přijde ve fázi 2.
 
@@ -478,10 +479,14 @@ a přežijí přestavbu image.
 Táž fotka nahraná podruhé nevytvoří druhý soubor: pozná se podle otisku obsahu
 (`hash_sha256`), takže to funguje i při jiném názvu souboru.
 
-Zobrazují se na `/media/:id` — **veřejně a bez rate limitu**. Fotky kurzů jsou obsah webu,
+Zobrazují se na `/media/:kod` — **veřejně a bez rate limitu**. Fotky kurzů jsou obsah webu,
 administrace si je zobrazuje touž cestou a stránka s galerií by se do limitu veřejného API
 (120/min) vešla jednou. Ven jde obrázek, ne název souboru ani to, kdo ho nahrál. Přílohy
 akceptace tudy **nejdou**, ty mají vlastní tabulku i endpoint za přihlášením.
+
+V adrese je **náhodný kód** (24 hex znaků, 96 bitů), ne `id`. Podle pořadových čísel
+se dalo projít `/media/1`, `/media/2`, … a prohlédnout si i fotky kurzu, který ještě
+není zveřejněný. `id` zůstává jen v administraci za přihlášením.
 
 U produktu je první fotka v pořadí **titulní** — ta velká na kartě. Že je právě jedna,
 hlídá aplikace v transakci; unikátní index by to neuhlídal, protože MariaDB bere každou

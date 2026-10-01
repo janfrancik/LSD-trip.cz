@@ -2,8 +2,8 @@
 //
 // Zobrazení nahraných fotek. Vlastní router mimo /api schválně ze dvou důvodů:
 //
-//   - adresa obrázku má být krátká a stálá (/media/12), protože se objeví
-//     v HTML stránky, v OG tagu a později i v e-mailu,
+//   - adresa obrázku má být krátká a stálá, protože se objeví v HTML
+//     stránky, v OG tagu a později i v e-mailu,
 //   - veřejné API má rate limit 120 požadavků za minutu, do kterého by se
 //     stránka s galerií vešla jednou a pak by se obrázky přestaly načítat.
 //
@@ -12,24 +12,27 @@
 // Osobní údaje tudy neodcházejí - ven jde obrázek, ne název souboru ani to,
 // kdo ho nahrál. Přílohy akceptace tudy nejdou, ty mají vlastní tabulku
 // i vlastní endpoint za přihlášením.
+//
+// V adrese je náhodný kód souboru, ne jeho id. Pořadová čísla se dala projít
+// po řadě, a tím i prohlédnout fotky kurzu, který ještě není zveřejněný.
 
 import express from 'express';
 import { asyncHandler, chybaNenalezeno } from '../chyby.js';
-import { nactiSoubor, cestaKSouboru } from '../soubory.js';
+import { nactiSouborPodleKodu, cestaKSouboru, DELKA_KODU } from '../soubory.js';
 
 const router = express.Router();
 
 router.get(
-  '/:id(\\d+)',
+  `/:kod([0-9a-f]{${DELKA_KODU}})`,
   asyncHandler(async (req, res) => {
-    const soubor = await nactiSoubor(Number(req.params.id));
+    const soubor = await nactiSouborPodleKodu(req.params.kod);
     if (!soubor) throw chybaNenalezeno('Obrázek nenalezen.');
 
     const cesta = cestaKSouboru(soubor.cesta);
     if (!cesta) throw chybaNenalezeno('Obrázek nenalezen.');
 
-    // Jméno souboru je náhodné a jeho obsah se nikdy nemění, takže se smí
-    // cachovat natvrdo. Výměnou fotky vznikne nové id, a tedy i nová adresa.
+    // Obsah souboru se nikdy nemění, takže se smí cachovat natvrdo.
+    // Výměnou fotky vznikne nový záznam, a tedy i nová adresa.
     res.type(soubor.mime);
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
     res.sendFile(cesta, (chyba) => {
@@ -40,5 +43,9 @@ router.get(
     });
   })
 );
+
+// Cokoli jiného než kód je 404, ne stránka webu. Bez tohohle by se stará
+// adresa /media/12 propadla až na veřejný web a vrátila jeho HTML s kódem 200.
+router.use((req, res) => res.status(404).end());
 
 export default router;

@@ -182,7 +182,7 @@ async function nactiDetail(id) {
   // Titulní fotka je vždycky první - karta kurzu i výpis na webu berou tu,
   // na kterou narazí dřív, a nemají se o pořadí starat.
   const [fotky] = await pool.query(
-    `SELECT s.id, s.puvodni_nazev, s.mime, s.velikost_b, s.alt, s.created_at,
+    `SELECT s.id, s.kod, s.puvodni_nazev, s.mime, s.velikost_b, s.alt, s.created_at,
             f.poradi, f.titulni
        FROM produkt_fotky f
        JOIN soubory s ON s.id = f.soubor_id

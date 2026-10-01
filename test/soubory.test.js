@@ -77,7 +77,7 @@ test('nahraná fotka se uloží na disk i do databáze', async () => {
   assert.equal(odpoved.status, 201);
   assert.equal(odpoved.data.mime, 'image/png');
   assert.equal(odpoved.data.nazev, 'fotka.png');
-  assert.equal(odpoved.data.url, `/media/${odpoved.data.id}`, 'klient dostane adresu, ne cestu na disku');
+  assert.match(odpoved.data.url, /^\/media\/[0-9a-f]{24}$/, 'adresa je náhodný kód, ne pořadové číslo');
   assert.equal(odpoved.data.cesta, undefined, 'cesta na disku ven nepatří');
 
   const [rows] = await pool.query('SELECT * FROM soubory WHERE id = ?', [odpoved.data.id]);
@@ -249,10 +249,37 @@ test('neexistující ani smazaný obrázek se nezobrazí', async () => {
   const klient = await prihlas();
   const { data: fotka } = await nahraj(klient);
 
-  assert.equal((await fetch(`${server.url}/media/999999`)).status, 404);
+  assert.equal((await fetch(`${server.url}/media/${'a'.repeat(24)}`)).status, 404);
 
   await klient.del(`/api/admin/soubory/${fotka.id}`);
   assert.equal((await fetch(server.url + fotka.url)).status, 404, 'smazaná fotka se přestane zobrazovat');
+});
+
+test('fotka se nedá najít podle pořadového čísla', async () => {
+  // Jinak by stačilo projít /media/1, /media/2, ... a prohlédnout si i fotky
+  // kurzu, který ještě není zveřejněný.
+  const klient = await prihlas();
+  const { data: fotka } = await nahraj(klient);
+
+  for (const adresa of [`/media/${fotka.id}`, '/media/1', '/media/999999', '/media/']) {
+    const odpoved = await fetch(server.url + adresa);
+    assert.equal(odpoved.status, 404, `${adresa} nesmí nic vrátit`);
+  }
+
+  assert.equal((await fetch(server.url + fotka.url)).status, 200, 'podle kódu se zobrazí');
+});
+
+test('každá fotka má svůj vlastní kód', async () => {
+  const klient = await prihlas();
+  const a = (await nahraj(klient, PNG_1X1)).data;
+  const b = (await nahraj(klient, PNG_2X1)).data;
+
+  assert.notEqual(a.url, b.url);
+
+  const [rows] = await pool.query('SELECT kod FROM soubory ORDER BY id');
+  assert.equal(rows.length, 2);
+  assert.equal(new Set(rows.map((r) => r.kod)).size, 2);
+  for (const { kod } of rows) assert.match(kod, /^[0-9a-f]{24}$/);
 });
 
 // ------------------------------------------------------------------- úklid

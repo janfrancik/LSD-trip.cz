@@ -51,6 +51,15 @@ function rozpoznej(bajty) {
   return PODPISY.find((p) => bajty.length > 12 && p.test(bajty)) ?? null;
 }
 
+// Kód do veřejné adresy (/media/<kod>). Záměrně ne `id`: pořadová čísla se
+// dají projít po řadě, a tím i prohlédnout fotky kurzu, který ještě není
+// zveřejněný. 12 bajtů = 96 bitů, hex kvůli collation sloupce (migrace 010).
+export const DELKA_KODU = 24;
+
+export function novyKod() {
+  return crypto.randomBytes(DELKA_KODU / 2).toString('hex');
+}
+
 /**
  * Uloží nahraný obrázek a vrátí záznam z databáze.
  *
@@ -99,6 +108,7 @@ export async function ulozSoubor({ obsah, nazev = null, alt = null, uzivatelId, 
   const mesic = isoDatum(new Date()).slice(0, 7); // 2026-10, podle pražského dne
   const jmeno = `${crypto.randomBytes(16).toString('hex')}.${typ.pripona}`;
   const relativni = path.posix.join(podadresar, mesic, jmeno);
+  const kod = novyKod();
 
   const cil = path.join(config.uploadDir, relativni);
   await mkdir(path.dirname(cil), { recursive: true });
@@ -106,9 +116,10 @@ export async function ulozSoubor({ obsah, nazev = null, alt = null, uzivatelId, 
 
   const [vysledek] = await pool.query(
     `INSERT INTO soubory
-       (cesta, puvodni_nazev, mime, velikost_b, alt, zdroj, hash_sha256, nahral_id)
-     VALUES (?, ?, ?, ?, ?, 'upload', ?, ?)`,
+       (kod, cesta, puvodni_nazev, mime, velikost_b, alt, zdroj, hash_sha256, nahral_id)
+     VALUES (?, ?, ?, ?, ?, ?, 'upload', ?, ?)`,
     [
+      kod,
       relativni,
       nazev ? String(nazev).slice(0, 255) : null,
       typ.mime,
@@ -137,6 +148,17 @@ export async function nactiSoubor(id) {
   const [rows] = await pool.query(
     'SELECT * FROM soubory WHERE id = ? AND smazano_at IS NULL',
     [id]
+  );
+  return rows[0] ?? null;
+}
+
+// Veřejné zobrazení chodí podle kódu, ne podle id. Porovnání je díky collation
+// sloupce bez ohledu na velikost písmen, ale na entropii to nic nemění: kódy
+// jsou vždycky malá hexadecimální písmena a jiný tvar router vůbec nepustí.
+export async function nactiSouborPodleKodu(kod) {
+  const [rows] = await pool.query(
+    'SELECT * FROM soubory WHERE kod = ? AND smazano_at IS NULL',
+    [kod]
   );
   return rows[0] ?? null;
 }

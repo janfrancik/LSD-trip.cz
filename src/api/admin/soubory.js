@@ -1,7 +1,7 @@
 // src/api/admin/soubory.js
 //
 // Nahrávání a správa souborů. Samotné zobrazení fotky je veřejné
-// (GET /media/:id v src/api/verejne.js) - fotky kurzů jsou obsah webu,
+// (GET /media/:kod v src/api/media.js) - fotky kurzů jsou obsah webu,
 // ne nic chráněného, a administrace si je zobrazuje toutéž cestou.
 
 import express from 'express';
@@ -159,11 +159,12 @@ router.delete(
 );
 
 // Cesta na disku ven nepatří - klient potřebuje jen adresu, kde si obrázek
-// vyzvedne, a údaje pro zobrazení.
+// vyzvedne, a údaje pro zobrazení. V adrese je náhodný kód, ne id: podle
+// pořadových čísel se dalo projít i fotky nezveřejněného kurzu.
 export function prosit(soubor) {
   return {
     id: soubor.id,
-    url: `/media/${soubor.id}`,
+    url: `/media/${soubor.kod}`,
     nazev: soubor.puvodni_nazev,
     mime: soubor.mime,
     velikost_b: soubor.velikost_b,
