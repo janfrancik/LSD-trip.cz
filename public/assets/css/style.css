@@ -2061,7 +2061,26 @@ textarea.field { min-height: 120px; resize: vertical; }
   .brand__logo { height: 38px; }
   .header__inner { padding-top: 12px; padding-bottom: 12px; }
 
-  .hero__eyebrow { font-size: 10px; letter-spacing: 0.18em; margin-bottom: 14px; }
+  /* Na telefonu je hero vyšší a eyebrow padne doprostřed fotky, kde je
+     zastínění nejslabší - tmavě oranžová na světlém nebi se pak nedala
+     přečíst. Vlastní podklad a světlejší odstín akcentu to drží čitelné
+     bez ohledu na fotku, aniž by se měnil vizuál zbytku heru.
+
+     Krytí 0.84 není od oka: fotku v heru vyměňuje majitelka, takže musí
+     vyjít i ta nejsvětlejší. I kdyby pod pilulkou bylo čistě bílé nebe,
+     vychází kontrast 4.8:1 - nad hranicí 4.5:1, kterou WCAG AA chce
+     pro takhle malé písmo. Při původních 0.68 to bylo 2.6:1. */
+  .hero__eyebrow {
+    font-size: 10px;
+    letter-spacing: 0.18em;
+    margin-bottom: 14px;
+    color: var(--accent-lite);
+    display: inline-block;
+    padding: 5px 10px;
+    border-radius: 3px;
+    background: rgba(6, 6, 7, 0.84);
+    text-shadow: none;
+  }
 
   .stats { grid-template-columns: 1fr 1fr; }
 

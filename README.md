@@ -426,7 +426,7 @@ Routování zatím běží na hashi; normální URL a serverové renderování p
 | `#/kurzy` | Kurzy a výcvik |
 | `#/kalendar` | Kalendář termínů s filtrováním |
 | `#/termin/:id` | Detail termínu + výběr počtu osob |
-| `#/booking` | Rezervační tok (prototyp, napojení na API ve fázi 3) |
+| `#/booking` | Poptávka na termín nebo poukaz — odesílá se na `POST /api/poptavky` |
 | `#/poukaz` | Dárkový poukaz s živým náhledem |
 | `#/expedice` | Expedice & Helitour |
 | `#/galerie` | Galerie s lightboxem |
@@ -442,5 +442,14 @@ Produkcí je návrh 1 v `public/`; administrace používá jeho design tokeny.
 
 ## Poznámka
 
-Rezervační a platební tok je zatím prototyp — data se nikam neodesílají a žádná platba
-neproběhne. Fotografie se do fáze 5 načítají z `www.lsd-trip.cz`.
+Web zatím **neumí rezervovat ani platit**. Průvodce na `#/booking` proto končí
+**poptávkou** — uloží se do `poptavky` a provoz se ozve. Žádné číslo rezervace
+se nevymýšlí a nic se neplatí; skutečné rezervace přijdou v etapě E5, platby ve fázi 4.
+
+Obsah webu je zatím napevno v `public/assets/js/data.js`, včetně termínů. Protože
+takový seznam časem zestárne, web ukazuje jen termíny s datem **od dnešního
+pražského dne dál** (`isoDatum()` ze `src/cas.js`, který se servíruje i na
+`/assets/js/cas.js`). Když žádný takový není, nabídne místo seznamu kontakt.
+
+Fotografie se do etapy E2 načítají z `www.lsd-trip.cz`. Hlídač natvrdo napsaných
+domén proto nad `public/` zatím jen vypisuje seznam, místo aby shodil testy.

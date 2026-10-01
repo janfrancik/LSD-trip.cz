@@ -2,6 +2,11 @@
    LSD — aplikace (router + stav + renderování)
    ========================================================================== */
 
+// Pražský den má projekt na jednom místě (src/cas.js, server ho servíruje
+// i sem). Vlastní výpočet přes new Date().toISOString() by kolem půlnoci
+// ukázal včerejšek a web by nabízel termín, který už proběhl.
+import { isoDatum } from './cas.js';
+
 (function (D) {
   'use strict';
 
@@ -27,6 +32,16 @@
 
   function free(t) { return Math.max(0, t.max - t.taken); }
 
+  /* Termíny jsou zatím napevno v data.js, takže postupem času zestárnou.
+     Dokud nejdou z databáze (etapa E4), web nesmí nabízet den, který už byl.
+     Porovnává se ISO datum termínu s dnešním pražským dnem - oboje řetězec
+     YYYY-MM-DD, takže stačí porovnání textů a nikde nevzniká Date z řetězce. */
+  function dnesIso() { return isoDatum(new Date()); }
+
+  function jeBudouci(t) { return String(t.iso || '') >= dnesIso(); }
+
+  function budouciTerminy() { return D.TERMINY.filter(jeBudouci); }
+
   function terminById(id) {
     var found = D.TERMINY.filter(function (t) { return t.id === Number(id); });
     return found[0] || null;
@@ -48,21 +63,19 @@
     pax: [{ name: '', weight: '', age: '' }],
     form: { name: '', email: '', phone: '', city: '', note: '' },
     terms: false,
-    pay: 'card',
     faqOpen: null,
     voucher: 0,
     voucherFor: '',
     contactSent: false,
     contactSending: false,
     contactError: null,
-    code: null
+    bookingSending: false,
+    bookingError: null
   };
 
   function selectedTermin() {
     return terminById(state.terminId) || D.TERMINY[4];
   }
-
-  function isEnquiry() { return !selectedTermin().price; }
 
   function setPeople(n) {
     var t = selectedTermin();
@@ -178,7 +191,7 @@
         '<span class="termrow__place">' + esc(t.place) + '</span>' +
       '</span>' +
       '<span class="termrow__spots">' + t.taken + ' / ' + t.max + ' obsazeno</span>' +
-      '<span class="termrow__cta' + (full ? ' termrow__cta--off' : '') + '">' + (full ? 'Obsazeno' : 'Rezervovat →') + '</span>' +
+      '<span class="termrow__cta' + (full ? ' termrow__cta--off' : '') + '">' + (full ? 'Obsazeno' : 'Mám zájem →') + '</span>' +
     '</' + tag + '>';
   }
 
@@ -206,14 +219,15 @@
         '<span class="cell__label">Cena</span>' +
         '<span class="cell__price">' + esc(priceLabel(t)) + '</span>' +
       '</span>' +
-      '<span class="cell__cta' + (full ? ' cell__cta--off' : '') + '">' + (full ? 'Obsazeno' : 'Rezervovat →') + '</span>' +
+      '<span class="cell__cta' + (full ? ' cell__cta--off' : '') + '">' + (full ? 'Obsazeno' : 'Mám zájem →') + '</span>' +
     '</' + tag + '>';
   }
 
   /* ------------------------------------------------------------- stránky */
 
   function viewHome() {
-    var spots = D.TERMINY.reduce(function (a, t) { return a + free(t); }, 0);
+    var nadchazejici = budouciTerminy();
+    var spots = nadchazejici.reduce(function (a, t) { return a + free(t); }, 0);
 
     return '' +
     '<section class="hero">' +
@@ -234,7 +248,11 @@
       '<div class="stat"><div class="stat__num">4 000 m</div><div class="stat__label">Výskoková výška</div></div>' +
       '<div class="stat"><div class="stat__num">50 s</div><div class="stat__label">Volný pád</div></div>' +
       '<div class="stat"><div class="stat__num">17 let</div><div class="stat__label">Provozu bez nehody</div></div>' +
-      '<div class="stat"><div class="stat__num">' + spots + '</div><div class="stat__label">Volných míst v září</div></div>' +
+      // Čtvrtá dlaždice má smysl, jen když je co nabídnout. Mimo sezónu by
+      // hlásila "0 volných míst", což je horší než nic.
+      (nadchazejici.length
+        ? '<div class="stat"><div class="stat__num">' + spots + '</div><div class="stat__label">Volných míst v nejbližších termínech</div></div>'
+        : '') +
     '</div></div></div>' +
 
     '<section class="section container">' +
@@ -242,10 +260,20 @@
       '<div class="cards">' + D.PRODUCTS.map(productCard).join('') + '</div>' +
     '</section>' +
 
-    '<section class="section container">' +
-      sectionHead('Nejbližší termíny', 'Celý kalendář →', 'go-kalendar') +
-      '<div class="termlist">' + D.TERMINY.slice(0, 5).map(terminRow).join('') + '</div>' +
-    '</section>' +
+    // Mimo sezónu (nebo než majitelka vypíše nové termíny) se sekce neukáže
+    // vůbec - místo prázdného seznamu nebo proběhlých dat vede odkaz na kontakt.
+    (nadchazejici.length
+      ? '<section class="section container">' +
+          sectionHead('Nejbližší termíny', 'Celý kalendář →', 'go-kalendar') +
+          '<div class="termlist">' + nadchazejici.slice(0, 5).map(terminRow).join('') + '</div>' +
+        '</section>'
+      : '<section class="section container">' +
+          '<div class="box" style="text-align:center">' +
+            '<h2 class="subhead" style="margin-bottom:10px">Termíny na další sezónu chystáme</h2>' +
+            '<p class="prose" style="margin-bottom:22px">Napiš nám a ozveme se, jakmile budou vypsané. Rádi ti termín podržíme dopředu.</p>' +
+            btn('Napsat nám', 'btn--primary', 'go', 'kontakt') +
+          '</div>' +
+        '</section>') +
 
     '<section class="section container">' +
       '<div class="feature-grid">' +
@@ -348,7 +376,10 @@
       '<div class="cards">' +
         D.COURSES.map(function (c) {
           var t = terminById(c.terminId);
-          var full = t ? free(t) === 0 : true;
+          // Proběhlý termín není volné místo - tlačítko by vedlo do minulosti.
+          // Rozlišujeme ale "plno" od "zatím žádný termín", ať to sedí.
+          var vypsany = t && jeBudouci(t);
+          var volno = vypsany && free(t) > 0;
           return '<article class="card">' +
             '<div class="card__media card__media--3-2" style="background-image:url(' + attr(c.img) + ')"></div>' +
             '<div class="card__body">' +
@@ -358,9 +389,11 @@
               '<div class="card__meta"><span>' + esc(c.dur) + '</span><span>' + esc(c.level) + '</span></div>' +
               '<div class="card__foot card__foot--plain">' +
                 '<span class="card__price card__price--lg">' + esc(c.price) + '</span>' +
-                (full
-                  ? '<span class="card__cta" style="color:var(--ghost)">Obsazeno</span>'
-                  : '<button type="button" class="btn btn--primary btn--sm" data-action="termin" data-arg="' + c.terminId + '">Rezervovat</button>') +
+                (volno
+                  ? '<button type="button" class="btn btn--primary btn--sm" data-action="termin" data-arg="' + c.terminId + '">Mám zájem</button>'
+                  : vypsany
+                    ? '<span class="card__cta" style="color:var(--ghost)">Obsazeno</span>'
+                    : '<button type="button" class="btn btn--outline btn--sm" data-action="go" data-arg="kontakt">Zeptat se na termín</button>') +
               '</div>' +
             '</div>' +
           '</article>';
@@ -377,7 +410,9 @@
   }
 
   function viewKalendar() {
-    var visible = D.TERMINY.filter(function (t) {
+    // Hlavní tlačítko v heru vede sem, takže proběhlé termíny musí zmizet
+    // i tady - jinak by titulka mlčela a kalendář hned vedle nabízel loňsko.
+    var visible = budouciTerminy().filter(function (t) {
       if (state.filter === 'Tandem') return t.kind === 'tandem';
       if (state.filter === 'Kurzy') return t.kind === 'kurz';
       if (state.filter === 'Volná místa') return free(t) > 0;
@@ -400,7 +435,10 @@
         '<div class="table__head"><div>Datum</div><div>Akce</div><div>Obsazenost</div><div>Cena</div><div></div></div>' +
         (visible.length
           ? visible.map(tableRow).join('')
-          : '<div class="empty">Pro tento filtr nemáme žádný termín</div>') +
+          : budouciTerminy().length
+            ? '<div class="empty">Pro tento filtr nemáme žádný termín</div>'
+            : '<div class="empty">Termíny na další sezónu teprve chystáme. ' +
+              'Napiš nám a ozveme se, jakmile budou vypsané.</div>') +
       '</div>' +
       '<p class="mono-note" style="margin-top:16px">Provoz závisí na počasí. O startech informujeme den předem SMS.</p>' +
     '</div>';
@@ -443,34 +481,36 @@
           '</div>' +
 
           '<div style="margin-top:22px">' +
-            btn(t.price ? 'Pokračovat k rezervaci' : 'Poslat nezávaznou poptávku', 'btn--primary btn--block', 'start-booking') +
+            btn('Poslat nezávaznou poptávku', 'btn--primary btn--block', 'start-booking') +
           '</div>' +
-          '<p class="fineprint">Rezervace je nezávazná 30 minut. Zrušení zdarma 48 h před termínem.</p>' +
+          '<p class="fineprint">Poptávka je nezávazná. Místo potvrdíme e-mailem, nic teď neplatíš.</p>' +
         '</aside>' +
       '</div>' +
     '</div>';
   }
 
+  /* Průvodce končí poptávkou, ne rezervací.
+     Dokud rezervace nejsou v databázi (etapa E5), nesmí web tvrdit, že je
+     místo zamluvené, a nesmí vymýšlet potvrzovací kód. Poslední krok proto
+     odešle poptávku na /api/poptavky - to je jediná cesta, která doopravdy
+     někde skončí. Krok "Platba" tím odpadl celý: není co platit. */
   function viewBooking() {
     var t = selectedTermin();
-    var enquiry = isEnquiry();
-    var isVoucher = state.mode === 'voucher' && state.bStep === 3;
+    var isVoucher = state.mode === 'voucher';
     var totalNum = (t.price || 0) * state.people;
     var totalLabel = totalNum ? czk(totalNum) : 'Cena na dotaz';
     var html = '<div class="container container--narrow" style="padding-top:44px">';
 
-    if (!isVoucher) {
-      var labels = enquiry
-        ? ['Účastníci', 'Kontakt', 'Hotovo']
-        : ['Účastníci', 'Kontakt', 'Platba', 'Hotovo'];
-      html += '<div class="progress-steps">' + labels.map(function (l, i) {
-        var reached = enquiry ? (i === 2 ? state.bStep === 3 : i <= state.bStep) : i <= state.bStep;
-        return '<div class="pstep' + (reached ? ' pstep--on' : '') + '">' +
-          '<div class="pstep__bar"></div>' +
-          '<div class="pstep__label">' + (i + 1) + '. ' + esc(l) + '</div>' +
-        '</div>';
-      }).join('') + '</div>';
-    }
+    var labels = isVoucher ? ['Kontakt', 'Hotovo'] : ['Účastníci', 'Kontakt', 'Hotovo'];
+    // Kroky se číslují 0, 1 a 3 (hotovo) - u poukazu se první přeskakuje.
+    var poradiKroku = isVoucher ? [1, 3] : [0, 1, 3];
+    html += '<div class="progress-steps">' + labels.map(function (l, i) {
+      var reached = state.bStep >= poradiKroku[i];
+      return '<div class="pstep' + (reached ? ' pstep--on' : '') + '">' +
+        '<div class="pstep__bar"></div>' +
+        '<div class="pstep__label">' + (i + 1) + '. ' + esc(l) + '</div>' +
+      '</div>';
+    }).join('') + '</div>';
 
     /* --- krok 1: účastníci --- */
     if (state.bStep === 0) {
@@ -496,7 +536,11 @@
     if (state.bStep === 1) {
       html += '<div>' +
         '<h1 class="section__title" style="margin-bottom:8px">Kontaktní údaje</h1>' +
-        '<p class="prose" style="margin-bottom:30px">Na telefon posíláme potvrzení startu den předem.</p>' +
+        '<p class="prose" style="margin-bottom:30px">' +
+          (isVoucher
+            ? 'Ozveme se ti s domluvou poukazu a způsobem platby.'
+            : 'Poptávka je nezávazná. Ozveme se ti s volnými místy a potvrzením termínu.') +
+        '</p>' +
         '<div class="field-grid">' +
           '<input class="field field--onpanel" type="text" autocomplete="name" placeholder="Jméno a příjmení" aria-label="Jméno a příjmení" value="' + attr(state.form.name) + '" data-form="name" />' +
           '<input class="field field--onpanel" type="email" autocomplete="email" placeholder="E-mail" aria-label="E-mail" value="' + attr(state.form.email) + '" data-form="email" />' +
@@ -508,71 +552,41 @@
           '<span class="checkbox__box" aria-hidden="true">' + (state.terms ? '✓' : '') + '</span>' +
           '<span class="checkbox__text">Souhlasím s provozními podmínkami a zpracováním osobních údajů. Potvrzuji, že jsem zdravotně způsobilý k seskoku.</span>' +
         '</button>' +
-      '</div>';
-    }
-
-    /* --- krok 3: platba --- */
-    if (state.bStep === 2 && !enquiry) {
-      html += '<div>' +
-        '<h1 class="section__title" style="margin-bottom:8px">Platba</h1>' +
-        '<p class="prose" style="margin-bottom:30px">Prototyp — žádná skutečná platba se neodešle.</p>' +
-        '<div class="paylist" role="radiogroup" aria-label="Způsob platby">' +
-          D.PAY_METHODS.map(function (m) {
-            var on = state.pay === m.key;
-            return '<button type="button" class="payopt' + (on ? ' payopt--active' : '') + '" data-action="pay" data-arg="' + attr(m.key) + '" role="radio" aria-checked="' + (on ? 'true' : 'false') + '">' +
-              '<span class="radio">' + (on ? '<span class="radio__dot"></span>' : '') + '</span>' +
-              '<span style="flex:1">' +
-                '<span class="payopt__title">' + esc(m.label) + '</span>' +
-                '<span class="payopt__note">' + esc(m.note) + '</span>' +
-              '</span>' +
-            '</button>';
-          }).join('') +
-        '</div>' +
-        (state.pay === 'card'
-          ? '<div class="cardbox">' +
-              '<input class="field field--full" type="text" inputmode="numeric" autocomplete="off" placeholder="Číslo karty" aria-label="Číslo karty" />' +
-              '<input class="field" type="text" autocomplete="off" placeholder="MM / RR" aria-label="Platnost karty" />' +
-              '<input class="field" type="text" inputmode="numeric" autocomplete="off" placeholder="CVC" aria-label="CVC kód" />' +
-            '</div>'
+        (state.bookingError
+          ? '<p role="alert" style="margin-top:14px;color:var(--accent-lite);font-size:14px">' + esc(state.bookingError) + '</p>'
           : '') +
       '</div>';
     }
 
-    /* --- krok 4: hotovo --- */
+    /* --- krok 3: hotovo --- */
     if (state.bStep === 3) {
       var vSel = D.VOUCHERS[state.voucher];
       var email = state.form.email || 'tvůj e-mail';
-      var doneTitle = isVoucher ? 'Poukaz je na cestě' : (enquiry ? 'Poptávka odeslána' : 'Máš to');
-      var doneLabel = isVoucher ? 'Poukaz' : (enquiry ? 'Poptávka' : 'Rezervace');
-      var text;
-      if (isVoucher) {
-        text = 'PDF poukazu posíláme na <strong>' + esc(email) + '</strong> do pěti minut. Platí 12 měsíců a termín si obdarovaný vybere sám v kalendáři.';
-      } else if (enquiry) {
-        text = 'Ozveme se na <strong>' + esc(email) + '</strong> s cenou a potvrzením termínu do 24 hodin. Nic teď neplatíš.';
-      } else {
-        text = 'Potvrzení letí na <strong>' + esc(email) + '</strong>. Den před termínem ti přijde SMS s časem startu.';
-      }
 
-      var summary = isVoucher ? [
+      // Žádné číslo rezervace. Poptávka je poptávka - potvrzení termínu
+      // a cenu pošle provoz, až se na ni podívá.
+      var souhrn = isVoucher ? [
         ['Poukaz', vSel.title],
         ['Pro koho', state.voucherFor || 'nevyplněno'],
         ['Platnost', '12 měsíců od vystavení'],
-        ['Cena', czk(vSel.price)]
+        ['Orientační cena', czk(vSel.price)]
       ] : [
         ['Akce', t.type],
         ['Termín', t.date + ' · ' + t.time],
         ['Místo', t.place],
         ['Osoby', String(state.people)],
-        ['Celkem', totalNum ? czk(totalNum) : 'dle rozsahu']
+        ['Orientační cena', totalNum ? czk(totalNum) : 'dle rozsahu']
       ];
 
       html += '<div class="done">' +
         '<div class="done__check" aria-hidden="true">✓</div>' +
-        '<h1 class="done__title">' + esc(doneTitle) + '</h1>' +
-        '<p class="done__text">' + text + '</p>' +
+        '<h1 class="done__title">Poptávka odeslána</h1>' +
+        '<p class="done__text">Ozveme se na <strong>' + esc(email) + '</strong> do 24 hodin — ' +
+          'potvrdíme volné místo' + (isVoucher ? ' a domluvíme poukaz' : ' i cenu') + '. ' +
+          'Nic teď neplatíš a nic není závazné.</p>' +
         '<div class="summary">' +
-          '<div class="summary__label">' + esc(doneLabel) + ' ' + esc(state.code || 'LSD-000000') + '</div>' +
-          summary.map(function (r) {
+          '<div class="summary__label">Co jsi nám poslal' + (isVoucher ? ' k poukazu' : '') + '</div>' +
+          souhrn.map(function (r) {
             return '<div class="summary__row"><span>' + esc(r[0]) + '</span><span>' + esc(r[1]) + '</span></div>';
           }).join('') +
         '</div>' +
@@ -582,14 +596,18 @@
 
     /* --- spodní lišta --- */
     if (state.bStep < 3) {
-      var nextLabel = enquiry
-        ? (state.bStep === 1 ? 'Odeslat poptávku' : 'Pokračovat')
-        : (state.bStep === 2 ? 'Zaplatit a potvrdit' : 'Pokračovat');
+      var nextLabel = state.bookingSending
+        ? 'Odesílám…'
+        : (state.bStep === 1 ? 'Odeslat poptávku' : 'Pokračovat');
 
       html += '<div class="bookingbar">' +
         '<div>' +
-          '<div class="bookingbar__label">' + esc(t.date + ' · ' + t.type + ' · ' + state.people + ' os.') + '</div>' +
-          '<div class="bookingbar__total">' + esc(totalLabel) + '</div>' +
+          '<div class="bookingbar__label">' + esc(
+            isVoucher
+              ? 'Dárkový poukaz · ' + D.VOUCHERS[state.voucher].title
+              : t.date + ' · ' + t.type + ' · ' + state.people + ' os.'
+          ) + '</div>' +
+          '<div class="bookingbar__total">' + esc(isVoucher ? czk(D.VOUCHERS[state.voucher].price) : totalLabel) + '</div>' +
         '</div>' +
         '<div class="bookingbar__actions">' +
           btn('Zpět', 'btn--outline', 'booking-back') +
@@ -849,26 +867,111 @@
 
   /* ------------------------------------------------------------ rezervace */
 
-  function bookingNext() {
-    var enquiry = isEnquiry();
-    var last = enquiry ? 1 : 2;
-    if (state.bStep >= 3) return;
-    if (state.bStep >= last) {
-      state.bStep = 3;
-      state.code = (enquiry ? 'LSD-D' : 'LSD-') + Math.floor(10000 + Math.random() * 89999);
+  /* Jediná cesta, kudy z webu odchází poptávka. */
+  function posliPoptavku(telo) {
+    return fetch('/api/poptavky', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(telo)
+    }).then(function (odpoved) {
+      return odpoved.json().catch(function () { return {}; }).then(function (data) {
+        if (!odpoved.ok) throw new Error(data.chyba || 'Zprávu se nepodařilo odeslat.');
+        return data;
+      });
+    });
+  }
+
+  /* Co provoz uvidí u poptávky v administraci. Termín ani účastníci nemají
+     zatím vlastní sloupce (přijdou v etapě E5), takže jdou do textu zprávy -
+     je to pořád lepší než poptávka bez kontextu. */
+  function textPoptavky() {
+    var radky = [];
+
+    if (state.mode === 'voucher') {
+      var v = D.VOUCHERS[state.voucher];
+      radky.push('Dárkový poukaz: ' + v.title + ' (' + czk(v.price) + ')');
+      if (state.voucherFor) radky.push('Pro koho: ' + state.voucherFor);
     } else {
-      state.bStep += 1;
+      var t = selectedTermin();
+      radky.push('Termín: ' + t.date + ' · ' + t.type + ' · ' + t.time);
+      radky.push('Místo: ' + t.place);
+      radky.push('Počet osob: ' + state.people);
+      state.pax.forEach(function (p, i) {
+        var popis = [
+          (p.name || '').trim(),
+          p.weight ? p.weight + ' kg' : '',
+          p.age ? p.age + ' let' : ''
+        ].filter(Boolean).join(', ');
+        if (popis) radky.push('Účastník ' + (i + 1) + ': ' + popis);
+      });
     }
+
+    if (state.form.city) radky.push('Město: ' + state.form.city);
+    if (state.form.note) radky.push('', 'Poznámka: ' + state.form.note);
+
+    return radky.join('\n');
+  }
+
+  function bookingNext() {
+    if (state.bStep >= 3 || state.bookingSending) return;
+
+    // Krok 0 (účastníci) jen přepne dál, odesílá se až z kroku 1.
+    if (state.bStep === 0) {
+      state.bStep = 1;
+      state.bookingError = null;
+      render();
+      window.scrollTo(0, 0);
+      return;
+    }
+
+    var jmeno = (state.form.name || '').trim();
+    var email = (state.form.email || '').trim();
+
+    if (jmeno.length < 2 || email.indexOf('@') === -1) {
+      state.bookingError = 'Vyplň prosím jméno a platný e-mail, ať se máme kam ozvat.';
+      render();
+      return;
+    }
+    if (!state.terms) {
+      state.bookingError = 'Bez souhlasu s podmínkami a zpracováním údajů ti poptávku zpracovat nemůžeme.';
+      render();
+      return;
+    }
+
+    state.bookingSending = true;
+    state.bookingError = null;
     render();
-    window.scrollTo(0, 0);
+
+    posliPoptavku({
+      jmeno: jmeno,
+      email: email,
+      telefon: (state.form.phone || '').trim(),
+      zprava: textPoptavky()
+    })
+      .then(function () {
+        state.bookingSending = false;
+        state.bStep = 3;
+        render();
+        window.scrollTo(0, 0);
+      })
+      .catch(function (chyba) {
+        state.bookingSending = false;
+        state.bookingError = chyba.message + ' Zkus to prosím znovu, nebo nám zavolej.';
+        render();
+      });
   }
 
   function bookingBack() {
-    if (state.bStep === 0) {
-      navigate('termin/' + selectedTermin().id);
+    if (state.bookingSending) return;
+
+    // Z prvního kroku se vrací tam, odkud se přišlo.
+    if (state.bStep === 0 || (state.bStep === 1 && state.mode === 'voucher')) {
+      navigate(state.mode === 'voucher' ? 'poukaz' : 'termin/' + selectedTermin().id);
       return;
     }
-    state.bStep = (state.bStep === 3 && isEnquiry()) ? 1 : state.bStep - 1;
+
+    state.bStep -= 1;
+    state.bookingError = null;
     render();
     window.scrollTo(0, 0);
   }
@@ -884,17 +987,19 @@
     'start-booking': function () {
       state.bStep = 0;
       state.mode = 'booking';
+      state.bookingError = null;
       navigate('booking');
     },
     'booking-next': bookingNext,
     'booking-back': bookingBack,
     'terms': function () { state.terms = !state.terms; render(); },
-    'pay': function (arg) { state.pay = arg; render(); },
     'voucher': function (arg) { state.voucher = Number(arg); render(); },
+    // Poukaz jde stejnou cestou jako termín: vyplnit kontakt a odeslat
+    // poptávku. Účastníci u poukazu nejsou, proto se začíná krokem 1.
     'buy-voucher': function () {
       state.mode = 'voucher';
-      state.bStep = 3;
-      state.code = 'LSD-P' + Math.floor(10000 + Math.random() * 89999);
+      state.bStep = 1;
+      state.bookingError = null;
       navigate('booking');
     },
     'faq': function (arg) {

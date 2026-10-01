@@ -301,6 +301,21 @@ test('administrace pozná, že v záložce běží starý kód', async () => {
   assert.equal(spocitejVerziKlienta(), verze, 'po vrácení souboru sedí otisk zas');
 });
 
+test('veřejný web i administrace dostanou týž cas.js', async () => {
+  // Veřejný web si od chvíle, kdy přestal nabízet proběhlé termíny, musí
+  // umět říct "který den je dnes v Praze". Kdyby si na to měl vlastní
+  // kopii, rozešla by se se serverem úplně stejně, jako se kdysi rozešel
+  // export akceptace - proto se oběma servíruje jeden a týž src/cas.js.
+  const zdroj = readFileSync(path.join(rootDir, 'src', 'cas.js'), 'utf8');
+
+  for (const cesta of ['/assets/js/cas.js', '/admin/assets/js/cas.js']) {
+    const odpoved = await fetch(server.url + cesta);
+    assert.equal(odpoved.status, 200, cesta);
+    assert.match(odpoved.headers.get('content-type') ?? '', /javascript/, cesta);
+    assert.equal(await odpoved.text(), zdroj, `${cesta} musí být tentýž soubor jako src/cas.js`);
+  }
+});
+
 test('soubory administrace se nesmí cachovat bez ověření u serveru', async () => {
   for (const cesta of ['/admin/assets/js/ui.js', '/admin/assets/js/cas.js', '/admin/assets/css/admin.css']) {
     const odpoved = await fetch(server.url + cesta);

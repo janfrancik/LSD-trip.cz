@@ -30,49 +30,49 @@
   var TERMINY = [
     {
       id: 904, kind: 'kurz', type: 'Parašutistický výcvik',
-      date: '4. 9. 2026', day: 'pátek', time: 'teorie od 10:00',
+      date: '4. 9. 2026', iso: '2026-09-04', day: 'pátek', time: 'teorie od 10:00',
       place: 'Jihlava — Henčov', taken: 7, max: 10, price: 4600, img: IMG.vycvik,
       desc: 'Zahájení základního výcviku: teorie od 10:00, první seskok v sobotu ráno. Kurz obsahuje zákonem požadovanou výuku dle osnov V-PARA 1 a V-PARA 2, rozšířenou o praktický nácvik na hangáru.'
     },
     {
       id: 900, kind: 'tandem', type: 'Tandem',
-      date: '4. 9. 2026', day: 'pátek', time: 'starty od 13:30',
+      date: '4. 9. 2026', iso: '2026-09-04', day: 'pátek', time: 'starty od 13:30',
       place: 'Jihlava — Henčov', taken: 16, max: 16, price: 4700, img: IMG.tandem,
       desc: 'Tandemové seskoky z 4 000 metrů. Na letišti počítej se dvěma až třemi hodinami — instruktáž, postroj, nástup, seskok, video.'
     },
     {
       id: 893, kind: 'tandem', type: 'Tandem',
-      date: '5. 9. 2026', day: 'sobota', time: 'starty 7:30 — 15:00',
+      date: '5. 9. 2026', iso: '2026-09-05', day: 'sobota', time: 'starty 7:30 — 15:00',
       place: 'Jihlava — Henčov', taken: 24, max: 24, price: 4700, img: IMG.tandem,
       desc: 'Hlavní sobotní provoz. V 15:30 navíc seskok nad Křižanovem.'
     },
     {
       id: 899, kind: 'tandem', type: 'Tandem',
-      date: '6. 9. 2026', day: 'neděle', time: 'starty od 9:00',
+      date: '6. 9. 2026', iso: '2026-09-06', day: 'neděle', time: 'starty od 9:00',
       place: 'Jihlava — Henčov', taken: 24, max: 24, price: 4700, img: IMG.tandem,
       desc: 'Nedělní provoz, klidnější vzduch a nejlepší viditelnost do Vysočiny.'
     },
     {
       id: 901, kind: 'tandem', type: 'Tandem',
-      date: '18. 9. 2026', day: 'pátek', time: 'starty od 14:00',
+      date: '18. 9. 2026', iso: '2026-09-18', day: 'pátek', time: 'starty od 14:00',
       place: 'Jihlava — Henčov', taken: 1, max: 8, price: 4700, img: IMG.tandemCam,
       desc: 'Odpolední blok s nejlepším světlem pro kameru. Ideální termín, pokud chceš video s externím kameramanem.'
     },
     {
       id: 902, kind: 'tandem', type: 'Tandem',
-      date: '19. 9. 2026', day: 'sobota', time: 'starty od 8:30',
+      date: '19. 9. 2026', iso: '2026-09-19', day: 'sobota', time: 'starty od 8:30',
       place: 'Jihlava — Henčov', taken: 18, max: 24, price: 4700, img: IMG.tandem,
       desc: 'Celodenní provoz. Doprovod má vstup na letiště zdarma.'
     },
     {
       id: 903, kind: 'tandem', type: 'Tandem',
-      date: '20. 9. 2026', day: 'neděle', time: 'starty od 8:30',
+      date: '20. 9. 2026', iso: '2026-09-20', day: 'neděle', time: 'starty od 8:30',
       place: 'Jihlava — Henčov', taken: 12, max: 16, price: 4700, img: IMG.tandem,
       desc: 'Poslední nedělní blok v září.'
     },
     {
       id: 910, kind: 'kurz', type: 'Kurz IAFF s větrným tunelem',
-      date: '2. 10. 2026', day: 'pátek', time: 'start 9:00',
+      date: '2. 10. 2026', iso: '2026-10-02', day: 'pátek', time: 'start 9:00',
       place: 'Jihlava + tunel Praha', taken: 3, max: 6, price: 0, img: IMG.iaff,
       desc: 'Zrychlený výcvik volného pádu s přípravou ve větrném tunelu. Cena podle rozsahu tunelových minut — potvrdíme e-mailem.'
     }

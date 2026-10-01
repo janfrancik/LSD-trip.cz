@@ -84,6 +84,8 @@
 </div>
 
 <script src="assets/js/data.js"></script>
-<script src="assets/js/app.js"></script>
+<!-- Modul, protože si importuje assets/js/cas.js - jedinou implementaci
+     pražského času v projektu (server ji servíruje z src/cas.js). -->
+<script type="module" src="assets/js/app.js"></script>
 </body>
 </html>
