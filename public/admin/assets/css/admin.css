@@ -696,6 +696,42 @@ select.pole { appearance: none; background-image: none; }
   .fotky-misto__ram--titulni { grid-column: span 2; }
 }
 
+/* ------------------------------------------------------- fotky u produktu */
+
+.fotky { display: grid; gap: 12px; }
+
+/* Na telefonu jedna fotka pod druhou, od tabletu mřížka - u kurzu jich
+   může být deset a listovat se k poslední přes celou obrazovku nedává smysl.
+   Titulní zůstává přes celou šířku, je to ta, na které záleží. */
+@media (min-width: 620px) {
+  .fotky { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); align-items: start; }
+  .fotka--titulni { grid-column: 1 / -1; }
+}
+
+.fotka {
+  display: grid; gap: 8px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  padding: 10px;
+}
+/* Titulní má barevný rám, aby bylo na první pohled vidět, která to je. */
+.fotka--titulni { border-color: var(--accent); }
+
+.fotka__obrazek { position: relative; aspect-ratio: 3 / 2; background: var(--bg); }
+.fotka__obrazek img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.fotka__odznak {
+  position: absolute; top: 0; left: 0;
+  background: var(--accent); color: #fff;
+  padding: 5px 10px;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+
+.fotka__chybi-popis { font-size: 12px; color: var(--varovani); line-height: 1.45; }
+
+.fotky__pridat { margin-top: 12px; }
+
 /* ----------------------------------------------------------------- náhled */
 
 .nahled-obal__popisek {

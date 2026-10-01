@@ -210,10 +210,19 @@ jejím potvrzení. Do `main` nic bez výslovného souhlasu.**
 | # | Obsah | Migrace |
 | --- | --- | --- |
 | **E1** | DPH číselník + kurzy v administraci: texty, cena, DPH, požadavky, průběh, aktivní/skrytý, pořadí, historie cen. Veřejný web beze změny. | `008` |
-| **E2** | Fotky: `soubory` + `produkt_fotky`, upload z mobilu, alt texty, titulní foto. Hlídač natvrdo napsaných domén nad `public/` se **přepne z varování na tvrdý assert**. | `009` |
+| **E2** | Fotky: `soubory` + `produkt_fotky`, upload z mobilu, alt texty, titulní foto. Hlídač natvrdo napsaných domén nad `public/` se **přepne z varování na tvrdý assert** — viz poznámku pod tabulkou. | `009` |
 | **E3** | Místa + termíny kurzů: kapacita, stav, hromadné vytvoření, kopie dne, zrušení s důvodem, instruktoři. Soupiska zatím prázdná. | `010` |
 | **E4** | **Veřejná část kurzů z API** + **SSR pilot** pro `/kurzy` a `/kurz/:slug` (normální URL, history API). Odstřihnutí `COURSES` a `COURSE_CHECKLIST` z `data.js`. | — |
 | **E5** | Přihlášky: zákazníci, transakční kapacita, veřejný formulář, e-maily, stavy, soupiska naostro, export CSV. | `011` |
+
+**Hlídač domén nad `public/` (upřesněno při E2).** Úplně prázdný být ještě nemůže:
+třináct zbylých adres jsou fotky na titulce (hero, produkty, aktuality, tým, galerie)
+a kontaktní e-mail, a ty se stěhují až ve fázi 5 („Migrace fotek ze starého webu",
+[plan-administrace.md §7](plan-administrace.md)). Hlídač je proto **západka**:
+v `test/bezpecnost.test.js` je vyjmenovaný seznam toho, co tam dnes je, a cokoli
+dalšího test shodí. Není to výjimka pro celé soubory — nová natvrdo napsaná doména
+se do webu nedostane. Jak budou fotky ubývat, seznam se bude zkracovat; až bude
+prázdný, zůstane z testu totéž co u `src/`.
 
 ### Transakce u kapacity (E5)
 ```sql

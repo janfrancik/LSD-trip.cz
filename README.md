@@ -11,10 +11,10 @@ Administrace na `/admin` se staví po fázích podle [docs/plan-administrace.md]
 
 Modul **Kurzy** má vlastní schválené zadání v [docs/plan-kurzy.md](docs/plan-kurzy.md)
 (datový model, API, obrazovky, etapy E1–E5, rozhodnutí). Staví se jako první nad
-modelem produktů a termínů z plánu administrace. **Hotová je etapa E1** — sazby DPH
+modelem produktů a termínů z plánu administrace. **Hotové jsou etapy E1 a E2** — sazby DPH
 a kurzy v administraci (`/admin/kurzy`): texty, cena, DPH, požadavky na účastníka,
-průběh kurzu, zveřejnění, pořadí a historie cen. Veřejný web zatím kurzy bere
-z `data.js`, napojí se v E4.
+průběh kurzu, zveřejnění, pořadí, historie cen a fotky včetně titulní a popisů.
+Veřejný web zatím kurzy bere z `data.js`, napojí se v E4.
 
 ## Struktura
 
@@ -185,6 +185,7 @@ středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >
 | `006_schranka_emailu.sql` | testovací schránka e-mailů |
 | `007_akceptace_testeri.sql` | přiřazení testerů k verzi, výsledky po lidech |
 | `008_produkty_a_cenik.sql` | sazby DPH, produkty (kurzy), požadavky, průběh, historie cen |
+| `009_soubory_a_fotky.sql` | nahrané soubory a jejich napojení na produkty |
 
 ## API
 
@@ -193,6 +194,7 @@ středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >
 | --- | --- | --- |
 | `POST` | `/api/poptavky` | Odeslání kontaktního formuláře (rate limit 5/h, past na roboty) |
 | `GET` | `/api/health` | Stav aplikace, databáze a počet migrací |
+| `GET` | `/media/:id` | Nahraná fotka. Mimo `/api` schválně — adresa má být krátká a stálá a obrázky nesmí spadnout pod rate limit veřejného API. |
 
 Čtení obsahu z databáze (`/api/bootstrap`, produkty, termíny) přijde ve fázi 2.
 
@@ -208,6 +210,7 @@ povinná hlavička `X-CSRF-Token` shodná s cookie `lsd_csrf`.
 | Poptávky | `GET /poptavky`, `GET|PATCH|DELETE /poptavky/:id`, `POST /poptavky/:id/odpovedet`, `POST /poptavky/:id/obnovit` |
 | Produkty (kurzy) | `GET|POST /produkty`, `GET|PATCH|DELETE /produkty/:id`, `POST /produkty/:id/obnovit`, `POST /produkty/poradi`, `PUT /produkty/:id/pozadavky`, `PUT /produkty/:id/kroky`, `GET /produkty/:id/cenik-historie` |
 | Sazby DPH | `GET /dph-sazby`, `PATCH /dph-sazby/:id` |
+| Soubory | `GET|POST /soubory`, `PATCH|DELETE /soubory/:id`, `PUT /produkty/:id/fotky` |
 | Audit | `GET /audit` |
 | Nastavení | `GET|PATCH /nastaveni`, `GET /nastaveni/integrace` |
 | E-maily | `GET /emaily`, `GET /emaily/:id`, `GET /emaily/:id/telo`, `GET /emaily/:id/priloha/:prilohaId` |
@@ -465,5 +468,34 @@ takový seznam časem zestárne, web ukazuje jen termíny s datem **od dnešníh
 pražského dne dál** (`isoDatum()` ze `src/cas.js`, který se servíruje i na
 `/assets/js/cas.js`). Když žádný takový není, nabídne místo seznamu kontakt.
 
-Fotografie se do etapy E2 načítají z `www.lsd-trip.cz`. Hlídač natvrdo napsaných
-domén proto nad `public/` zatím jen vypisuje seznam, místo aby shodil testy.
+## Nahrané soubory a fotky
+
+Fotky se nahrávají v administraci (karta kurzu → Fotky), rovnou z mobilu. Soubor jde
+jako base64 v JSON, typ se pozná **z obsahu**, ne z toho, co tvrdí prohlížeč. Data leží
+ve volume `uploads`, v databázi je jen cesta — obrázky tak nenadýmají zálohu databáze
+a přežijí přestavbu image.
+
+Táž fotka nahraná podruhé nevytvoří druhý soubor: pozná se podle otisku obsahu
+(`hash_sha256`), takže to funguje i při jiném názvu souboru.
+
+Zobrazují se na `/media/:id` — **veřejně a bez rate limitu**. Fotky kurzů jsou obsah webu,
+administrace si je zobrazuje touž cestou a stránka s galerií by se do limitu veřejného API
+(120/min) vešla jednou. Ven jde obrázek, ne název souboru ani to, kdo ho nahrál. Přílohy
+akceptace tudy **nejdou**, ty mají vlastní tabulku i endpoint za přihlášením.
+
+U produktu je první fotka v pořadí **titulní** — ta velká na kartě. Že je právě jedna,
+hlídá aplikace v transakci; unikátní index by to neuhlídal, protože MariaDB bere každou
+`NULL` jako jinou hodnotu. Po smazání titulní se pořadí srovná a titulní se stane další.
+
+Zmenšování, převod na WebP a náhledy přijdou s fotogalerií (fáze 5). Do té doby se
+obrázek ukládá tak, jak přišel, a limit je 10 MB na fotku.
+
+## Doména v kódu
+
+V `src/` nesmí být natvrdo napsaná doména vůbec — absolutní adresy se skládají z `APP_URL`.
+
+Nad `public/` je hlídač **západka**: v `test/bezpecnost.test.js` je vyjmenovaný seznam toho,
+co tam ze starého webu zbývá (fotky na titulce a kontaktní e-mail), a **cokoli dalšího test
+shodí**. Není to výjimka pro celé soubory — nová natvrdo napsaná doména se do webu nedostane.
+Jak budou fotky ubývat, bude se seznam zkracovat; až bude prázdný, zůstane z testu totéž
+co u `src/`. Zbylé fotky titulky se přenesou ve fázi 5 („Migrace fotek ze starého webu").

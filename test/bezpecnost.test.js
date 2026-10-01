@@ -135,25 +135,101 @@ test('v kódu aplikace není natvrdo napsaná doména', async () => {
   );
 });
 
-test('veřejný web zatím smí mít adresy na starý web, ale ví se o nich', async (t) => {
-  // Ve `public/` jsou dnes všechny fotky načítané absolutní adresou ze starého
-  // webu. Dokud nejsou fotky přenesené do vlastního úložiště (etapa E2), nemá
-  // smysl kvůli tomu shazovat testy - ale nesmí to ani tiše přibývat.
-  // Proto se zatím jen vypisuje seznam.
-  //
-  // V E2 se tenhle test změní na tvrdý: `assert.deepEqual(nalezy, [])`,
-  // stejně jako u src/ výše.
-  //
-  // navrh_2/ je statická ukázka pro majitelku, ne kód aplikace - ta se neprochází.
-  const nalezy = await najdiDomeny(path.join(rootDir, 'public'), ['.js', '.html', '.css']);
+// Co ve `public/` zbývá ze starého webu. Jsou to adresy fotek na titulce
+// (hero, produkty, aktuality, tým, galerie) a kontaktní e-mail. Fotky se
+// přenesou do vlastního úložiště až ve fázi 5 ("Migrace fotek ze starého
+// webu" v docs/plan-administrace.md §7), do té doby se z něj načítají.
+//
+// Tohle NENÍ výjimka pro celé soubory - je to vyjmenovaný seznam toho, co
+// tam dnes je. Cokoli dalšího test shodí, takže nová natvrdo napsaná doména
+// se do webu nedostane. Jak budou fotky ubývat, bude se seznam zkracovat;
+// až bude prázdný, zůstane z testu totéž co u `src/`.
+const STARY_WEB_ZATIM_POVOLENO = {
+  'public/assets/js/app.js': [
+    // Kontaktní e-mail. Do nastavení patří taky (provoz.email už existuje),
+    // napojí se při převodu obsahu webu na databázi.
+    'mailto:info@lsd-trip.cz',
+    '>info@lsd-trip.cz</a></div></div>',
+  ],
+  'public/assets/js/data.js': [
+    'https://www.lsd-trip.cz/image/eshop/1512969318_image_gopr3595_00_00_49_00_49.jpg',
+    'https://www.lsd-trip.cz/image/eshop/1512893393_image_img_5635ab.jpeg',
+    'https://www.lsd-trip.cz/image/eshop/1512986228_image_vlcsnap-2017-04-02-20h56m57s323.png',
+    'https://www.lsd-trip.cz/image/carousel/1652266303_1_image_28350.jpg',
+    'https://www.lsd-trip.cz/image/carousel/1512896173_1_image_zv2.jpg',
+    'https://www.lsd-trip.cz/image/gallery/',
+    'https://www.lsd-trip.cz/image/news/1787649526_1_image_srpen1.jpg',
+    'https://www.lsd-trip.cz/image/news/1786465737_1_image_bc527bf2-415c-40dc-a6b9-db69180468aa.jpg',
+    'https://www.lsd-trip.cz/image/news/1785300889_1_image_vlcsnap-2026-07-28-17h53m57s259.jpg',
+    'https://www.lsd-trip.cz/image/member/',
+  ],
+  'public/index.html': [
+    // Obrázek do náhledu při sdílení na sítích.
+    'https://www.lsd-trip.cz/image/eshop/1512969318_image_gopr3595_00_00_49_00_49.jpg',
+  ],
+};
 
-  if (nalezy.length) {
-    t.diagnostic(`Natvrdo napsaná doména ve public/ (${nalezy.length}×), k odstranění v E2:`);
-    for (const nalez of nalezy) t.diagnostic(`  ${nalez}`);
+// Celé adresy a e-maily, ne jen řádky - číslo řádku se posune při každé úpravě
+// souboru a seznam by se musel přepisovat pořád dokola.
+const VZOR_ADRESY = /[^\s'"`(),]*(?:lsd-trip\.cz|francik\.eu)[^\s'"`(),]*/gi;
+
+async function najdiAdresy(adresar, pripony) {
+  const podleSouboru = {};
+
+  async function projdi(kde) {
+    for (const polozka of await readdir(kde, { withFileTypes: true })) {
+      const cesta = path.join(kde, polozka.name);
+      if (polozka.isDirectory()) {
+        await projdi(cesta);
+        continue;
+      }
+      if (!pripony.some((pripona) => polozka.name.endsWith(pripona))) continue;
+
+      const shody = (await readFile(cesta, 'utf8')).match(VZOR_ADRESY);
+      if (!shody) continue;
+
+      const klic = path.relative(rootDir, cesta).split(path.sep).join('/');
+      podleSouboru[klic] = [...new Set(shody)];
+    }
   }
 
-  // Záměrně bez assertu na prázdnotu - viz komentář výše.
-  assert.ok(Array.isArray(nalezy));
+  await projdi(adresar);
+  return podleSouboru;
+}
+
+test('ve veřejném webu nepřibyla žádná natvrdo napsaná doména', async (t) => {
+  // navrh_2/ je statická ukázka pro majitelku, ne kód aplikace - neprochází se.
+  const nalezeno = await najdiAdresy(path.join(rootDir, 'public'), ['.js', '.html', '.css']);
+
+  const nove = [];
+  for (const [soubor, adresy] of Object.entries(nalezeno)) {
+    const povolene = STARY_WEB_ZATIM_POVOLENO[soubor] ?? [];
+    for (const adresa of adresy) {
+      if (!povolene.includes(adresa)) nove.push(`${soubor}: ${adresa}`);
+    }
+  }
+
+  assert.deepEqual(
+    nove,
+    [],
+    'Nová natvrdo napsaná doména ve veřejném webu. Absolutní adresy se skládají\n' +
+      'z APP_URL, obrázky se nahrávají do administrace a servírují z /media/:id.\n' +
+      'Kdyby to opravdu byla další fotka ze starého webu, doplň ji do\n' +
+      'STARY_WEB_ZATIM_POVOLENO i s důvodem:\n' + nove.join('\n')
+  );
+
+  // Až se fotka přenese, má zmizet i ze seznamu - jinak by v něm zůstaly
+  // položky, které už nic nehlídají, a nikdo by nepoznal, kolik práce zbývá.
+  const zbytecne = [];
+  for (const [soubor, adresy] of Object.entries(STARY_WEB_ZATIM_POVOLENO)) {
+    for (const adresa of adresy) {
+      if (!(nalezeno[soubor] ?? []).includes(adresa)) zbytecne.push(`${soubor}: ${adresa}`);
+    }
+  }
+  if (zbytecne.length) {
+    t.diagnostic(`Hotovo, ${zbytecne.length}× už ve webu není — vyškrtni ze seznamu:`);
+    for (const radek of zbytecne) t.diagnostic(`  ${radek}`);
+  }
 });
 
 test('healthcheck hlásí stav databáze i počet migrací', async () => {

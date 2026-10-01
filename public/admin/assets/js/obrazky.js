@@ -35,6 +35,31 @@ export async function nahrajObrazek(soubor) {
   return api.post('/akceptace/prilohy', { obsah, nazev: soubor.name });
 }
 
+// Fotky obsahu webu (kurzy, později galerie) jdou jinam než snímky
+// z testování: mají vlastní tabulku, alt text a veřejnou adresu /media/:id.
+// Limit je vyšší, protože fotka z mobilu bývá větší než snímek obrazovky,
+// ale pořád konečný - zmenšování na serveru přijde až s fotogalerií.
+export const MAX_BAJTU_FOTKA = 10 * 1024 * 1024;
+
+/**
+ * Nahraje fotku do knihovny souborů a vrátí { id, url, alt, ... }.
+ * Kontrola velikosti je i tady, aby člověk na mobilních datech nečekal
+ * na odeslání něčeho, co server stejně odmítne.
+ */
+export async function nahrajFotku(soubor) {
+  if (!soubor.type.startsWith('image/')) {
+    throw new Error('Nahrát se dá jen obrázek — JPEG, PNG nebo WebP.');
+  }
+  if (soubor.size > MAX_BAJTU_FOTKA) {
+    throw new Error(
+      `Fotka má ${(soubor.size / 1024 / 1024).toFixed(1)} MB, maximum je ` +
+        `${MAX_BAJTU_FOTKA / 1024 / 1024} MB. Zkus ji v telefonu zmenšit.`
+    );
+  }
+  const obsah = await prectiJakoDataUrl(soubor);
+  return api.post('/soubory', { obsah, nazev: soubor.name });
+}
+
 // Náhled nahrané přílohy. Obrázek se bere z API (ne z dat v paměti), takže
 // stejný kód funguje i pro přílohy uložené dřív.
 export function nahled(priloha) {

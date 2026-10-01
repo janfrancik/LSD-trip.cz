@@ -15,6 +15,7 @@ import { limitVerejneApi } from './auth/limit.js';
 import { zajistiCsrfToken } from './auth/csrf.js';
 import verejneApi from './api/verejne.js';
 import adminApi from './api/admin/index.js';
+import mediaApi from './api/media.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
@@ -36,18 +37,22 @@ export function vytvorApp() {
   // nahrání snímku obrazovky v akceptaci - obrázek jde jako base64 v JSON,
   // takže potřebuje vyšší limit. Limit je proto na cestě, ne globální; kdyby
   // byl globální, dal by se každý endpoint zahltit osmimegovým tělem.
-  // (Upload fotogalerie přijde ve fázi 5 a bude mít vlastní endpoint.)
   const teloMale = express.json({ limit: '100kb' });
   const teloSObrazkem = express.json({ limit: '8mb' });
-  app.use((req, res, next) =>
-    req.path === '/api/admin/akceptace/prilohy'
-      ? teloSObrazkem(req, res, next)
-      : teloMale(req, res, next)
-  );
+  // Fotky kurzů jdou rovnou z mobilu a bývají větší než snímek obrazovky.
+  // Base64 navíc nafoukne obsah o třetinu, takže 10MB fotka potřebuje 14MB tělo.
+  const teloSFotkou = express.json({ limit: '14mb' });
+  const VELKE_TELO = new Map([
+    ['/api/admin/akceptace/prilohy', teloSObrazkem],
+    ['/api/admin/soubory', teloSFotkou],
+  ]);
+  app.use((req, res, next) => (VELKE_TELO.get(req.path) ?? teloMale)(req, res, next));
 
   // ---------------------------------------------------------------------- API
 
   app.use('/robots.txt', robotsTxt);
+  // Obrázky mimo /api - krátká adresa a žádný rate limit (viz api/media.js).
+  app.use('/media', mediaApi);
   app.use('/api/admin', adminApi);
   app.use('/api', limitVerejneApi, verejneApi);
 

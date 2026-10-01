@@ -91,9 +91,11 @@ export async function vycistiData(pool) {
     'nastaveni',
     'poptavky',
     'cenik_historie',
+    'produkt_fotky',
     'produkt_kroky',
     'produkt_pozadavky',
     'produkty',
+    'soubory',
     'uzivatele',
   ];
   // `dph_sazby` se schválně NEmaže: je to číselník, který naplnila migrace.

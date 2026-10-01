@@ -14,6 +14,7 @@ import { asyncHandler, chybaNenalezeno, chybaKonflikt } from '../../chyby.js';
 import { zvaliduj, schemaSeznam } from '../../validace.js';
 import { vyzaduje } from '../../auth/opravneni.js';
 import { zapisAudit } from '../../audit.js';
+import { prosit as prositSoubor } from './soubory.js';
 
 const router = express.Router();
 
@@ -178,7 +179,24 @@ async function nactiDetail(id) {
     [id]
   );
 
-  return { ...rows[0], pozadavky, kroky };
+  // Titulní fotka je vždycky první - karta kurzu i výpis na webu berou tu,
+  // na kterou narazí dřív, a nemají se o pořadí starat.
+  const [fotky] = await pool.query(
+    `SELECT s.id, s.puvodni_nazev, s.mime, s.velikost_b, s.alt, s.created_at,
+            f.poradi, f.titulni
+       FROM produkt_fotky f
+       JOIN soubory s ON s.id = f.soubor_id
+      WHERE f.produkt_id = ? AND s.smazano_at IS NULL
+      ORDER BY f.titulni DESC, f.poradi, s.id`,
+    [id]
+  );
+
+  return {
+    ...rows[0],
+    pozadavky,
+    kroky,
+    fotky: fotky.map((f) => ({ ...prositSoubor(f), poradi: f.poradi, titulni: f.titulni })),
+  };
 }
 
 // GET /api/admin/produkty/:id
@@ -429,6 +447,72 @@ router.put(
       nadpis: z.string().trim().min(1, 'Krok musí mít nadpis.').max(160),
       text: z.string().trim().max(65535).nullable().optional(),
     }),
+  })
+);
+
+// ------------------------------------------------------------------- fotky
+
+// PUT /api/admin/produkty/:id/fotky
+//
+// Posílá se celý seznam id fotek v pořadí, v jakém mají být. První je
+// titulní. Stejně jako u odrážek: majitelka s fotkami hýbe v administraci
+// a uloží je najednou, ne po jedné.
+router.put(
+  '/:id(\\d+)/fotky',
+  vyzaduje('produkty', 'menit'),
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    const { fotky } = zvaliduj(
+      z.object({
+        fotky: z.array(z.coerce.number().int().positive()).max(50, 'Víc než 50 fotek na kurz nedává smysl.'),
+      }),
+      req.body ?? {}
+    );
+
+    const [[produkt]] = await pool.query(
+      'SELECT id, nazev FROM produkty WHERE id = ? AND smazano_at IS NULL',
+      [id]
+    );
+    if (!produkt) throw chybaNenalezeno('Produkt nenalezen.');
+
+    // Táž fotka dvakrát v jednom kurzu nedává smysl a rozbila by primární klíč.
+    const unikatni = [...new Set(fotky)];
+
+    if (unikatni.length) {
+      const [existujici] = await pool.query(
+        'SELECT id FROM soubory WHERE id IN (?) AND smazano_at IS NULL',
+        [unikatni]
+      );
+      if (existujici.length !== unikatni.length) {
+        throw chybaNenalezeno('Některá z fotek už neexistuje. Načti stránku znovu.');
+      }
+    }
+
+    const spojeni = await pool.getConnection();
+    try {
+      await spojeni.beginTransaction();
+      await spojeni.query('DELETE FROM produkt_fotky WHERE produkt_id = ?', [id]);
+      for (let i = 0; i < unikatni.length; i++) {
+        await spojeni.query(
+          'INSERT INTO produkt_fotky (produkt_id, soubor_id, poradi, titulni) VALUES (?, ?, ?, ?)',
+          [id, unikatni[i], i + 1, i === 0 ? 1 : 0]
+        );
+      }
+      await spojeni.commit();
+    } catch (chyba) {
+      await spojeni.rollback();
+      throw chyba;
+    } finally {
+      spojeni.release();
+    }
+
+    await zapisAudit({
+      req, akce: 'zmena', entita: 'produkt', entitaId: id,
+      popis: `${produkt.nazev} — fotky`,
+      po: { pocet_fotek: unikatni.length },
+    });
+
+    res.json(await nactiDetail(id));
   })
 );
 

@@ -11,6 +11,7 @@ import {
   esc, kc, datumCas, prazdno, strankovani, hlaska, potvrd, pole, ukazChybyPoli,
   formularModal,
 } from '../ui.js';
+import { nahrajFotku, MAX_BAJTU_FOTKA } from '../obrazky.js';
 import { jdiNa, stav as globalniStav } from '../admin.js';
 
 const filtr = { q: '', strana: 1, smazane: '' };
@@ -239,6 +240,7 @@ async function karta(koren, id) {
 
   praceNaKurzu = {
     id,
+    fotky: kurz.fotky.map((f) => ({ ...f })),
     pozadavky: kurz.pozadavky.map((p) => p.text),
     kroky: kurz.kroky.map((k) => ({ nadpis: k.nadpis, text: k.text ?? '' })),
     pozadavkyPuvodni: otiskPozadavku(kurz.pozadavky.map((p) => p.text)),
@@ -289,6 +291,7 @@ async function karta(koren, id) {
   nactiHistorii(koren, id);
   navazFormular(koren, kurz, id);
   navazSeznamy(koren);
+  navazFotky(koren, id);
   navazNahled(koren);
 
   // Náhled je na telefonu nad formulářem, takže "Náhled" k němu jen vyjede.
@@ -440,15 +443,141 @@ function sekcePozadavky(kurz) {
 function sekceFotky() {
   return sekce(
     'Fotky',
-    'Titulní fotka je ta velká na kartě kurzu, ostatní se ukážou v galerii na stránce kurzu. ' +
-      '<strong>Nahrávání přibude v příští etapě</strong> — do té doby je místo fotky tmavá plocha ' +
-      'a kurz se bez ní obejde.',
-    `<div class="fotky-misto">
-        <div class="fotky-misto__ram fotky-misto__ram--titulni">Titulní fotka<br />na šířku, poměr 3:2</div>
-        <div class="fotky-misto__ram">Galerie</div>
-        <div class="fotky-misto__ram">Galerie</div>
+    'První fotka je <strong>titulní</strong> — ta velká na kartě kurzu. Ostatní se ukážou ' +
+      'v galerii na stránce kurzu. Nejlépe vypadají fotky na šířku v poměru 3:2. ' +
+      'Popis fotky vidí čtečka pro nevidomé a objeví se i tehdy, když se obrázek nenačte.',
+    `<div data-fotky>
+        <div class="fotky" data-fotky-seznam></div>
+        ${smiMenit() ? `
+          <div class="fotky__pridat">
+            <input type="file" id="fotka-vstup" accept="image/jpeg,image/png,image/webp"
+                   multiple hidden />
+            <button type="button" class="btn btn--obrys btn--blok" data-vybrat-fotku>
+              + Přidat fotku
+            </button>
+            <p class="sekce__napoveda" style="margin-top:8px">
+              Z telefonu můžeš fotit rovnou. Maximum ${MAX_BAJTU_FOTKA / 1024 / 1024} MB na fotku —
+              zmenšování na serveru přijde s fotogalerií.
+            </p>
+          </div>` : ''}
       </div>`
   );
+}
+
+function vykresliFotky(koren) {
+  const obal = koren.querySelector('[data-fotky-seznam]');
+  if (!obal) return;
+
+  const fotky = praceNaKurzu.fotky;
+  const muze = smiMenit();
+
+  if (!fotky.length) {
+    obal.innerHTML = `<div class="fotky-misto">
+        <div class="fotky-misto__ram fotky-misto__ram--titulni">Zatím žádná fotka</div>
+      </div>`;
+    return;
+  }
+
+  obal.innerHTML = fotky.map((f, i) => `
+      <div class="fotka${i === 0 ? ' fotka--titulni' : ''}">
+        <div class="fotka__obrazek">
+          <img src="${esc(f.url)}" alt="${esc(f.alt ?? '')}" loading="lazy" />
+          ${i === 0 ? '<span class="fotka__odznak">Titulní</span>' : ''}
+        </div>
+        <input class="pole" type="text" data-alt="${f.id}" value="${esc(f.alt ?? '')}"
+               placeholder="Co je na fotce — např. „Instruktor s účastníkem po přistání“"
+               aria-label="Popis fotky ${i + 1}" ${muze ? '' : 'readonly'} />
+        ${!f.alt ? '<p class="fotka__chybi-popis">Bez popisu. Doplň ho, ať fotce rozumí i čtečka.</p>' : ''}
+        ${muze ? `<div class="polozka__akce">
+          <button type="button" class="btn btn--obrys btn--maly" data-fotka-posun="${i}" data-smer="-1"
+                  ${i === 0 ? 'disabled' : ''} aria-label="Posunout dopředu">↑</button>
+          <button type="button" class="btn btn--obrys btn--maly" data-fotka-posun="${i}" data-smer="1"
+                  ${i === fotky.length - 1 ? 'disabled' : ''} aria-label="Posunout dozadu">↓</button>
+          <button type="button" class="btn btn--obrys btn--maly" data-fotka-smazat="${f.id}"
+                  aria-label="Odebrat fotku">✕</button>
+        </div>` : ''}
+      </div>`).join('');
+}
+
+function navazFotky(koren, id) {
+  const blok = koren.querySelector('[data-fotky]');
+  if (!blok) return;
+
+  vykresliFotky(koren);
+
+  const vstup = blok.querySelector('#fotka-vstup');
+  blok.querySelector('[data-vybrat-fotku]')?.addEventListener('click', () => vstup?.click());
+
+  vstup?.addEventListener('change', async () => {
+    const soubory = [...(vstup.files ?? [])];
+    vstup.value = ''; // ať jde tutéž fotku vybrat znovu po smazání
+
+    for (const soubor of soubory) {
+      try {
+        const fotka = await nahrajFotku(soubor);
+        // Tatáž fotka už u kurzu být nemusí podruhé.
+        if (praceNaKurzu.fotky.some((f) => f.id === fotka.id)) {
+          hlaska('Tuhle fotku už kurz má.', 'chyba');
+          continue;
+        }
+        praceNaKurzu.fotky.push(fotka);
+        vykresliFotky(koren);
+        await ulozFotky(koren, id);
+      } catch (chyba) {
+        hlaska(chyba.message, 'chyba');
+      }
+    }
+  });
+
+  blok.addEventListener('click', async (e) => {
+    const posun = e.target.closest('[data-fotka-posun]');
+    const smazat = e.target.closest('[data-fotka-smazat]');
+
+    if (posun) {
+      const odkud = Number(posun.dataset.fotkaPosun);
+      const kam = odkud + Number(posun.dataset.smer);
+      if (kam < 0 || kam >= praceNaKurzu.fotky.length) return;
+      praceNaKurzu.fotky.splice(kam, 0, praceNaKurzu.fotky.splice(odkud, 1)[0]);
+      vykresliFotky(koren);
+      await ulozFotky(koren, id);
+      return;
+    }
+
+    if (smazat) {
+      const soubororId = Number(smazat.dataset.fotkaSmazat);
+      praceNaKurzu.fotky = praceNaKurzu.fotky.filter((f) => f.id !== soubororId);
+      vykresliFotky(koren);
+      await ulozFotky(koren, id);
+    }
+  });
+
+  // Popis fotky se ukládá rovnou k souboru, ne přes formulář kurzu -
+  // tatáž fotka může být později i jinde a popis patří k ní.
+  blok.addEventListener('change', async (e) => {
+    const pole = e.target.closest('[data-alt]');
+    if (!pole) return;
+    const souborId = Number(pole.dataset.alt);
+    try {
+      const novy = await api.patch(`/soubory/${souborId}`, { alt: pole.value.trim() });
+      const fotka = praceNaKurzu.fotky.find((f) => f.id === souborId);
+      if (fotka) fotka.alt = novy.alt;
+      vykresliFotky(koren);
+      obnovNahled(koren);
+    } catch (chyba) {
+      hlaska(chyba.message, 'chyba');
+    }
+  });
+}
+
+// Pořadí a složení fotek se ukládá hned, ne až s formulářem. Nahrát fotku
+// a pak o ni přijít, protože se zapomnělo kliknout na Uložit, by byla škoda.
+async function ulozFotky(koren, id) {
+  try {
+    await api.put(`/produkty/${id}/fotky`, { fotky: praceNaKurzu.fotky.map((f) => f.id) });
+    obnovNahled(koren);
+  } catch (chyba) {
+    hlaska(chyba.message, 'chyba');
+  }
 }
 
 function sekceZverejneni(kurz) {
@@ -611,10 +740,13 @@ function nahledKarty(k) {
   const cena = k.cena_na_dotaz ? 'Cena na dotaz' : (k.cena_hal == null ? '—' : kc(k.cena_hal));
   const meta = [k.delka_text, k.uroven_text].filter(Boolean);
 
+  // Titulní fotka je vždycky první v seznamu (viz ulozFotky).
+  const titulni = praceNaKurzu?.fotky?.[0] ?? null;
+
   return `<article class="nk" data-nk>
-      <div class="nk__media">
+      <div class="nk__media"${titulni ? ` style="background-image:url(${esc(titulni.url)})"` : ''}>
         ${k.stitek ? `<span class="nk__stitek">${esc(k.stitek)}</span>` : ''}
-        Fotka přibude v příští etapě
+        ${titulni ? '' : 'Zatím bez fotky'}
       </div>
       <div class="nk__telo">
         <h3 class="nk__nazev">${esc(k.nazev || 'Název kurzu')}</h3>
@@ -671,7 +803,16 @@ function navazNahled(koren) {
 
   formular.addEventListener('input', prekresli);
   formular.addEventListener('change', prekresli);
+  prekresliNahled = prekresli;
   prekresli();
+}
+
+// Náhled se překresluje sám při psaní do formuláře. Fotky ale leží mimo něj,
+// takže po jejich změně je potřeba o překreslení říct.
+let prekresliNahled = null;
+
+function obnovNahled() {
+  prekresliNahled?.();
 }
 
 // ------------------------------------------------------------ ukládání karty
