@@ -9,6 +9,10 @@ bez build kroku — Express ho servíruje jako statické soubory.
 Administrace na `/admin` se staví po fázích podle [docs/plan-administrace.md](docs/plan-administrace.md).
 **Hotová je fáze 1** (zabezpečení, přihlášení, role, audit, nastavení, poptávky, testovací prostředí).
 
+Modul **Kurzy** má vlastní schválené zadání v [docs/plan-kurzy.md](docs/plan-kurzy.md)
+(datový model, API, obrazovky, etapy E1–E5, rozhodnutí). Staví se jako první nad
+modelem produktů a termínů z plánu administrace.
+
 ## Struktura
 
 ```

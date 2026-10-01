@@ -147,8 +147,11 @@ pokud `NODE_ENV !== 'production'` a `EMAIL_REZIM` není nastaven, aplikace e-mai
 ### Konvence
 - Názvy tabulek i sloupců česky, `snake_case`, množné číslo (držím se `poptavky` a `_migrace`).
 - **Peníze:** vždy `INT` v haléřích, sloupce končí `_hal`. Nikdy `FLOAT`, nikdy `DECIMAL` pro součty.
-- **Čas:** kontejner i MariaDB v `TZ=Europe/Prague`, `DATETIME` v místním čase, `DATE` pro dny.
-  `mysql2` dostane `timezone: 'local'` + `dateStrings: true` (už je).
+- **Čas:** kontejner i MariaDB v `TZ=UTC`, `DATETIME` **v UTC**, `DATE` pro dny.
+  `mysql2` dostane `timezone: 'Z'` + `dateStrings: true`, spojení `SET time_zone = '+00:00'`.
+  Na Europe/Prague se převádí až při zobrazení, a jen přes `src/cas.js`.
+  *(Opraveno 1. 10. 2026 — viz 6.3. Původně tu stálo `Europe/Prague` a `timezone: 'local'`,
+  což přestalo platit migrací `005_casy_v_utc.sql`.)*
 - **Mazání:** `smazano_at DATETIME NULL` (soft delete) u všeho, co má vazby. Tvrdě se maže jen `_soubory` po potvrzení.
 - **Auditované tabulky** mají `created_at`, `updated_at`, `vytvoril_id`, `upravil_id`.
 - Všechny `ENGINE=InnoDB`, `utf8mb4_unicode_ci`.
@@ -578,9 +581,36 @@ Testy: **`node:test` + vestavěný `fetch`** (Node 24), žádný Jest ani supert
 - Veřejný web nedostane žádný endpoint, který vrací osobní údaje bez podepsaného tokenu.
 
 ### 6.3 Časová zóna a formáty
-- `TZ=Europe/Prague` v obou kontejnerech + `MARIADB_INITDB_SKIP_TZINFO` nenastavovat (tabulky časových zón potřebujeme).
-- Datum uživateli vždy `26. 9. 2026`, čas `13:30`, peníze `4 700 Kč` — jedna funkce `formatuj.js` na serveru i v administraci.
-- Sezóna a „dnes“ se počítají z pražského data, ne z UTC.
+
+**Opraveno 1. 10. 2026.** Původní návrh počítal s `TZ=Europe/Prague` a `DATETIME`
+v místním čase. To se ukázalo jako chyba a migrace `005_casy_v_utc.sql` to otočila:
+**v databázi je čas vždy v UTC.** Důvod je v `CLAUDE.md` i v hlavičce `src/cas.js` —
+pražský čas „na hodinách“ je nejednoznačný. Poslední říjnovou neděli proběhne hodina
+2:00–3:00 dvakrát, takže `2026-10-25 02:30:00` jsou dva různé okamžiky vzdálené
+hodinu. U držení rezervace na 48 h, splatností a pořadí plateb je to chyba, která
+se už nedá opravit zpětně. Text níž platí v opravené podobě.
+
+- `TZ=UTC` v obou kontejnerech, spojení má `SET time_zone = '+00:00'` (`src/db.js`),
+  ovladač `timezone: 'Z'` + `dateStrings: true`. `NOW()`, `DATE_ADD` i porovnání
+  v SQL tím počítají v UTC a jsou správně — **nikdy se nepřičítají ani neodečítají
+  hodiny, aby „to sedělo“.**
+- Na Europe/Prague se převádí **až při zobrazení, a jen přes `src/cas.js`**
+  (`datum()`, `cas()`, `datumCas()`, `pred()`, `isoDatum()`, `okamzik()`, `proDb()`).
+  Platí pro administraci, e-maily, exporty i doklady. Žádné `toLocaleString()`
+  ani `new Date(retezecZDatabaze)`. Místo plánovaného `formatuj.js` je to `src/cas.js`,
+  který si administrace i veřejný web načítají jako modul ze serveru — jedna
+  implementace, ne dvě. Hlídá to `test/casy-moduly.test.js`.
+- Datum uživateli vždy `26. 9. 2026`, čas `13:30`, peníze `4 700 Kč`.
+- Sezóna a „dnes“ se počítají z **pražského** data (`isoDatum()`), ne z UTC půlnoci.
+
+**Okamžik vs. hodiny na letišti.** Jsou to dvě různé věci a pletou se:
+
+| Co | Typ | Zóna |
+| --- | --- | --- |
+| `terminy.datum`, `terminy.cas_od`, `cas_do` | `DATE` + `TIME` | **žádná** — jsou to hodiny na letišti. Termín v 10:00 je prostě 10:00. |
+| `rezervace.drzeni_do`, `splatnost`, `created_at`, `storno_at` | `DATETIME` / `DATE` | **UTC**, zobrazení přes `cas.js` |
+
+Proto se u termínů nepoužívá `DATETIME`: svedlo by to k převodům, které tam nepatří.
 
 ### 6.4 Transakce u kapacity
 ```sql
