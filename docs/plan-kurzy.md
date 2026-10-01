@@ -93,7 +93,8 @@ proto má E3 migraci `011`, ne `010`.
 
 ### `011_mista_a_terminy.sql`
 ```
-mista              id, nazev, adresa, gps_lat, gps_lon, aktivni
+mista              id, nazev, adresa, gps_lat, gps_lon, poznamka, aktivni,
+                   poradi, smazano_at, +audit
 termin_serie       id, nazev, pravidlo JSON, vytvoril_id, created_at
 terminy            id, produkt_id, serie_id NULL, nazev_prepis NULL,
                    datum DATE, cas_od TIME NULL, cas_do TIME NULL,
@@ -108,6 +109,13 @@ termin_instruktori termin_id, uzivatel_id, role ENUM('tandem','aff','kamera','ba
 ```
 `obsazeno_mist` je **cache pro výpisy**. Autoritativní je součet z `rezervace`
 uvnitř transakce (§5), cache se přepočítá v téže transakci.
+
+**Upřesněno při E3:** `kapacita_mist = 0` znamená bez omezení — kurz kapacitu má
+vždycky, ale den otevřených dveří ne a vymyšlené číslo by bylo horší než jedna
+domluvená nula. Včerejší a starší termíny přepíná hodinová údržba z „otevřeno“
+na „proběhlo“; zrušených se to netýká. Místa i seznam lidí k přiřazení
+(`GET /terminy/instruktori`) jdou pod právo `terminy`, aby si provoz vystačil
+sám — na `uzivatele` právo nemá a bez toho by k termínu nikoho nepřiřadil.
 
 ### `012_zakaznici_a_prihlasky.sql`
 ```

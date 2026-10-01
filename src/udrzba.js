@@ -11,6 +11,7 @@ import { uklidProslychSession } from './auth/session.js';
 import { uklidStarePokusy } from './auth/limit.js';
 import { uklidNepouzitePrilohy } from './akceptace/prilohy.js';
 import { uklidOsireleSoubory, dopocitejChybejiciVarianty } from './soubory.js';
+import { oznacProbehleTerminy } from './terminy.js';
 
 const HODINA_MS = 60 * 60 * 1000;
 
@@ -27,13 +28,17 @@ async function uklid() {
     // nebo přinesené importem. Dopočítá se jich pár za kolo, ať to nikdo
     // nemusí spouštět ručně.
     const zmensene = await dopocitejChybejiciVarianty();
+    // Termíny, které už se odlétaly. Jinak by u nich svítilo "otevřeno"
+    // a provoz by je po sezóně odklikával ručně jeden po druhém.
+    const probehle = await oznacProbehleTerminy();
 
-    if (session || pokusy || prilohy || fotky || zmensene) {
+    if (session || pokusy || prilohy || fotky || zmensene || probehle) {
       console.log(
         `[údržba] smazáno ${session} prošlých přihlášení, ${pokusy} starých pokusů` +
           (prilohy ? `, ${prilohy} nepoužitých příloh` : '') +
           (fotky ? `, ${fotky} osiřelých souborů` : '') +
-          (zmensene ? `, zmenšeno ${zmensene} fotek pro web` : '')
+          (zmensene ? `, zmenšeno ${zmensene} fotek pro web` : '') +
+          (probehle ? `, ${probehle} termínů označeno jako proběhlé` : '')
       );
     }
   } catch (err) {

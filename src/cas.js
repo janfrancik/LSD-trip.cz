@@ -162,3 +162,61 @@ export function sklon(pocet, jeden, dva, vic) {
   if (pocet >= 2 && pocet <= 4) return dva;
   return vic;
 }
+
+// ------------------------------------------------ kalendářní dny (bez zóny)
+//
+// Termíny na letišti jsou dny na kalendáři, ne okamžiky na ose času: "17. 5."
+// je 17. 5. bez ohledu na zónu. Počítá se proto nad UTC půlnocemi - posouvání
+// po 24 hodinách v místní zóně by na přechodu letního času den přeskočilo
+// nebo zopakovalo. Tyhle funkce berou i vracejí "YYYY-MM-DD".
+
+function pulnoc(iso) {
+  const cas = Date.parse(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  return Number.isNaN(cas) ? null : cas;
+}
+
+const DEN_MS = 24 * 60 * 60 * 1000;
+
+// ISO číslování: 1 = pondělí … 7 = neděle.
+export function denVTydnu(iso) {
+  const cas = pulnoc(iso);
+  if (cas === null) return null;
+  const den = new Date(cas).getUTCDay();
+  return den === 0 ? 7 : den;
+}
+
+export function oDniDal(iso, dni = 1) {
+  const cas = pulnoc(iso);
+  if (cas === null) return iso;
+  return new Date(cas + dni * DEN_MS).toISOString().slice(0, 10);
+}
+
+// Délka rozsahu ve dnech včetně obou krajů.
+export function pocetDni(od, doKdy) {
+  const zacatek = pulnoc(od);
+  const konec = pulnoc(doKdy);
+  if (zacatek === null || konec === null) return 0;
+  return Math.floor((konec - zacatek) / DEN_MS) + 1;
+}
+
+/**
+ * Data v rozsahu, případně jen vybrané dny v týdnu.
+ *
+ * @param {string} od     "2026-05-01"
+ * @param {string} doKdy  "2026-06-30"
+ * @param {number[]} dny  1 = pondělí … 7 = neděle; prázdné = všechny dny
+ */
+export function datumyVRozsahu(od, doKdy, dny = []) {
+  const vybrane = new Set(dny);
+  const vysledek = [];
+  const zacatek = pulnoc(od);
+  const konec = pulnoc(doKdy);
+  if (zacatek === null || konec === null || konec < zacatek) return vysledek;
+
+  for (let cas = zacatek; cas <= konec; cas += DEN_MS) {
+    const den = new Date(cas).toISOString().slice(0, 10);
+    if (vybrane.size && !vybrane.has(denVTydnu(den))) continue;
+    vysledek.push(den);
+  }
+  return vysledek;
+}

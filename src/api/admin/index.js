@@ -26,6 +26,8 @@ import akceptace from './akceptace.js';
 import produkty from './produkty.js';
 import dph from './dph.js';
 import soubory from './soubory.js';
+import mista from './mista.js';
+import terminy from './terminy.js';
 
 const router = express.Router();
 
@@ -61,6 +63,8 @@ router.use('/emaily', emaily);
 router.use('/produkty', produkty);
 router.use('/dph-sazby', dph);
 router.use('/soubory', soubory);
+router.use('/mista', mista);
+router.use('/terminy', terminy);
 
 // Akceptační testování je nástroj testovacího prostředí. V produkci se router
 // vůbec nenamontuje - cesty tam tedy neexistují, ne že by jen vracely 403.

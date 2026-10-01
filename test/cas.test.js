@@ -181,3 +181,38 @@ test('NOW() v databázi a Date.now() v aplikaci jdou stejně', async () => {
   const rozdil = Math.abs(okamzik(r.ted).getTime() - Date.now());
   assert.ok(rozdil < 5000, `čas databáze a aplikace se liší o ${rozdil} ms`);
 });
+
+// -------------------------------------------- kalendářní dny (den na papíře)
+
+test('dny v rozsahu nepřeskočí ani nezopakují den na přechodu letního času', async () => {
+  const { datumyVRozsahu, oDniDal, pocetDni } = await import('../src/cas.js');
+
+  // V Praze se 29. 3. 2026 přechází na letní čas a 25. 10. zpátky. Den na
+  // kalendáři to nesmí posunout - "17. 5." je 17. 5. bez ohledu na zónu.
+  const jaro = datumyVRozsahu('2026-03-28', '2026-03-30');
+  assert.deepEqual(jaro, ['2026-03-28', '2026-03-29', '2026-03-30']);
+
+  const podzim = datumyVRozsahu('2026-10-24', '2026-10-26');
+  assert.deepEqual(podzim, ['2026-10-24', '2026-10-25', '2026-10-26']);
+
+  assert.equal(oDniDal('2026-03-28', 1), '2026-03-29');
+  assert.equal(oDniDal('2026-10-24', 7), '2026-10-31');
+  assert.equal(pocetDni('2026-03-28', '2026-03-30'), 3);
+});
+
+test('dny v týdnu se vybírají podle ISO, pondělí je jednička', async () => {
+  const { datumyVRozsahu, denVTydnu } = await import('../src/cas.js');
+
+  assert.equal(denVTydnu('2026-05-01'), 5, '1. 5. 2026 je pátek');
+  assert.equal(denVTydnu('2026-05-03'), 7, 'neděle je sedmička, ne nula');
+
+  const patkyASoboty = datumyVRozsahu('2026-05-01', '2026-05-31', [5, 6]);
+  assert.equal(patkyASoboty.length, 10);
+  assert.equal(patkyASoboty[0], '2026-05-01');
+  assert.equal(patkyASoboty.at(-1), '2026-05-30');
+
+  // Prázdný výběr = všechny dny.
+  assert.equal(datumyVRozsahu('2026-05-01', '2026-05-31').length, 31);
+  // Obrácený rozsah nevrátí nic, místo aby se zacyklil.
+  assert.deepEqual(datumyVRozsahu('2026-05-31', '2026-05-01'), []);
+});

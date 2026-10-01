@@ -794,3 +794,67 @@ select.pole { appearance: none; background-image: none; }
 .nahled-obal__skryto {
   margin-top: 8px; font-size: 12px; color: var(--varovani); line-height: 1.45;
 }
+
+/* ==========================================================================
+   Termíny
+   ========================================================================== */
+
+/* Tlačítka v hlavičce seznamu. Na telefonu se zalomí pod nadpis a jsou
+   přes celou šířku - "Nový termín" se mačká často a jednou rukou. */
+.hlava-akce { display: flex; flex-wrap: wrap; gap: 8px; }
+.hlava-akce .btn { flex: 1; white-space: nowrap; }
+
+@media (min-width: 600px) {
+  .hlava-akce .btn { flex: 0 0 auto; }
+}
+
+/* Filtry nad seznamem: na telefonu pod sebou, od tabletu do řádku. */
+.filtr-radek { display: grid; gap: 8px; margin-bottom: 12px; }
+
+@media (min-width: 700px) {
+  .filtr-radek { grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr) minmax(0, 1fr) auto; }
+}
+
+/* Dny v týdnu u hromadného zadání. Sedm zaškrtávátek pod sebou by na
+   telefonu zabralo půl obrazovky, takhle je to jeden řádek s plochami,
+   do kterých se dá trefit prstem. */
+.dny-vyber { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+
+.den {
+  min-height: 44px;
+  border: 1px solid var(--line-strong);
+  background: var(--panel-2);
+  color: var(--text-2);
+  font-family: var(--font-mono); font-size: 12px; letter-spacing: 0.04em;
+  cursor: pointer;
+}
+.den:hover { border-color: var(--line-strong); color: var(--text); }
+.den--vybrany {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+}
+
+/* ------------------------------------------------------------ karta termínu */
+
+.karta-termin { display: block; }
+
+/* Karta termínu nemá náhled webové karty jako kurz - termín se na webu
+   ukazuje jako řádek u kurzu, ne jako vlastní dlaždice. Na širokém monitoru
+   proto sekce jdou do dvou sloupců, ať se karta neroluje přes celou obrazovku. */
+.karta-sloupce { display: grid; gap: 14px; }
+.karta-sloupce .sekce { margin-bottom: 0; }
+
+@media (min-width: 900px) {
+  .karta-sloupce {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+  }
+}
+
+.karta-hlavicka__duvod {
+  margin-top: 10px; font-size: 13px; line-height: 1.5; color: var(--chyba);
+}
+
+/* Řádek s údajem, který se needituje (kolik je přihlášených). */
+.sekce__udaj { margin-top: 12px; font-size: 14px; color: var(--text-2); }
+
+.soupiska { margin-top: 12px; }

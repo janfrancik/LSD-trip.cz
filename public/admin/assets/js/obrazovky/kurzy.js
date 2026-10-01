@@ -12,6 +12,7 @@ import {
   formularModal,
 } from '../ui.js';
 import { nahrajFotku, MAX_BAJTU_FOTKA } from '../obrazky.js';
+import { omezNaKurz } from './terminy.js';
 import { jdiNa, stav as globalniStav } from '../admin.js';
 
 const filtr = { q: '', strana: 1, smazane: '' };
@@ -301,6 +302,13 @@ async function karta(koren, id) {
       ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
 
+  // Termíny jsou vlastní obrazovka, ale otevírají se rovnou předfiltrované
+  // na tenhle kurz - jinak by se v nich musel znovu hledat.
+  koren.querySelector('[data-terminy]')?.addEventListener('click', () => {
+    omezNaKurz(kurz.id);
+    jdiNa('terminy');
+  });
+
   koren.querySelector('[data-ulozit-nahore]')?.addEventListener('click', () => {
     koren.querySelector('#formular')?.requestSubmit();
   });
@@ -352,6 +360,7 @@ function hlavicka(kurz, muze) {
       <div class="karta-hlavicka__akce">
         ${muze ? '<button type="button" class="btn btn--hlavni" data-ulozit-nahore>Uložit</button>' : ''}
         <button type="button" class="btn btn--obrys" data-nahled>Náhled</button>
+        <button type="button" class="btn btn--obrys" data-terminy>Termíny</button>
       </div>
     </div>`;
 }

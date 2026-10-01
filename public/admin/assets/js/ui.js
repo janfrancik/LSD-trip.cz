@@ -21,7 +21,10 @@ export function esc(hodnota) {
 // vygenerování byl v UTC a časy testů v pražském čase.
 //
 // Reexport, aby obrazovky mohly dál psát `import { datumCas } from '../ui.js'`.
-export { datum, datumSlovy, cas, datumCas, pred, sklon, okamzik } from './cas.js';
+export {
+  datum, datumSlovy, cas, datumCas, pred, sklon, okamzik,
+  isoDatum, denVTydnu, oDniDal,
+} from './cas.js';
 
 // Peníze držíme v haléřích, zobrazujeme v korunách.
 export function kc(halere) {
@@ -211,9 +214,12 @@ export function pole({ klic, popisek, typ = 'text', hodnota = '', napoveda = '',
         ${napovedaHtml}
       </div>`;
   } else {
+    // Datum a čas schválně nativní: na mobilu se tím dostane kolečko
+    // s velkými plochami, které zná z telefonu, a formát řeší systém.
     const typAtr =
       typ === 'cislo' ? 'number' : typ === 'email' ? 'email' : typ === 'telefon' ? 'tel'
-      : typ === 'heslo' ? 'password' : 'text';
+      : typ === 'heslo' ? 'password' : typ === 'datum' ? 'date' : typ === 'cas' ? 'time'
+      : 'text';
     const rozsah =
       (min != null ? ` min="${esc(min)}"` : '') + (max != null && typ === 'cislo' ? ` max="${esc(max)}"` : '');
     vstup = `<input class="pole" type="${typAtr}" id="${id}" name="${esc(klic)}"

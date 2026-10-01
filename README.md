@@ -11,9 +11,11 @@ Administrace na `/admin` se staví po fázích podle [docs/plan-administrace.md]
 
 Modul **Kurzy** má vlastní schválené zadání v [docs/plan-kurzy.md](docs/plan-kurzy.md)
 (datový model, API, obrazovky, etapy E1–E5, rozhodnutí). Staví se jako první nad
-modelem produktů a termínů z plánu administrace. **Hotové jsou etapy E1 a E2** — sazby DPH
+modelem produktů a termínů z plánu administrace. **Hotové jsou etapy E1 až E3** — sazby DPH
 a kurzy v administraci (`/admin/kurzy`): texty, cena, DPH, požadavky na účastníka,
-průběh kurzu, zveřejnění, pořadí, historie cen a fotky včetně titulní a popisů.
+průběh kurzu, zveřejnění, pořadí, historie cen a fotky včetně titulní a popisů;
+a termíny (`/admin/terminy`): místa, kapacita, stav, hromadné zakládání, kopie dne,
+zrušení s důvodem a instruktoři. Soupiska zůstává prázdná, dokud nebudou přihlášky (E5).
 Veřejný web zatím kurzy bere z `data.js`, napojí se v E4.
 
 ## Struktura
@@ -31,6 +33,8 @@ src/db.js                    sdílený connection pool (mysql2)
 src/bezpecnost.js            hlavičky, CSP, robots.txt
 src/cas.js                   formátování data a času (Europe/Prague) — server i administrace
 src/nastaveni.js             registr nastavení (popisy v kódu, hodnoty v databázi)
+src/soubory.js               nahrané fotky: typ z obsahu, zmenšení pro web, úklid
+src/terminy.js               dny v rozsahu pro hromadné zadání, posun proběhlých termínů
 src/audit.js                 zápis do auditu
 src/auth/                    hesla, session, CSRF, rate limit, role, 2FA
 src/api/verejne.js           veřejné API webu
@@ -188,6 +192,7 @@ středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >
 | `008_produkty_a_cenik.sql` | sazby DPH, produkty (kurzy), požadavky, průběh, historie cen |
 | `009_soubory_a_fotky.sql` | nahrané soubory a jejich napojení na produkty |
 | `010_soubory_kod.sql` | náhodný kód souboru do veřejné adresy fotky |
+| `011_mista_a_terminy.sql` | místa, termíny kurzů, série a instruktoři |
 
 ## API
 
@@ -213,6 +218,8 @@ povinná hlavička `X-CSRF-Token` shodná s cookie `lsd_csrf`.
 | Produkty (kurzy) | `GET|POST /produkty`, `GET|PATCH|DELETE /produkty/:id`, `POST /produkty/:id/obnovit`, `POST /produkty/poradi`, `PUT /produkty/:id/pozadavky`, `PUT /produkty/:id/kroky`, `GET /produkty/:id/cenik-historie` |
 | Sazby DPH | `GET /dph-sazby`, `PATCH /dph-sazby/:id` |
 | Soubory | `GET|POST /soubory`, `PATCH|DELETE /soubory/:id`, `PUT /produkty/:id/fotky` |
+| Místa | `GET|POST /mista`, `PATCH|DELETE /mista/:id`, `POST /mista/:id/obnovit` |
+| Termíny | `GET|POST /terminy`, `GET|PATCH|DELETE /terminy/:id`, `POST /terminy/hromadne`, `POST /terminy/:id/kopie`, `POST /terminy/:id/zrusit`, `POST /terminy/:id/obnovit`, `PUT /terminy/:id/instruktori`, `GET /terminy/:id/soupiska`, `GET /terminy/instruktori` |
 | Audit | `GET /audit` |
 | Nastavení | `GET|PATCH /nastaveni`, `GET /nastaveni/integrace` |
 | E-maily | `GET /emaily`, `GET /emaily/:id`, `GET /emaily/:id/telo`, `GET /emaily/:id/priloha/:prilohaId` |
@@ -521,6 +528,44 @@ spuštění nic nezkazí, originály zůstávají nedotčené.
 
 Limit je 10 MB na fotku — ne kvůli místu na disku, ale kvůli tomu, že obrázek chodí
 jako base64 v JSON a tělo požadavku má strop 14 MB.
+
+## Termíny kurzů
+
+Termín je den u kurzu: `terminy` + číselník `mista`. Vlastní tabulka pro kurzy
+nevzniká (viz [docs/plan-kurzy.md](docs/plan-kurzy.md) §1), takže stejné obrazovky
+obslouží později i tandemové dny.
+
+**Čas má dvojí povahu a nesmí se to smíchat.** `datum`, `cas_od` a `cas_do` jsou
+hodiny na letišti — `DATE` a `TIME` bez zóny, protože „sraz v 8:00“ platí v 8:00
+bez ohledu na letní čas. Nikdy se nepřevádějí. Naproti tomu `zruseno_at` a
+`created_at` jsou okamžiky na ose času, tedy UTC jako všude jinde. Jediná otázka,
+která se ptá na zónu, je „který den je dnes v Praze“ — na to je `isoDatum()`
+ze [src/cas.js](src/cas.js).
+
+Opakované termíny se **nedopočítávají z pravidla za běhu**, ale zakládají se řádky:
+provoz každý den ručně přiohne (jiný čas, jiná kapacita) a pravidlo by mu to
+přepisovalo. `termin_serie` drží jen to, z čeho dávka vznikla, aby šlo „všech
+dvanáct pátků“ najednou najít. Hromadné zadání i kopie dne **přeskočí dny, na
+kterých u kurzu termín už je** — dvakrát spuštěná dávka nevyrobí dvojité termíny.
+
+**Zrušení potřebuje důvod** a nedá se udělat běžnou úpravou (`PATCH` hodnotu
+`zruseno` odmítne). Přihlášky po zrušení **zůstávají**, přesouvá je provoz ručně
+a e-mail o zrušení odejde, až přihlášky budou (E5) — rozhodnutí 7 v plánu kurzů.
+Termín s přihlášenými se nedá smazat, jen zrušit.
+
+`kapacita_mist = 0` znamená **bez omezení**. `obsazeno_mist` je cache pro výpisy;
+autoritativní je součet z `rezervace` uvnitř transakce (E5), která cache přepočítá
+v téže transakci.
+
+Včerejší a starší termíny přepne hodinová údržba z „otevřeno“ na **„proběhlo“** —
+jinak by u odlétaných termínů svítilo otevřeno a provoz by je po sezóně odklikával
+ručně. Zrušených se to netýká.
+
+Místa patří pod oprávnění **`terminy`**, ne `nastaveni`: termíny spravuje provoz
+a nové letiště si musí umět založit sám. Ze stejného důvodu existuje
+`GET /terminy/instruktori` — plný seznam uživatelů je pod právem `uzivatele`, které
+provoz nemá, a bez téhle cesty by si k termínu nemohl nikoho přiřadit. Ven jdou
+jen jméno a role.
 
 ## Doména v kódu
 
