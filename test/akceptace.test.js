@@ -525,21 +525,43 @@ test('export souhrnu obsahuje, kdo co testoval', async () => {
 test('v produkci modul akceptace vůbec neexistuje', () => {
   // Konfigurace se čte při načtení modulu, takže se prostředí nedá přepnout
   // uprostřed testu - ověření běží v samostatném procesu.
+  // Potomek se ukončuje doběhnutím, ne process.exit() - na Windows se tím
+  // libuv rozbije a execFileSync pak hlásí chybu i po úspěšném výpisu.
+  // Ze stejného důvodu se ptá přes node:http s `agent: false`, ne přes fetch:
+  // undici si drží keep-alive spojení a proces by nedoběhl. Totéž je
+  // v test/konfigurace.test.js.
   const skript = `
     process.env.PROSTREDI = 'produkce';
+    const http = await import('node:http');
     const { vytvorApp } = await import('./src/app.js');
+    const pool = (await import('./src/db.js')).default;
+
     const app = vytvorApp();
     const server = app.listen(0, '127.0.0.1');
     await new Promise((r) => server.once('listening', r));
     const port = server.address().port;
-    const akceptace = await fetch('http://127.0.0.1:' + port + '/api/admin/akceptace');
-    const ja = await fetch('http://127.0.0.1:' + port + '/api/admin/ja');
+
+    function zeptejSe(cesta) {
+      return new Promise((splnit, odmitnout) => {
+        const dotaz = http.request({ host: '127.0.0.1', port, path: cesta, agent: false }, (res) => {
+          let telo = '';
+          res.on('data', (kus) => { telo += kus; });
+          res.on('end', () => splnit({ status: res.statusCode, telo }));
+        });
+        dotaz.on('error', odmitnout);
+        dotaz.end();
+      });
+    }
+
+    const akceptace = await zeptejSe('/api/admin/akceptace');
+    const ja = await zeptejSe('/api/admin/ja');
     console.log(JSON.stringify({
       akceptace: akceptace.status,
-      jaAkceptace: (await ja.json()).akceptace,
+      jaAkceptace: JSON.parse(ja.telo).akceptace,
     }));
-    server.close();
-    process.exit(0);
+
+    await new Promise((r) => server.close(r));
+    await pool.end();
   `;
 
   // Produkce má přísnější validaci konfigurace (nesmí běžet s vývojovými

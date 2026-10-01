@@ -91,40 +91,69 @@ test('nečitelný JSON nespadne jako 500', async () => {
   assert.equal(odpoved.status, 400);
 });
 
-test('v kódu aplikace není natvrdo napsaná doména', async () => {
-  // Přechod na lsd-trip.cz musí být jen změna .env. Kdyby se do src/ vloudila
-  // konkrétní doména, tenhle test to chytí dřív, než se na to přijde v produkci.
-  const zakazane = [/lsd-trip\.cz/i, /francik\.eu/i];
+// Přechod na lsd-trip.cz musí být jen změna .env. Projde zadaný adresář
+// a vrátí každý řádek, kde je doména napsaná natvrdo.
+const ZAKAZANE_DOMENY = [/lsd-trip\.cz/i, /francik\.eu/i];
+
+async function najdiDomeny(adresar, pripony) {
   const nalezy = [];
 
-  async function projdi(adresar) {
-    for (const polozka of await readdir(adresar, { withFileTypes: true })) {
-      const cesta = path.join(adresar, polozka.name);
+  async function projdi(kde) {
+    for (const polozka of await readdir(kde, { withFileTypes: true })) {
+      const cesta = path.join(kde, polozka.name);
       if (polozka.isDirectory()) {
         await projdi(cesta);
         continue;
       }
-      if (!polozka.name.endsWith('.js')) continue;
+      if (!pripony.some((pripona) => polozka.name.endsWith(pripona))) continue;
 
       const obsah = await readFile(cesta, 'utf8');
       obsah.split('\n').forEach((radek, i) => {
         // Bezpečnostní politika CSP musí starý web zmínit (fotky se z něj
         // do fáze 5 načítají) - to je vědomá výjimka, ne opomenutí.
         if (cesta.endsWith('bezpecnost.js')) return;
-        for (const vzor of zakazane) {
+        for (const vzor of ZAKAZANE_DOMENY) {
           if (vzor.test(radek)) nalezy.push(`${path.relative(rootDir, cesta)}:${i + 1}: ${radek.trim()}`);
         }
       });
     }
   }
 
-  await projdi(path.join(rootDir, 'src'));
+  await projdi(adresar);
+  return nalezy;
+}
+
+test('v kódu aplikace není natvrdo napsaná doména', async () => {
+  // Kdyby se do src/ vloudila konkrétní doména, tenhle test to chytí dřív,
+  // než se na to přijde v produkci.
+  const nalezy = await najdiDomeny(path.join(rootDir, 'src'), ['.js']);
 
   assert.deepEqual(
     nalezy,
     [],
     'Doména patří do APP_URL v .env, ne do kódu:\n' + nalezy.join('\n')
   );
+});
+
+test('veřejný web zatím smí mít adresy na starý web, ale ví se o nich', async (t) => {
+  // Ve `public/` jsou dnes všechny fotky načítané absolutní adresou ze starého
+  // webu. Dokud nejsou fotky přenesené do vlastního úložiště (etapa E2), nemá
+  // smysl kvůli tomu shazovat testy - ale nesmí to ani tiše přibývat.
+  // Proto se zatím jen vypisuje seznam.
+  //
+  // V E2 se tenhle test změní na tvrdý: `assert.deepEqual(nalezy, [])`,
+  // stejně jako u src/ výše.
+  //
+  // navrh_2/ je statická ukázka pro majitelku, ne kód aplikace - ta se neprochází.
+  const nalezy = await najdiDomeny(path.join(rootDir, 'public'), ['.js', '.html', '.css']);
+
+  if (nalezy.length) {
+    t.diagnostic(`Natvrdo napsaná doména ve public/ (${nalezy.length}×), k odstranění v E2:`);
+    for (const nalez of nalezy) t.diagnostic(`  ${nalez}`);
+  }
+
+  // Záměrně bez assertu na prázdnotu - viz komentář výše.
+  assert.ok(Array.isArray(nalezy));
 });
 
 test('healthcheck hlásí stav databáze i počet migrací', async () => {

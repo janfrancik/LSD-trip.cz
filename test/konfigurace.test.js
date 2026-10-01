@@ -59,15 +59,41 @@ function envZNavodu() {
 
 // Spustí aplikaci v samostatném procesu (config.js se čte při načtení modulu,
 // v jednom procesu by se přepnout nedalo) a zkusí healthcheck.
+//
+// Potomek se NEUKONČUJE přes process.exit(). Na Windows se tím libuv rozbije
+// ("Assertion failed: !(handle->flags & UV_HANDLE_CLOSING)", návratový kód 127)
+// a execFileSync to vyhodnotí jako nenastartovanou aplikaci, i když se výsledek
+// už stihl vypsat. Místo toho se poctivě zavře server i databázový pool
+// a proces doběhne sám, protože nezbude žádný handle.
+//
+// Ze stejného důvodu se na healthcheck neptá přes fetch: undici si drží spojení
+// v keep-alive poolu, který proces udržuje naživu. `node:http` s `agent: false`
+// zavře socket hned.
 function spustAplikaci(zmeny) {
   const skript = `
+    const http = await import('node:http');
     const { vytvorApp } = await import('./src/app.js');
     const config = (await import('./src/config.js')).default;
+    const pool = (await import('./src/db.js')).default;
+
     const server = vytvorApp().listen(0, '127.0.0.1');
     await new Promise((r) => server.once('listening', r));
     const port = server.address().port;
-    const odpoved = await fetch('http://127.0.0.1:' + port + '/api/health');
-    const data = await odpoved.json();
+
+    const odpoved = await new Promise((splnit, odmitnout) => {
+      const dotaz = http.request(
+        { host: '127.0.0.1', port, path: '/api/health', agent: false },
+        (res) => {
+          let telo = '';
+          res.on('data', (kus) => { telo += kus; });
+          res.on('end', () => splnit({ status: res.statusCode, telo }));
+        }
+      );
+      dotaz.on('error', odmitnout);
+      dotaz.end();
+    });
+    const data = JSON.parse(odpoved.telo);
+
     console.log('VYSLEDEK ' + JSON.stringify({
       health: odpoved.status,
       prostredi: data.prostredi,
@@ -75,8 +101,9 @@ function spustAplikaci(zmeny) {
       jeHttps: config.jeHttps,
       rezim: config.EMAIL_REZIM,
     }));
-    server.close();
-    process.exit(0);
+
+    await new Promise((r) => server.close(r));
+    await pool.end();
   `;
 
   try {
