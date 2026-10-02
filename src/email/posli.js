@@ -8,9 +8,15 @@
 // prostředí tedy nemůže dojít e-mail skutečnému zákazníkovi, i kdyby se v kódu
 // spletl kdokoli.
 //
-// Režim 'vypnuto' je výchozí: e-mail se jen zaloguje a nikam neodejde.
+// Režim 'vypnuto' je výchozí: e-mail nikam neodejde a v logu zůstane se stavem
+// 'chyba' a důvodem. Tělo se ukládá i tak - záznam do `emaily` (včetně
+// `telo_snapshot`, `telo_text` a příloh) vzniká PŘED rozhodnutím, jestli se
+// odesílá, takže se v administraci dá otevřít a přečíst, co by bylo odešlo.
+// Tlačítko "odeslat znovu" ale neexistuje: co se v tomhle režimu nepošle,
+// musí člověk vyřídit sám.
+//
 // Režim 'schranka' (testovací prostředí, kde není Resend) taky nic neodešle,
-// ale uloží celý e-mail - HTML, text i přílohy - do testovací schránky
+// ale e-mail skončí ve stavu 've_schrance', tedy v testovací schránce
 // v administraci, kde se dá otevřít jako v poštovním klientovi.
 
 import { Resend } from 'resend';

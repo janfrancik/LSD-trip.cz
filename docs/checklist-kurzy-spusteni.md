@@ -67,9 +67,9 @@ Pořadí je závazné. Nasazení na `main` se spouští až po odsouhlasení tes
    | `PROSTREDI` | `produkce` | Podle toho se pozná produkce, ne podle `NODE_ENV`. Když zůstane výchozí `vyvoj`, aplikace **naběhne** — ale s modulem „Ke schválení“ na očích a bez indexace. |
    | `ROBOTS` | `povolit` | Výchozí hodnota je `zakazat`. Když se nenastaví, ostrý web se **nedostane do Googlu** a nikde to nezaskřípe. |
    | `APP_URL` | celá adresa ostrého webu | Skládají se z ní odkazy v e-mailech a kanonické adresy. |
-   | `EMAIL_REZIM` | `live`, nebo `vypnuto` | **Tohle je ten přepínač** — viz 2.1a níž. `live` vyžaduje hotový Resend. |
-   | `RESEND_API_KEY` | klíč z Resendu | Povinný při `live`; při `vypnuto` zůstane prázdný. |
-   | `EMAIL_ODESILATEL` | `LSD <rezervace@…>` | Doména musí být ověřená v Resendu. |
+   | `EMAIL_REZIM` | `vypnuto` (zatím) | **Tohle je ten přepínač** — viz 2.1a níž. Na `live` se přepne, až bude Resend; `schranka` produkce odmítne a nenastartuje. |
+   | `RESEND_API_KEY` | — (zatím prázdné) | Povinný teprve při `live` — bez něj by aplikace s `live` nenastartovala. |
+   | `EMAIL_ODESILATEL` | `LSD <rezervace@…>` | Doména musí být ověřená v Resendu (až k `live`). |
    | `EMAIL_TEST_PRIJEMCE` | — | V produkci se nepoužívá; nechat prázdné. |
    | `VOLUME_PREFIX` | `lsd_main` | Bez téhle (a `IMAGE_TAG=latest`, `APP_CONTAINER=lsdtrip-app`) compose schválně nenastartuje. |
 
@@ -91,10 +91,31 @@ tenhle checklist chtěl `live`. Platí tohle:
   („Odesílání e-mailů je vypnuté“), takže se nic neztratí — ale někdo musí
   přihlášky hlídat ručně a ozvat se telefonem.
 
-Veřejná přihláška bez potvrzovacího e-mailu je horší než žádná přihláška.
-Pokud Resend není hotový, nasaďte produkci s `vypnuto` a **kurzy zveřejněte
-bez termínů** — bez termínu se na kurz nejde přihlásit (zbyde poptávka,
-která chodí stejnou cestou jako dnes). Termíny doplňte, až se přepne na `live`.
+**Rozhodnuto (3. 10. 2026):** Resend hotový není, produkce jde na
+`EMAIL_REZIM=vypnuto`, a **termíny se přesto zveřejní** — přihláška z webu
+tedy poběží bez automatických e-mailů. Je to vědomá volba majitele
+repozitáře; alternativa (zveřejnit kurzy bez termínů, takže se nejde
+přihlásit a zbyde jen poptávka) se nebere.
+
+Co z toho plyne pro provoz, dokud se nepřepne na `live`:
+
+- **Nové přihlášky se nikam neohlásí.** Musí se hlídat v administraci
+  v sekci **Přihlášky** — e-mail provozu nepřijde. Dokud není `live`, dívejte
+  se tam každý den.
+- **Zákazník nedostane potvrzení.** Po odeslání přihlášky uvidí na webu
+  děkovnou stránku a nic víc. Ozvěte se mu telefonem nebo z vlastní pošty,
+  ať neví jen to, že „něco odeslal“.
+- **Nic se neztratí.** E-mail se uloží celý (předmět, HTML i textová verze)
+  a v sekci **E-maily** se dá otevřít a přečíst; jen má stav „chyba“
+  s důvodem „Odesílání e-mailů je vypnuté“. Co odeslat mělo, je tím pádem
+  dohledatelné.
+- **Tlačítko „odeslat znovu“ není.** Po přepnutí na `live` se staré
+  e-maily samy nerozešlou — co se v tomhle období nepošle, zůstane
+  nerozeslané a vyřídí se po telefonu.
+
+Až bude Resend hotový, je přepnutí na `live` změna `EMAIL_REZIM`
+a `RESEND_API_KEY` v `.env` plus `docker compose up -d`. Žádné nasazování,
+žádná migrace. Pak platí bod 8 v 2.4 (první ostrý e-mail si pošlete sama).
 
 ### 2.2 Nasazení
 
