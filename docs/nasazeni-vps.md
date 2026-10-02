@@ -310,6 +310,11 @@ ROBOTS=povolit
 
 # Produkce zůstává na "vypnuto", dokud nebude ověřená doména v Resendu.
 # Teprve pak EMAIL_REZIM=live - do té doby se e-maily jen zapisují do logu.
+#
+# POZOR: s "vypnuto" projde přihláška z webu, ale zákazníkovi ani provozu nic
+# nepřijde (v administraci je v E-mailech vidět jako chyba). Než se zveřejní
+# termíny kurzů, přečti si 2.1a v checklist-kurzy-spusteni.md - bez termínu
+# se na kurz nejde přihlásit, takže se dá nasadit i s vypnutými e-maily.
 EMAIL_REZIM=vypnuto
 EMAIL_TEST_PRIJEMCE=
 EMAIL_ODESILATEL=LSD <rezervace@lsd.francik.eu>
@@ -382,9 +387,22 @@ git push origin main
 git checkout test          # a pokračuje se zase v testu
 ```
 
-Push do `main` nasadí produkci a spustí migrace. Pak zopakuj ověření z kroku 10
-pro `lsd.francik.eu`.
+Push do `main` nasadí produkci a spustí migrace. Produkce má dosud jen migraci
+`001`, takže se najednou dohání `002`–`012` — celá fáze 1 i modul kurzů. Pak
+zopakuj ověření z kroku 10 pro `lsd.francik.eu`.
 
+## P4a. První účet na produkci
+
+Databáze je po P3 prázdná a migrace žádný účet nezakládají, takže se do
+administrace nemá kdo přihlásit. Bez tohohle kroku je produkce nepoužitelná:
+
+```bash
+cd /home/deploy/apps/lsdtrip
+docker compose exec app node scripts/vytvor-uzivatele.js <DOPLNIT-EMAIL> "<DOPLNIT-JMÉNO>" admin
+```
+
+Skript vypíše heslo pro první přihlášení; mění se při něm a nastaví se druhý
+faktor. Další účty (provoz, instruktoři) už se zakládají v administraci.
 
 ## P5. Ověření produkce
 

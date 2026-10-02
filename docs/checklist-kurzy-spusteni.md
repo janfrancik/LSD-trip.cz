@@ -44,35 +44,73 @@ Dvě fotky, které pořád chybí ze staré titulky:
 
 Pořadí je závazné. Nasazení na `main` se spouští až po odsouhlasení testery.
 
+> **Produkce není „starý web s administrací“.** Na `main` je dnes jen pět commitů:
+> statický web a kostra aplikace s migrací `001`. Administrace, uživatelé,
+> poptávky ani kurzy tam nikdy nebyly. Tenhle přechod proto nasazuje **fázi 1
+> i kurzy najednou** — a produkční `.env` i volume se musí nejdřív připravit
+> podle sekce **„Přechod main na novou verzi“ (P1–P3)** v
+> [nasazeni-vps.md](nasazeni-vps.md). Bez toho nová verze vůbec nenaběhne:
+> compose odmítne start bez `VOLUME_PREFIX`, `IMAGE_TAG` a `APP_CONTAINER`.
+
 ### 2.1 Před nasazením
 
 1. **Záloha produkční databáze.** `scripts/zaloha.sh` běží v cronu; před
    zásahem se spustí ještě jednou ručně a ověří se, že záloha má rozumnou
-   velikost a jde rozbalit.
+   velikost a jde rozbalit. (Produkční databáze je zatím prázdná — záloha je
+   pojistka, ne přenos dat. Starý volume se podle P3 zahazuje.)
 2. **Kontrola `.env` na produkci** (soubor vytváří člověk, workflow ho nikdy
-   nepřepisuje):
+   nepřepisuje). Celý vzor je v P2 v [nasazeni-vps.md](nasazeni-vps.md), tady
+   jsou řádky, na kterých záleží nejvíc:
 
    | Proměnná | Hodnota | Poznámka |
    | --- | --- | --- |
-   | `PROSTREDI` | `produkce` | Podle toho se pozná produkce, ne podle `NODE_ENV`. |
-   | `EMAIL_REZIM` | `live` | **Tohle je ten přepínač.** Dokud tam je `schranka` nebo `test`, zákazníkům nic nedojde. |
-   | `RESEND_API_KEY` | klíč z Resendu | Bez něj se e-mail neodešle a zapíše se chyba. |
+   | `PROSTREDI` | `produkce` | Podle toho se pozná produkce, ne podle `NODE_ENV`. Když zůstane výchozí `vyvoj`, aplikace **naběhne** — ale s modulem „Ke schválení“ na očích a bez indexace. |
+   | `ROBOTS` | `povolit` | Výchozí hodnota je `zakazat`. Když se nenastaví, ostrý web se **nedostane do Googlu** a nikde to nezaskřípe. |
+   | `APP_URL` | celá adresa ostrého webu | Skládají se z ní odkazy v e-mailech a kanonické adresy. |
+   | `EMAIL_REZIM` | `live`, nebo `vypnuto` | **Tohle je ten přepínač** — viz 2.1a níž. `live` vyžaduje hotový Resend. |
+   | `RESEND_API_KEY` | klíč z Resendu | Povinný při `live`; při `vypnuto` zůstane prázdný. |
    | `EMAIL_ODESILATEL` | `LSD <rezervace@…>` | Doména musí být ověřená v Resendu. |
    | `EMAIL_TEST_PRIJEMCE` | — | V produkci se nepoužívá; nechat prázdné. |
-   | `APP_URL` | celá adresa ostrého webu | Skládají se z ní odkazy v e-mailech a kanonické adresy. |
+   | `VOLUME_PREFIX` | `lsd_main` | Bez téhle (a `IMAGE_TAG=latest`, `APP_CONTAINER=lsdtrip-app`) compose schválně nenastartuje. |
 
 3. **Kontaktní e-mail provozu** v Nastavení (bod 1) — jinak provoz o nových
    přihláškách neví.
 
+### 2.1a Rozhodnutí: pustit přihlášku s vypnutými e-maily, nebo počkat na Resend?
+
+Dva návody si tady do teď protiřečily. [nasazeni-vps.md](nasazeni-vps.md) (P2)
+nechává produkci na `EMAIL_REZIM=vypnuto`, dokud není ověřená doména v Resendu;
+tenhle checklist chtěl `live`. Platí tohle:
+
+- **`EMAIL_REZIM=live`** — potřebuje hotový Resend (ověřená doména, klíč).
+  Teprve s ním má veřejná přihláška smysl: zákazník dostane potvrzení a provoz
+  upozornění.
+- **`EMAIL_REZIM=vypnuto`** — přihláška z webu **projde a uloží se**, ale
+  **nikomu nic nepřijde**: ani potvrzení zákazníkovi, ani upozornění provozu.
+  V administraci v sekci E-maily se takový e-mail objeví jako chyba
+  („Odesílání e-mailů je vypnuté“), takže se nic neztratí — ale někdo musí
+  přihlášky hlídat ručně a ozvat se telefonem.
+
+Veřejná přihláška bez potvrzovacího e-mailu je horší než žádná přihláška.
+Pokud Resend není hotový, nasaďte produkci s `vypnuto` a **kurzy zveřejněte
+bez termínů** — bez termínu se na kurz nejde přihlásit (zbyde poptávka,
+která chodí stejnou cestou jako dnes). Termíny doplňte, až se přepne na `live`.
+
 ### 2.2 Nasazení
 
-4. **Merge `test` → `main`** (jen s výslovným souhlasem majitelky repozitáře).
+4. **Merge `test` → `main`** (jen s výslovným souhlasem majitelky repozitáře)
+   — až po P1–P3, tedy po novém `.env` a odstranění starého volume. Je to
+   krok P4: `git merge --ff-only test`, žádný vlastní commit do `main`.
 5. Workflow nasadí produkci sám a v tomhle pořadí:
-   - spustí **migrace 008–012** nad produkční databází (`docker compose run --rm app npm run migrate`),
+   - spustí **migrace 002–012** nad produkční databází (`docker compose run --rm app npm run migrate`),
    - teprve pak zamění kontejner a čeká, až nahlásí `healthy`.
+
+   Produkce má zatím jen `001_init.sql`, takže se nedohánějí jen kurzy, ale
+   celá administrace:
 
    | Migrace | Co přidá |
    | --- | --- |
+   | `002`–`007` | uživatelé, role a audit, e-maily a poptávky, modul akceptace, časy v UTC, testovací schránka |
    | `008_produkty_a_cenik.sql` | sazby DPH, produkty (kurzy), požadavky, průběh, historie cen |
    | `009_soubory_a_fotky.sql` | nahrané soubory a jejich napojení na produkty |
    | `010_soubory_kod.sql` | náhodný kód do veřejné adresy fotky |
@@ -81,11 +119,27 @@ Pořadí je závazné. Nasazení na `main` se spouští až po odsouhlasení tes
 
    Všechny migrace jen přidávají tabulky a sloupce. Žádná nic nemaže ani
    nepřejmenovává, takže se stará verze aplikace nad novým schématem nerozbije.
+   Data plní jen dvě z nich, a to číselníky: `008` sazby DPH a `012` šest
+   výchozích šablon e-mailů. **Žádné zkušební kurzy migrace nezakládají** —
+   produkce dostane modul čistý.
 
-6. **Ověřit po nasazení:**
+6. **Založit první účet.** Databáze je po přechodu prázdná, takže se do
+   administrace nemá kdo přihlásit — tenhle krok nejde vynechat:
+
+   ```bash
+   cd /home/deploy/apps/lsdtrip
+   docker compose exec app node scripts/vytvor-uzivatele.js <e-mail> "<jméno>" admin
+   ```
+
+   Heslo si skript vypíše; při prvním přihlášení se mění a nastaví se druhý
+   faktor. Účty pro provoz a instruktory se pak zakládají už v administraci.
+
+7. **Ověřit po nasazení:**
    - `/api/health` vrací `prostredi: produkce` a `migrace: 12`,
+   - `/robots.txt` má `Allow: /` (ne `Disallow`),
    - `/kurzy` a stránka jednoho kurzu se načtou,
    - v administraci sedí Kurzy, Termíny, Přihlášky a Šablony e-mailů,
+   - v menu **není** „Ke schválení“ (v produkci se modul nezapíná),
    - fotka kurzu se zobrazí (adresa `/media/<kód>`).
 
 ### 2.3 Zkušební data
@@ -121,18 +175,23 @@ Co se **nemaže**:
 - fotky ve volume `uploads` — osiřelé soubory uklidí sama hodinová údržba den
   po smazání.
 
-Na produkci se tohle pouští **jen tehdy**, když se tam něco zkoušelo. Pokud
-produkce dostane modul čistý, je to zbytečné.
+**Na produkci se tohle nepouští.** Produkční databáze vzniká při přechodu
+nová a prázdná (P3) a migrace do ní žádné zkušební kurzy nezakládají — není
+tam co uklízet. Skript výš je určený pro **test**, kde zkušební data po
+akceptaci zůstala.
 
 ### 2.4 Po spuštění
 
-7. **První ostrý e-mail si pošlete sama**: založte přihlášku po telefonu na
+8. **První ostrý e-mail si pošlete sama**: založte přihlášku po telefonu na
    svůj e-mail se zapnutým přepínačem a zkontrolujte, že dorazila a vypadá,
-   jak má. Teprve pak pustíte přihlášku do oběhu.
-8. **Sledujte E-maily** první dny — je tam vidět, co odešlo a jestli se to
+   jak má. Teprve pak pustíte přihlášku do oběhu. (Platí pro
+   `EMAIL_REZIM=live`; při `vypnuto` není co kontrolovat — viz 2.1a.)
+9. **Sledujte E-maily** první dny — je tam vidět, co odešlo a jestli se to
    doručilo.
-9. Na VPS běží vedle i cizí aplikace ve sdílené síti. Žádný `docker system
-   prune` a žádný zásah mimo adresáře `lsdtrip*` a volumes `lsd_*`.
+10. **Přidat produkční řádek do cronu** pro zálohy (viz P5 v
+    [nasazeni-vps.md](nasazeni-vps.md)) — bez něj se produkce nezálohuje.
+11. Na VPS běží vedle i cizí aplikace ve sdílené síti. Žádný `docker system
+    prune` a žádný zásah mimo adresáře `lsdtrip*` a volumes `lsd_*`.
 
 ---
 
