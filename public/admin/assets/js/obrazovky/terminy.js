@@ -14,6 +14,7 @@ import {
   esc, kc, prazdno, strankovani, hlaska, potvrd, pole, ukazChybyPoli, formularModal, sklon,
   isoDatum, denVTydnu, oDniDal,
 } from '../ui.js';
+import { omezNaTermin } from './prihlasky.js';
 import { jdiNa, stav as globalniStav } from '../admin.js';
 
 const filtr = { q: '', strana: 1, produkt: '', stav: '', minule: '', smazane: '' };
@@ -541,7 +542,14 @@ async function karta(koren, id) {
             + Přidat člověka
           </button>` : ''}`)}
 
-        ${sekce('Soupiska', 'Papír na letiště. Přihlášky se sem doplní v další etapě.', `
+        ${sekce('Soupiska', 'Papír na letiště: kdo přijede, kolik váží a co má doložit. ' +
+          'Kdo je mimo limit věku nebo váhy, je zvýrazněný.', `
+          <div class="soupiska-akce">
+            <button type="button" class="btn btn--obrys btn--maly" data-tisk>Vytisknout</button>
+            <a class="btn btn--obrys btn--maly" href="/api/admin/terminy/${t.id}/soupiska.csv"
+               download>Stáhnout CSV</a>
+            <button type="button" class="btn btn--obrys btn--maly" data-prihlasky>Přihlášky</button>
+          </div>
           <div data-soupiska class="soupiska">Načítám…</div>`)}
       </div>
     </form>
@@ -565,6 +573,12 @@ async function karta(koren, id) {
     if (!volny) return hlaska('Všichni už na termínu jsou.', 'chyba');
     prace.instruktori.push({ uzivatel_id: volny.id, jmeno: volny.jmeno, role: 'aff' });
     vykresliInstruktory(koren, muze);
+  });
+
+  koren.querySelector('[data-tisk]')?.addEventListener('click', () => window.print());
+  koren.querySelector('[data-prihlasky]')?.addEventListener('click', () => {
+    omezNaTermin(t.id);
+    jdiNa('prihlasky');
   });
 
   koren.querySelector('[data-ulozit]')?.addEventListener('click', () => uloz(koren, t));
@@ -644,11 +658,12 @@ async function nactiSoupisku(koren, id) {
   if (!obal) return;
   try {
     const s = await api.get(`/terminy/${id}/soupiska`);
-    obal.innerHTML = s.ucastnici.length
-      ? ''
-      : `<p class="sekce__udaj text-faint">
-           Zatím se nikdo nepřihlásil. ${esc(s.pozdeji ?? '')}
-         </p>`;
+    obal.innerHTML = s.ucastnici.length ? soupiskaHtml(s) : `
+      <p class="sekce__udaj text-faint">Zatím se nikdo nepřihlásil.</p>`;
+
+    obal.querySelectorAll('[data-prihlaska]').forEach((b) =>
+      b.addEventListener('click', () => jdiNa('prihlasky/' + b.dataset.prihlaska))
+    );
   } catch {
     obal.innerHTML = '<p class="sekce__udaj text-faint">Soupisku se nepodařilo načíst.</p>';
   }
@@ -708,16 +723,21 @@ async function zrus(koren, t) {
   const vysledek = await formularModal({
     nadpis: 'Zrušit termín',
     text: 'Přihlášky zůstanou a dá se jim napsat. Na webu se termín přestane nabízet.',
-    polia: [{
-      klic: 'duvod', popisek: 'Důvod zrušení', typ: 'textarea',
-      napoveda: 'Přečte si ho i přihlášený — napiš to tak, jak bys to řekla do telefonu.',
-    }],
+    polia: [
+      { klic: 'duvod', popisek: 'Důvod zrušení', typ: 'textarea',
+        napoveda: 'Přečte si ho i přihlášený — napiš to tak, jak bys to řekla do telefonu.' },
+      { klic: 'poslat_email', popisek: 'Dát přihlášeným vědět e-mailem', typ: 'prepinac',
+        hodnota: true },
+    ],
     potvrzeni: 'Zrušit termín',
   });
   if (!vysledek) return;
 
   try {
-    const odpoved = await api.post(`/terminy/${t.id}/zrusit`, { duvod: vysledek.duvod });
+    const odpoved = await api.post(`/terminy/${t.id}/zrusit`, {
+      duvod: vysledek.duvod,
+      poslat_email: vysledek.poslat_email,
+    });
     hlaska(odpoved.zprava ?? 'Termín je zrušený.');
     karta(koren, t.id);
   } catch (chyba) {
@@ -911,4 +931,68 @@ async function upravMisto(koren, misto) {
   } catch (chyba) {
     hlaska(chyba.message, 'chyba');
   }
+}
+
+// Tabulka soupisky. Tiskne se jako jediná věc na stránce (viz @media print
+// v admin.css), proto má vlastní třídu a ne jen .tabulka - na papíře má
+// vypadat jako formulář na podpis, ne jako obrazovka.
+function soupiskaHtml(s) {
+  const t = s.termin;
+  const limity = [
+    t.limity.min_vek ? `od ${t.limity.min_vek} let` : '',
+    t.limity.max_vek ? `do ${t.limity.max_vek} let` : '',
+    t.limity.max_vaha_kg ? `do ${t.limity.max_vaha_kg} kg` : '',
+  ].filter(Boolean).join(' · ');
+
+  return `
+    <div class="soupiska-list">
+      <div class="soupiska-hlavicka">
+        <h2>${esc(t.produkt_nazev)}</h2>
+        <p>
+          ${esc(denAdatum(t.datum))}${rozsahCasu(t) ? ` · ${esc(rozsahCasu(t))}` : ''}
+          ${t.misto ? ` · ${esc(t.misto)}` : ''}
+        </p>
+        <p class="soupiska-hlavicka__meta">
+          Přihlášeno ${s.pocty.prihlaseno}${t.kapacita_mist ? ` z ${t.kapacita_mist}` : ''} ·
+          zaplaceno ${s.pocty.zaplaceno}${limity ? ` · limity kurzu: ${esc(limity)}` : ''}
+          ${s.instruktori.length
+            ? ` · instruktoři: ${esc(s.instruktori.map((i) => i.jmeno).join(', '))}`
+            : ''}
+        </p>
+      </div>
+
+      <table class="soupiska-tabulka">
+        <thead><tr>
+          <th>Jméno</th><th>Věk</th><th>Váha</th><th>Telefon</th><th>Stav</th>
+          <th>Zapl.</th><th>Prohlídka</th><th>Zástupce</th><th>Poznámka</th>
+        </tr></thead>
+        <tbody>
+          ${s.ucastnici.map((u) => `
+            <tr class="${u.varovani.length ? 'soupiska-tabulka__pozor' : ''}">
+              <td>
+                <button type="button" class="odkaz-tlacitko" data-prihlaska="${u.rezervace_id}">
+                  ${esc(u.jmeno)}
+                </button>
+                <span class="soupiska-kod">${esc(u.kod)}</span>
+                ${u.varovani.length ? `<div class="soupiska-pozor">${esc(u.varovani.join('; '))}</div>` : ''}
+              </td>
+              <td>${u.vek ?? '—'}</td>
+              <td>${u.vaha_kg ? u.vaha_kg + ' kg' : '—'}</td>
+              <td>${esc(u.telefon ?? '—')}</td>
+              <td>${esc(u.stav_popis)}</td>
+              <td>${u.zaplaceno ? 'ano' : 'ne'}</td>
+              <td>${u.doklada_prohlidku ? 'ano' : 'ne'}</td>
+              <td>${u.zajisti_souhlas_zastupce ? 'ano' : '—'}</td>
+              <td>${esc(u.poznamka ?? '')}</td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+
+      ${s.pocty.mimo_limit
+        ? `<p class="soupiska-pozor soupiska-pozor--souhrn">
+             ${s.pocty.mimo_limit} ${s.pocty.mimo_limit === 1 ? 'účastník je' : 'účastníků je'} mimo limit kurzu.
+             Rozhodnutí je na provozu — nezamítá se to samo.
+           </p>`
+        : ''}
+    </div>`;
 }

@@ -858,3 +858,117 @@ select.pole { appearance: none; background-image: none; }
 .sekce__udaj { margin-top: 12px; font-size: 14px; color: var(--text-2); }
 
 .soupiska { margin-top: 12px; }
+
+/* ==========================================================================
+   Soupiska
+   ========================================================================== */
+
+.soupiska-akce { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+
+.soupiska-hlavicka h2 {
+  font-family: var(--font-display); font-size: 19px;
+  text-transform: uppercase; letter-spacing: 0.02em; margin: 0 0 4px;
+}
+.soupiska-hlavicka p { margin: 0; font-size: 14px; color: var(--text-2); }
+.soupiska-hlavicka__meta { margin-top: 6px !important; font-size: 12.5px; color: var(--faint); }
+
+.soupiska-tabulka {
+  width: 100%; border-collapse: collapse; margin-top: 14px;
+  font-size: 13.5px;
+}
+.soupiska-tabulka th {
+  text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line-strong);
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint);
+  white-space: nowrap;
+}
+.soupiska-tabulka td {
+  padding: 10px 6px; border-bottom: 1px solid var(--line-soft); vertical-align: top;
+}
+/* Mimo limit: barva i tučně, ať to nezávisí jen na barvě. */
+.soupiska-tabulka__pozor td { background: rgba(255, 176, 32, 0.07); }
+.soupiska-kod {
+  display: block; font-family: var(--font-mono); font-size: 10.5px; color: var(--ghost);
+}
+.soupiska-pozor { margin-top: 4px; font-size: 12px; color: var(--varovani); font-weight: 500; }
+.soupiska-pozor--souhrn { margin-top: 14px; font-size: 13px; }
+
+/* Tlačítko, které má vypadat jako odkaz (jméno v soupisce). */
+.odkaz-tlacitko {
+  background: none; border: 0; padding: 0; font: inherit;
+  color: var(--accent); cursor: pointer; text-align: left;
+}
+.odkaz-tlacitko:hover { color: var(--accent-lite); }
+
+/* Účastník mimo limit v kartě přihlášky. */
+.polozka--pozor { border-color: var(--varovani); }
+
+/* --------------------------------------------------------------- tisk ---
+   Na papír jde jen soupiska: černé na bílém, bez navigace a bez tlačítek.
+   Provoz si ji bere na letiště a podepisuje do ní. */
+@media print {
+  body { background: #fff; color: #000; }
+
+  .bocni, .spodni-lista, .hlavicka, .ulozit-lista, .hlasky,
+  .karta-hlavicka, .soupiska-akce, .zalozky, .filtr-radek,
+  .panel__hlava, .hlaseni, .btn { display: none !important; }
+
+  /* Ze všech sekcí karty zůstane jen ta se soupiskou. */
+  .karta-sloupce .sekce { display: none !important; }
+  .karta-sloupce .sekce:has(.soupiska) { display: block !important; }
+
+  .sekce, .karta-sloupce {
+    display: block !important;
+    background: none !important; border: 0 !important; padding: 0 !important;
+    margin: 0 !important; grid-template-columns: none !important;
+  }
+  .sekce__hlava { display: none !important; }
+
+  .soupiska-hlavicka h2, .soupiska-hlavicka p,
+  .soupiska-tabulka, .soupiska-tabulka td, .soupiska-tabulka th,
+  .soupiska-kod, .soupiska-pozor {
+    color: #000 !important;
+  }
+  .soupiska-tabulka th { border-bottom: 1px solid #000; }
+  .soupiska-tabulka td { border-bottom: 1px solid #bbb; }
+  .soupiska-tabulka__pozor td { background: #f0f0f0 !important; font-weight: 600; }
+  .odkaz-tlacitko { color: #000 !important; }
+
+  /* Sloupec na podpis — papír slouží i k odškrtávání na letišti. */
+  .soupiska-tabulka thead tr th:last-child::after { content: ' · podpis'; }
+  .soupiska-tabulka tbody tr td:last-child { min-width: 120px; border-bottom: 1px solid #000; }
+
+  @page { size: landscape; margin: 12mm; }
+}
+
+/* ------------------------------------------------------ šablony e-mailů */
+
+.pole--vysoke { min-height: 320px; font-family: var(--font-mono); font-size: 13px; line-height: 1.6; }
+
+.promenne { margin-top: 16px; }
+.promenne__nadpis {
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.1em; text-transform: uppercase; color: var(--faint);
+  margin-bottom: 8px;
+}
+.promenne__seznam { display: flex; flex-wrap: wrap; gap: 6px; }
+
+.promenna {
+  border: 1px solid var(--line-strong); background: var(--panel-2);
+  color: var(--accent-lite); cursor: pointer;
+  padding: 6px 10px; min-height: 36px;
+  font-family: var(--font-mono); font-size: 12px;
+}
+.promenna:hover { border-color: var(--accent); }
+
+/* Náhled e-mailu jako text: čitelnější než HTML vykreslené v administraci
+   a nejde z něj nic spustit. */
+.nahled-text {
+  white-space: pre-wrap;
+  margin: 12px 0 0;
+  padding: 14px;
+  background: var(--panel-2);
+  border: 1px solid var(--line-soft);
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.65;
+  color: var(--text-2);
+}

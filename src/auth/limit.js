@@ -41,6 +41,16 @@ export const limitPoptavky = rateLimit({
   handler: zprava('Zprávu jsi už poslal několikrát. Ozveme se, nebo zavolej na uvedené číslo.'),
 });
 
+// Přihlášky na termín. Volnější než u poptávky: z jedné IP se může hlásit
+// rodina i několikrát po sobě, ale robot ať formulář nezahltí.
+export const limitPrihlasek = rateLimit({
+  windowMs: 60 * MINUTA,
+  limit: 15,
+  standardHeaders: 'draft-7',
+  legacyHeaders: false,
+  handler: zprava('Přihlášek z tohohle připojení přišlo moc. Zkus to za chvíli, nebo nám zavolej.'),
+});
+
 // Obecný strop na veřejné API, ať web nikdo nezahltí.
 export const limitVerejneApi = rateLimit({
   windowMs: MINUTA,
@@ -53,7 +63,7 @@ export const limitVerejneApi = rateLimit({
 // Testy potřebují limity vynulovat mezi případy, jinak by se ovlivňovaly.
 // V běžném provozu se tahle funkce nikdy nevolá.
 export async function vynulujLimity() {
-  for (const limiter of [limitPrihlaseni, limitResetHesla, limitPoptavky, limitVerejneApi]) {
+  for (const limiter of [limitPrihlaseni, limitResetHesla, limitPoptavky, limitPrihlasek, limitVerejneApi]) {
     await limiter.resetKey?.('::ffff:127.0.0.1');
     await limiter.resetKey?.('127.0.0.1');
   }

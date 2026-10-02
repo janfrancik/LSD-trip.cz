@@ -207,14 +207,17 @@ zvýraznění** — provoz to na místě musí vidět na první pohled.
 | `/kurzy` | přehled kurzů z API | hotovo v E4 (ze serveru) |
 | `/kurz/:slug` | **detail kurzu** — popis, co je v ceně, průběh, požadavky, fotky, termíny, cena | hotovo v E4 (ze serveru) |
 | `/termin/:id` | detail termínu + přihláška | je, z `data.js` |
-| `/prihlaska` | formulář: účastníci, kontakt, souhlasy, rekapitulace | dnes končí poptávkou |
+| přihláška | formulář na stránce kurzu: účastníci, kontakt, souhlasy | hotovo v E5 |
+| `/prihlaska/:kod` | stav přihlášky pro účastníka (odkaz z e-mailu) | hotovo v E5 |
 
 ### E-maily
 Přes `src/email/posli.js`, lokálně i na testu `EMAIL_REZIM=schranka` → ven nic nejde.
 Šablony v databázi, texty editovatelné majitelkou — nic natvrdo.
 
-`prihlaska_prijata` (účastníkovi) · `prihlaska_provoz` (na `provoz.email`
-z nastavení) · `prihlaska_potvrzena` · `prihlaska_zrusena`.
+`prihlaska_prijata` (účastníkovi) · `prihlaska_provoz` (na `provoz.email` z nastavení) ·
+`prihlaska_potvrzena` · `prihlaska_zaplacena` · `prihlaska_zrusena` · `termin_zruseny`.
+
+Šablony jsou v `email_sablony` a upravují se v administraci i s náhledem (E5).
 
 ---
 
@@ -230,7 +233,18 @@ jejím potvrzení. Do `main` nic bez výslovného souhlasu.**
 | **E2** | Fotky: `soubory` + `produkt_fotky`, upload z mobilu, alt texty, titulní foto. Hlídač natvrdo napsaných domén nad `public/` se **přepne z varování na tvrdý assert** — viz poznámku pod tabulkou. | `009` |
 | **E3** | Místa + termíny kurzů: kapacita, stav, hromadné vytvoření, kopie dne, zrušení s důvodem, instruktoři. Soupiska zatím prázdná. | `011` |
 | **E4** | **Veřejná část kurzů z API** + **SSR pilot** pro `/kurzy` a `/kurz/:slug` (normální URL). Titulka bere kurzy z databáze. Odstřiženo `COURSES`, `COURSE_CHECKLIST` i termíny kurzů z `data.js`. | — |
-| **E5** | Přihlášky: zákazníci, transakční kapacita, veřejný formulář, e-maily, stavy, soupiska naostro, export CSV. | `012` |
+| **E5** | Přihlášky: zákazníci, transakční kapacita, veřejný formulář, souhlasy, e-maily ze šablon, stavy, anonymizace, soupiska naostro, export CSV. | `012` |
+
+**Přihlášky (upřesněno při E5).** Souhlasy se ukládají i s textem, jaký měl člověk
+před očima — podmínky se mění a platí ty tehdejší. Datum narození se ukládá jen kvůli
+věkovému limitu a souhlasu zástupce. Do auditu jde číslo přihlášky a jméno, nikdy
+e-mail, telefon ani text poznámky. Výmaz podle GDPR se dělá **anonymizací**, ne
+smazáním řádku: přihlášky a ceny musí zůstat kvůli účetnictví.
+
+Čekací listina se nevede: plný termín přihlášku odmítne a nabídne další termíny
+téhož kurzu. Každá změna stavu **může** poslat e-mail — rozhoduje přepínač v dialogu,
+ne automatika. Přihláška nahrazuje poptávku jen u kurzů, kde je volný termín;
+u ostatních zůstává poptávka z dávky B.
 
 **SSR a poptávka (upřesněno při E4).** Stránky `/kurzy` a `/kurz/:slug` vykresluje
 server; zbytek webu zůstává na `#` adresách. Skořápka se nepíše podruhé — bere se

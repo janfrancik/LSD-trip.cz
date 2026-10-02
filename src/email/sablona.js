@@ -17,7 +17,14 @@ export function escapujHtml(hodnota) {
     .replace(/'/g, '&#39;');
 }
 
-export function vyrenderuj(sablona, data = {}) {
+/**
+ * @param {string} sablona
+ * @param {object} data
+ * @param {object} [moznosti]
+ * @param {boolean} [moznosti.escapovat] true (výchozí) pro HTML šablony,
+ *        false pro textové - u textové verze e-mailu by `&amp;` byl chybou.
+ */
+export function vyrenderuj(sablona, data = {}, { escapovat = true } = {}) {
   let vysledek = String(sablona);
 
   // Podmíněné bloky (bez zanořování - víc teď nepotřebujeme).
@@ -26,10 +33,11 @@ export function vyrenderuj(sablona, data = {}) {
     (_, klic, obsah) => (hodnotaZ(data, klic) ? obsah : '')
   );
 
-  // Proměnné. Escapuje se vždy - HTML smí být jen v samotné šabloně.
-  vysledek = vysledek.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, klic) =>
-    escapujHtml(hodnotaZ(data, klic))
-  );
+  // Proměnné. V HTML se escapuje vždy - HTML smí být jen v samotné šabloně.
+  vysledek = vysledek.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_, klic) => {
+    const hodnota = hodnotaZ(data, klic);
+    return escapovat ? escapujHtml(hodnota) : String(hodnota ?? '');
+  });
 
   return vysledek;
 }

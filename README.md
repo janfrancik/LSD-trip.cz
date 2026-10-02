@@ -11,11 +11,12 @@ Administrace na `/admin` se staví po fázích podle [docs/plan-administrace.md]
 
 Modul **Kurzy** má vlastní schválené zadání v [docs/plan-kurzy.md](docs/plan-kurzy.md)
 (datový model, API, obrazovky, etapy E1–E5, rozhodnutí). Staví se jako první nad
-modelem produktů a termínů z plánu administrace. **Hotové jsou etapy E1 až E4** — sazby DPH
+modelem produktů a termínů z plánu administrace. **Modul je hotový (E1–E5)** — sazby DPH
 a kurzy v administraci (`/admin/kurzy`): texty, cena, DPH, požadavky na účastníka,
 průběh kurzu, zveřejnění, pořadí, historie cen a fotky včetně titulní a popisů;
 a termíny (`/admin/terminy`): místa, kapacita, stav, hromadné zakládání, kopie dne,
-zrušení s důvodem a instruktoři. Soupiska zůstává prázdná, dokud nebudou přihlášky (E5).
+zrušení s důvodem a instruktoři; přihlášky z webu včetně kapacity, souhlasů, e-mailů,
+soupisky na letiště a exportů.
 Veřejný web kurzy bere z databáze: titulka, `/kurzy` a `/kurz/:slug` (vykreslené na
 serveru). Tandem, expedice a aktuality zůstávají v `data.js`, dokud nebudou mít
 vlastní modul.
@@ -38,6 +39,9 @@ src/nastaveni.js             registr nastavení (popisy v kódu, hodnoty v datab
 src/soubory.js               nahrané fotky: typ z obsahu, zmenšení pro web, úklid
 src/terminy.js               dny v rozsahu pro hromadné zadání, posun proběhlých termínů
 src/kurzy.js                 kurzy pro veřejnou část (API i stránky ze serveru)
+src/prihlasky.js             přihlášky: transakční kapacita, souhlasy, oznámení
+src/prihlasky-soupiska.js    soupiska termínu pro obrazovku, tisk i CSV
+src/csv.js                   export do CSV, které otevře Excel v češtině
 src/web/                     stránky vykreslované na serveru (/kurzy, /kurz/:slug)
 src/audit.js                 zápis do auditu
 src/auth/                    hesla, session, CSRF, rate limit, role, 2FA
@@ -197,6 +201,7 @@ středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >
 | `009_soubory_a_fotky.sql` | nahrané soubory a jejich napojení na produkty |
 | `010_soubory_kod.sql` | náhodný kód souboru do veřejné adresy fotky |
 | `011_mista_a_terminy.sql` | místa, termíny kurzů, série a instruktoři |
+| `012_zakaznici_a_prihlasky.sql` | zákazníci, přihlášky, účastníci, položky, šablony e-mailů |
 
 ## API
 
@@ -208,6 +213,8 @@ středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >
 | `GET` | `/api/produkty?typ=kurz` | Zveřejněné kurzy v pořadí z administrace, s titulní fotkou a nejbližším termínem |
 | `GET` | `/api/produkty/:slug` | Detail kurzu. Nezveřejněný vrací 404, ne 403 |
 | `GET` | `/api/terminy?typ=kurz` | Termíny kurzů pro výpisy — u termínu jen počet volných míst |
+| `POST` | `/api/prihlasky` | Přihláška na termín (rate limit 15/h, past na roboty, transakční kapacita) |
+| `GET` | `/api/prihlasky/:kod?t=` | Účastník vidí svou přihlášku. Bez tokenu 404 |
 | `GET` | `/media/:kod` | Nahraná fotka. Mimo `/api` schválně — adresa má být krátká a stálá a obrázky nesmí spadnout pod rate limit veřejného API. |
 
 Veřejné odpovědi **nikdy nevracejí osobní údaje**: u termínu jde ven počet volných míst,
@@ -227,7 +234,10 @@ povinná hlavička `X-CSRF-Token` shodná s cookie `lsd_csrf`.
 | Sazby DPH | `GET /dph-sazby`, `PATCH /dph-sazby/:id` |
 | Soubory | `GET|POST /soubory`, `PATCH|DELETE /soubory/:id`, `PUT /produkty/:id/fotky` |
 | Místa | `GET|POST /mista`, `PATCH|DELETE /mista/:id`, `POST /mista/:id/obnovit` |
-| Termíny | `GET|POST /terminy`, `GET|PATCH|DELETE /terminy/:id`, `POST /terminy/hromadne`, `POST /terminy/:id/kopie`, `POST /terminy/:id/zrusit`, `POST /terminy/:id/obnovit`, `PUT /terminy/:id/instruktori`, `GET /terminy/:id/soupiska`, `GET /terminy/instruktori` |
+| Přihlášky | `GET|POST /rezervace`, `GET|PATCH|DELETE /rezervace/:id`, `POST /rezervace/:id/stav`, `POST /rezervace/:id/storno`, `POST /rezervace/:id/obnovit`, `PUT /rezervace/:id/ucastnici`, `GET /rezervace/export.csv` |
+| Zákazníci | `GET /zakaznici`, `GET|PATCH /zakaznici/:id`, `POST /zakaznici/:id/anonymizovat` |
+| Šablony e-mailů | `GET /sablony`, `PATCH /sablony/:id`, `POST /sablony/:id/nahled` |
+| Termíny | `GET|POST /terminy`, `GET|PATCH|DELETE /terminy/:id`, `POST /terminy/hromadne`, `POST /terminy/:id/kopie`, `POST /terminy/:id/zrusit`, `POST /terminy/:id/obnovit`, `PUT /terminy/:id/instruktori`, `GET /terminy/:id/soupiska`, `GET /terminy/:id/soupiska.csv`, `GET /terminy/instruktori` |
 | Audit | `GET /audit` |
 | Nastavení | `GET|PATCH /nastaveni`, `GET /nastaveni/integrace` |
 | E-maily | `GET /emaily`, `GET /emaily/:id`, `GET /emaily/:id/telo`, `GET /emaily/:id/priloha/:prilohaId` |
@@ -459,7 +469,8 @@ Většina webu routuje na hashi. **Kurzy mají normální adresu a vykresluje je
 | `#/` | Domů — hero, statistiky, produkty, nejbližší termíny, aktuality |
 | `#/tandem` | Tandemový seskok — průběh a ceníkové varianty |
 | `/kurzy` | Kurzy a výcvik — **ze serveru**, kurzy z databáze |
-| `/kurz/:slug` | Detail kurzu — **ze serveru**: popis, co je v ceně, průběh, požadavky, fotky, termíny, poptávka |
+| `/kurz/:slug` | Detail kurzu — **ze serveru**: popis, co je v ceně, průběh, požadavky, fotky, termíny, přihláška |
+| `/prihlaska/:kod?t=` | Stav přihlášky pro účastníka — odkaz z potvrzovacího e-mailu |
 | `#/kalendar` | Kalendář termínů s filtrováním |
 | `#/termin/:id` | Detail termínu + výběr počtu osob |
 | `#/booking` | Poptávka na termín nebo poukaz — odesílá se na `POST /api/poptavky` |
@@ -606,6 +617,72 @@ a nové letiště si musí umět založit sám. Ze stejného důvodu existuje
 `GET /terminy/instruktori` — plný seznam uživatelů je pod právem `uzivatele`, které
 provoz nemá, a bez téhle cesty by si k termínu nemohl nikoho přiřadit. Ven jdou
 jen jméno a role.
+
+## Přihlášky na kurz
+
+Přihláška je řádek v `rezervace` + účastníci v `rezervace_ucastnici` + položka
+s cenou v `rezervace_polozky`. Zákazník se zakládá podle e-mailu; co se o něm ví,
+je v `zakaznici`.
+
+### Kapacita
+
+Na pět míst se nesmí dostat šest lidí, ani když kliknou naráz. Zápis proto běží
+**v jedné transakci se zámkem na termínu** (`SELECT … FOR UPDATE`). Autoritativní
+je součet `pocet_osob` z přihlášek uvnitř transakce; `terminy.obsazeno_mist` je jen
+cache pro výpisy a přepočítá se v téže transakci, takže se nemůže rozejít.
+
+Hlídá to test, který pustí **dvacet souběžných přihlášek na pět míst** a čeká přesně
+pět úspěšných. Čekací listina se nevede: plný termín přihlášku odmítne a nabídne
+další termíny téhož kurzu.
+
+### Souhlasy
+
+VOP, zpracování údajů a zdravotní prohlášení jsou tři zaškrtnutí, bez kterých
+přihláška neprojde. Ke každé přihlášce se ukládá **čas i text souhlasu** tak, jak
+zněl v ten den — podmínky se časem mění a platí ty, které měl člověk před očima.
+Texty jsou v nastavení (skupina „Souhlasy v přihlášce"), ne v kódu.
+
+### Osobní údaje
+
+Ukládá se jen to, co přihláška potřebuje. **Datum narození** slouží ke dvěma věcem:
+věkovému limitu kurzu a souhlasu zákonného zástupce — nic jiného se z něj nepočítá.
+Lékařská prohlídka se **nenahrává**, je to jen zaškrtnutí „doložím na místě"
+(rozhodnutí 4 v plánu kurzů).
+
+Do **auditu** jdou jen číslo přihlášky, jméno a co se měnilo — nikdy e-mail, telefon,
+datum narození ani text poznámky. Hlídá to test.
+
+**Anonymizace** (tlačítko v kartě přihlášky) přepíše jméno, e-mail, telefon, adresu,
+jména účastníků i těla odeslaných e-mailů a nastaví `anonymizovano_at`. Přihlášky
+a jejich ceny zůstanou kvůli účetnictví. Je to nevratné a schválně to není totéž
+co smazání.
+
+### Stavy a e-maily
+
+Stav přepíná provoz ručně: nová → potvrzená → zaplacená, kdykoli storno s důvodem.
+Platební brána v tomhle modulu není (rozhodnutí 8), takže „zaplacená" znamená
+„provoz viděl peníze na účtu".
+
+**Ke každé změně stavu se e-mail posílat nemusí** — rozhoduje přepínač v dialogu.
+Provoz často nejdřív zavolá a e-mail by byl navíc.
+
+Texty e-mailů jsou v databázi (`email_sablony`) a upravují se v administraci
+(E-maily → Šablony e-mailů) i s náhledem. Šablona je **prostý text** s proměnnými
+`{{takhle}}`; obálku, barvy a odstavce doplní aplikace, takže vzhled e-mailu nejde
+rozbít ani omylem vložit kód. Vypnutá šablona znamená, že se e-mail neposílá.
+
+Odesílání jde pořád přes [src/email/posli.js](src/email/posli.js), takže **na testu
+se příjemce přepíše na `EMAIL_TEST_PRIJEMCE` ještě před odesláním** a zákazníkovi
+odtud nemůže dojít nic. Testem ověřeno i pro přihlášky.
+
+### Soupiska
+
+`GET /terminy/:id/soupiska` a `soupiska.csv` mají **stejné sloupce** — jinak by
+provoz držel v ruce dva různé papíry k témuž dni. Tiskne se přes `@media print`
+v administraci: na papír jde jen soupiska, černá na bílé, na šířku a s místem na
+podpis. Účastníci **mimo limit věku nebo váhy** jsou zvýraznění; nezamítá se to samo
+(rozhodnutí 3), ale provoz to musí vidět dřív než na letišti. Stornované přihlášky
+na soupisce nejsou.
 
 ## Doména v kódu
 

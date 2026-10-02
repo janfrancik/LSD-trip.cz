@@ -12,6 +12,8 @@ import * as dashboard from './obrazovky/dashboard.js';
 import * as poptavky from './obrazovky/poptavky.js';
 import * as kurzy from './obrazovky/kurzy.js';
 import * as terminy from './obrazovky/terminy.js';
+import * as prihlasky from './obrazovky/prihlasky.js';
+import * as sablony from './obrazovky/sablony.js';
 import * as uzivatele from './obrazovky/uzivatele.js';
 import * as emaily from './obrazovky/emaily.js';
 import * as audit from './obrazovky/audit.js';
@@ -29,6 +31,7 @@ const OBRAZOVKY = [
   { cesta: 'poptavky', nazev: 'Poptávky', ikona: '✉', oblast: 'poptavky', modul: poptavky, vMenu: true },
   { cesta: 'kurzy', nazev: 'Kurzy', ikona: '▲', oblast: 'produkty', modul: kurzy, vMenu: true },
   { cesta: 'terminy', nazev: 'Termíny', ikona: '▦', oblast: 'terminy', modul: terminy, vMenu: true },
+  { cesta: 'prihlasky', nazev: 'Přihlášky', ikona: '☑', oblast: 'rezervace', modul: prihlasky, vMenu: true },
   { cesta: 'emaily', nazev: 'E-maily', ikona: '▤', oblast: 'emaily_log', modul: emaily, vMenu: true },
   { cesta: 'uzivatele', nazev: 'Uživatelé', ikona: '☺', oblast: 'uzivatele', modul: uzivatele, vMenu: true },
   { cesta: 'nastaveni', nazev: 'Nastavení', ikona: '⚙', oblast: 'nastaveni', modul: nastaveni, vMenu: true },
@@ -39,6 +42,9 @@ const OBRAZOVKY = [
     cesta: 'akceptace', nazev: 'Ke schválení', ikona: '✓', oblast: 'akceptace',
     modul: akceptace, vMenu: true, jenNaTestu: true,
   },
+  // Šablony e-mailů nejsou v menu: chodí se na ně z obrazovky E-maily,
+  // protože je to spíš nastavení než denní práce.
+  { cesta: 'sablony', nazev: 'Šablony e-mailů', ikona: '▤', oblast: 'emaily_sablony', modul: sablony, vMenu: false },
   { cesta: 'ucet', nazev: 'Můj účet', ikona: '⚿', oblast: null, modul: ucet, vMenu: false },
 ];
 

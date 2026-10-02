@@ -43,9 +43,10 @@ async function seznam(koren) {
   ];
 
   koren.innerHTML = `
-    <h1 class="nadpis" style="margin-bottom:6px">
-      ${schranka ? 'Testovací schránka' : 'Odeslané e-maily'}
-    </h1>
+    <div class="panel__hlava" style="margin-bottom:6px">
+      <h1 class="nadpis">${schranka ? 'Testovací schránka' : 'Odeslané e-maily'}</h1>
+      <button type="button" class="btn btn--obrys" data-sablony>Šablony e-mailů</button>
+    </div>
     ${schranka
       ? `<div class="panel panel--tesny" style="border-left:3px solid var(--varovani);margin-bottom:14px">
            <strong>Testovací schránka — nic neodešlo.</strong>
@@ -109,6 +110,7 @@ async function seznam(koren) {
   koren.querySelector('#hledat').addEventListener('keydown', (e) => {
     if (e.key === 'Enter') hledat();
   });
+  koren.querySelector('[data-sablony]')?.addEventListener('click', () => jdiNa('sablony'));
 
   koren.querySelectorAll('[data-id]').forEach((prvek) =>
     prvek.addEventListener('click', () => jdiNa(`emaily/${prvek.dataset.id}`))

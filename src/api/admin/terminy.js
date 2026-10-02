@@ -22,6 +22,9 @@ import { zvaliduj, schemaSeznam } from '../../validace.js';
 import { vyzaduje } from '../../auth/opravneni.js';
 import { zapisAudit } from '../../audit.js';
 import { isoDatum, datumyVRozsahu, pocetDni } from '../../cas.js';
+import { nactiSoupisku } from '../../prihlasky-soupiska.js';
+import { posliCsv, anoNe } from '../../csv.js';
+import { nactiPrihlasku, posliOznameni } from '../../prihlasky.js';
 
 const router = express.Router();
 
@@ -284,26 +287,51 @@ router.get(
 
 // GET /api/admin/terminy/:id/soupiska
 //
-// Papír, se kterým se jde na letiště. Přihlášky přijdou až v E5, takže zatím
-// chodí hlavička a prázdný seznam - obrazovka i tisk se ale dají vyzkoušet
-// už teď a nebude se předělávat.
+// Papír, se kterým se jde na letiště: kdo přijede, kolik váží, kolik mu je
+// a co má s sebou doložit. Účastníci mimo limit věku nebo váhy jsou označení -
+// provoz to musí vidět na první pohled, ne to dopočítávat (rozhodnutí 3).
+//
+// Vidí ji i instruktor: na letišti ji potřebuje ten, kdo tam zrovna je.
 router.get(
   '/:id(\\d+)/soupiska',
   vyzaduje('terminy'),
   asyncHandler(async (req, res) => {
-    const termin = await nactiDetail(Number(req.params.id));
-    if (!termin) throw chybaNenalezeno('Termín nenalezen.');
+    const soupiska = await nactiSoupisku(Number(req.params.id));
+    if (!soupiska) throw chybaNenalezeno('Termín nenalezen.');
+    res.json(soupiska);
+  })
+);
 
-    res.json({
-      termin,
-      ucastnici: [],
-      pocty: {
-        prihlaseno: 0,
-        volno: termin.kapacita_mist > 0 ? termin.kapacita_mist - termin.obsazeno_mist : null,
-      },
-      // Ať je na obrazovce poznat, že prázdná soupiska není chyba.
-      pozdeji: 'Přihlášky se sem doplní v další etapě (E5).',
-    });
+// GET /api/admin/terminy/:id/soupiska.csv
+//
+// Stejné sloupce jako tištěná soupiska - ať se dvě verze téhož papíru
+// nerozejdou.
+router.get(
+  '/:id(\\d+)/soupiska.csv',
+  vyzaduje('terminy'),
+  asyncHandler(async (req, res) => {
+    const soupiska = await nactiSoupisku(Number(req.params.id));
+    if (!soupiska) throw chybaNenalezeno('Termín nenalezen.');
+
+    posliCsv(
+      res,
+      `soupiska-${soupiska.termin.datum}.csv`,
+      ['Jméno', 'Věk', 'Váha kg', 'Telefon', 'E-mail', 'Stav', 'Zaplaceno',
+        'Prohlídka doložena', 'Souhlas zástupce', 'Mimo limit', 'Poznámka'],
+      soupiska.ucastnici.map((u) => [
+        u.jmeno,
+        u.vek ?? '',
+        u.vaha_kg ?? '',
+        u.telefon ?? '',
+        u.email ?? '',
+        u.stav_popis,
+        anoNe(u.zaplaceno),
+        anoNe(u.doklada_prohlidku),
+        anoNe(u.zajisti_souhlas_zastupce),
+        u.varovani.join('; '),
+        u.poznamka ?? '',
+      ])
+    );
   })
 );
 
@@ -620,11 +648,14 @@ router.post(
   vyzaduje('terminy', 'menit'),
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
-    const { duvod } = zvaliduj(
+    const { duvod, poslat_email: poslatEmail } = zvaliduj(
       z.object({
         duvod: z.string({ error: 'Napiš důvod zrušení.' }).trim()
           .min(3, 'Napiš důvod zrušení — přečte si ho i přihlášený.')
           .max(500, 'Důvod je příliš dlouhý.'),
+        // Komu se zruší termín, ten se to má dozvědět. Přepínač tu přesto je:
+        // někdy provoz všem zavolá dřív, než stihne kliknout.
+        poslat_email: z.coerce.boolean().default(true),
       }),
       req.body ?? {}
     );
@@ -646,10 +677,32 @@ router.post(
     });
 
     // Přihlášky zůstávají a přesouvá je provoz ručně (rozhodnutí 7
-    // v docs/plan-kurzy.md). E-mail o zrušení odejde, až přihlášky budou (E5).
+    // v docs/plan-kurzy.md) - zrušení termínu je nesmí odstranit ani stornovat.
+    // Odejde jen e-mail, že se neletí.
+    const komu = await prihlaseniNaTerminu(id);
+    let odeslano = 0;
+    if (poslatEmail) {
+      for (const rezervaceId of komu) {
+        const prihlaska = await nactiPrihlasku(rezervaceId);
+        const vysledek = await posliOznameni('termin_zruseny', prihlaska, { duvod }).catch(
+          (chyba) => {
+            console.error('[terminy] e-mail o zrušení neodešel:', chyba.message);
+            return null;
+          }
+        );
+        if (vysledek) odeslano += 1;
+      }
+    }
+
     res.json({
       ...(await nactiDetail(id)),
-      zprava: 'Termín je zrušený. Na webu se přestane nabízet.',
+      prihlasek: komu.length,
+      emailu_odeslano: odeslano,
+      zprava:
+        'Termín je zrušený. Na webu se přestane nabízet.' +
+        (komu.length
+          ? ` Přihlášek zůstává ${komu.length}${odeslano ? `, e-mail odešel ${odeslano}×` : ''} — přesun domluv s lidmi sama.`
+          : ''),
     });
   })
 );
@@ -714,6 +767,18 @@ function zpravaOZalozeni(sloveso, vytvoreno, preskoceno) {
     `${sloveso} ${vytvoreno} ${sklonTerminu(vytvoreno)}` +
     (preskoceno ? `, ${preskoceno} vynecháno — na ty dny už termín byl.` : '.')
   );
+}
+
+// Živé přihlášky na termín. Stornované se neoznamují - ti lidé už nejedou.
+async function prihlaseniNaTerminu(terminId) {
+  const [rows] = await pool.query(
+    `SELECT id FROM rezervace
+      WHERE termin_id = ? AND smazano_at IS NULL
+        AND stav IN ('nova','potvrzena','zaplacena')
+      ORDER BY id`,
+    [terminId]
+  );
+  return rows.map((r) => r.id);
 }
 
 function sklonTerminu(pocet) {

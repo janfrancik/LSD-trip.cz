@@ -17,6 +17,10 @@ export const SKUPINY = [
   { klic: 'poukazy', nazev: 'Dárkové poukazy', popis: 'Platnost a texty poukazů.' },
   { klic: 'emaily', nazev: 'E-maily', popis: 'Kdy se rozesílají připomínky a jaké jsou výchozí texty.' },
   { klic: 'web', nazev: 'Texty na webu', popis: 'Nadpisy a úvodní odstavce stránek, které nejsou obsahem kurzu.' },
+  {
+    klic: 'souhlasy', nazev: 'Souhlasy v přihlášce',
+    popis: 'Texty, které člověk zaškrtává při přihlášení. Ukládají se k přihlášce v tom znění, jaké tam bylo v ten den.',
+  },
 ];
 
 // typ: text | textarea | cislo | bool | datum | email | telefon
@@ -91,6 +95,34 @@ export const REGISTR = {
   'emaily.pripominka_dni_predem': {
     skupina: 'emaily', typ: 'cislo', popisek: 'Připomínka termínu kolik dní předem', vychozi: '3', min: 1, max: 30,
   },
+  // Souhlasy u přihlášky. Text se ke každé přihlášce uloží tak, jak zněl
+  // v ten den - podmínky se mění a platí ty, které měl člověk před očima.
+  // Proto tady, ne v kódu: jinak by se po změně nedalo doložit, s čím kdo
+  // souhlasil.
+  'souhlasy.vop_text': {
+    skupina: 'souhlasy', typ: 'textarea', popisek: 'Souhlas s provozními podmínkami',
+    vychozi: 'Souhlasím s provozními podmínkami spolku a beru na vědomí storno podmínky.',
+    povinne: true,
+  },
+  'souhlasy.vop_odkaz': {
+    skupina: 'souhlasy', typ: 'text', popisek: 'Odkaz na plné znění podmínek', vychozi: '', max: 255,
+    napoveda: 'Nepovinné. Celá adresa včetně https://. U zaškrtnutí se pak ukáže odkaz „přečíst“.',
+  },
+  'souhlasy.gdpr_text': {
+    skupina: 'souhlasy', typ: 'textarea', popisek: 'Souhlas se zpracováním osobních údajů',
+    vychozi:
+      'Souhlasím se zpracováním osobních údajů pro vyřízení přihlášky. ' +
+      'Údaje nepředáváme nikomu dalšímu a na požádání je smažeme.',
+    povinne: true,
+  },
+  'souhlasy.zdravi_text': {
+    skupina: 'souhlasy', typ: 'textarea', popisek: 'Zdravotní prohlášení',
+    vychozi:
+      'Prohlašuji, že jsem zdravotně způsobilý k parašutistickému výcviku a nejsem si ' +
+      'vědom překážky, která by mi ve skoku bránila. Lékařskou prohlídku doložím na místě.',
+    povinne: true,
+  },
+
   // Stránka /kurzy se renderuje na serveru. Nadpis ani úvodní text proto
   // nejsou v kódu - majitelka je mění tady, bez nasazení.
   'web.kurzy_nadpis': {

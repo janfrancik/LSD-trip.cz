@@ -15,7 +15,9 @@
 import express from 'express';
 import { asyncHandler } from '../chyby.js';
 import { nactiVerejneKurzy, nactiVerejnyKurz } from '../kurzy.js';
+import { nactiPrihlaskuPodleKodu } from '../prihlasky.js';
 import { hodnota } from '../nastaveni.js';
+import { popisTerminu } from '../prihlasky.js';
 import config from '../config.js';
 import { datum as formatujDatum } from '../cas.js';
 import { stranka, escHtml, odstavce } from './layout.js';
@@ -207,6 +209,9 @@ router.get(
 
     const pozadavky = pozadavkyVety(kurz.pozadavky);
     const volne = kurz.terminy.filter((t) => !t.plno);
+    // Texty souhlasů spravuje majitelka v nastavení. Ke každé přihlášce se
+    // pak uloží v tom znění, jaké měl člověk před očima.
+    const souhlasy = volne.length ? await nactiTextySouhlasu() : null;
     const meta = [kurz.delka_text, kurz.uroven_text].filter(Boolean);
 
     const obsah = `
@@ -316,7 +321,9 @@ router.get(
             }</div>
           </div>
           <div style="margin-top:22px">
-            <a class="btn btn--primary btn--block" href="#poptavka">Mám zájem</a>
+            <a class="btn btn--primary btn--block" href="${volne.length ? '#prihlaska' : '#poptavka'}">${
+              volne.length ? 'Přihlásit se' : 'Mám zájem'
+            }</a>
           </div>
           <div style="margin-top:10px">
             <a class="btn btn--outline btn--block" href="/kurzy">Všechny kurzy</a>
@@ -325,8 +332,11 @@ router.get(
       </div>
 
       <div class="container" style="padding-bottom:40px">
-        <section class="box" id="poptavka">
-          <h2 class="subhead" style="margin-bottom:10px">Mám zájem o kurz</h2>
+        ${volne.length ? formularPrihlasky(kurz, volne, souhlasy) : ''}
+        <section class="box" id="poptavka"${volne.length ? ' style="margin-top:22px"' : ''}>
+          <h2 class="subhead" style="margin-bottom:10px">${
+            volne.length ? 'Nebo se jen zeptej' : 'Mám zájem o kurz'
+          }</h2>
           <p class="prose" style="margin-bottom:24px">
             Poptávka je nezávazná. Ozveme se ti s volnými místy, potvrzením termínu i cenou.
           </p>
@@ -407,5 +417,208 @@ router.get(
     );
   })
 );
+
+// ------------------------------------------------------------- přihláška
+
+async function nactiTextySouhlasu() {
+  const [vop, vopOdkaz, gdpr, zdravi] = await Promise.all([
+    hodnota('souhlasy.vop_text'),
+    hodnota('souhlasy.vop_odkaz'),
+    hodnota('souhlasy.gdpr_text'),
+    hodnota('souhlasy.zdravi_text'),
+  ]);
+  return { vop, vopOdkaz, gdpr, zdravi };
+}
+
+function souhlas(klic, text, odkaz) {
+  return `<label class="souhlas">
+      <input type="checkbox" name="souhlas_${klic}" />
+      <span>${escHtml(text)}${
+        odkaz ? ` <a href="${escHtml(odkaz)}" target="_blank" rel="noopener">přečíst</a>` : ''
+      }</span>
+    </label>`;
+}
+
+// Řádek účastníka. Zaškrtnutí o prohlídce a souhlasu zástupce se ukazují
+// jen tam, kde je kurz vyžaduje - jinak by to byl formulář plný otázek,
+// které se daného kurzu netýkají.
+function ucastnik(kurz, poradi) {
+  const p = kurz.pozadavky;
+  return `<fieldset class="ucastnik" data-ucastnik>
+      <legend class="ucastnik__legenda">Účastník <span data-cislo>${poradi}</span></legend>
+      <div class="field-grid field-grid--tri">
+        <input class="field" type="text" data-pole="jmeno" autocomplete="name"
+               placeholder="Jméno a příjmení" aria-label="Jméno a příjmení účastníka" />
+        <input class="field" type="date" data-pole="datum_narozeni"
+               aria-label="Datum narození účastníka" title="Datum narození" />
+        <input class="field" type="number" data-pole="vaha_kg" inputmode="numeric" min="20" max="300"
+               placeholder="Hmotnost (kg)" aria-label="Hmotnost účastníka v kilogramech" />
+      </div>
+      <p class="ucastnik__napoveda">
+        Datum narození potřebujeme kvůli věkovému limitu${
+          p.souhlas_zastupce_do_let ? ' a souhlasu zákonného zástupce' : ''
+        }, hmotnost kvůli vybavení. Nic dalšího z nich nepočítáme.
+      </p>
+      ${p.lekarska_prohlidka
+        ? `<label class="souhlas souhlas--maly">
+             <input type="checkbox" data-pole="doklada_prohlidku" />
+             <span>Lékařskou prohlídku doložím na místě.</span>
+           </label>`
+        : ''}
+      ${p.souhlas_zastupce_do_let
+        ? `<label class="souhlas souhlas--maly">
+             <input type="checkbox" data-pole="zajisti_souhlas_zastupce" />
+             <span>Je mi méně než ${p.souhlas_zastupce_do_let} let — zajistím písemný souhlas zákonného zástupce.</span>
+           </label>`
+        : ''}
+      <div class="ucastnik__akce">
+        <button type="button" class="btn btn--outline btn--sm" data-odebrat hidden>Odebrat účastníka</button>
+      </div>
+    </fieldset>`;
+}
+
+function formularPrihlasky(kurz, volne, souhlasy) {
+  return `<section class="box" id="prihlaska">
+      <h2 class="subhead" style="margin-bottom:10px">Přihláška na kurz</h2>
+      <p class="prose" style="margin-bottom:24px">
+        Místo ti podržíme a ozveme se s potvrzením. Nic teď neplatíš.
+      </p>
+
+      <form class="poptavka" data-prihlaska data-kurz="${escHtml(kurz.nazev)}" novalidate>
+        <label class="pole-popisek" for="prihlaska-termin">Termín</label>
+        <select class="field" id="prihlaska-termin" name="termin_id" aria-label="Termín">
+          ${volne
+            .map(
+              (t) =>
+                `<option value="${t.id}">${escHtml(formatujDatum(t.datum))}${
+                  t.misto ? ` · ${escHtml(t.misto)}` : ''
+                }${t.volno !== null ? ` — volno ${t.volno}` : ''}</option>`
+            )
+            .join('')}
+        </select>
+
+        <div data-ucastnici>${ucastnik(kurz, 1)}</div>
+        <button type="button" class="btn btn--outline btn--sm" data-pridat-ucastnika
+                style="margin-bottom:22px">+ Další účastník</button>
+
+        <h3 class="pole-popisek">Kontakt na toho, kdo přihlášku podává</h3>
+        <div class="field-grid">
+          <input class="field" type="text" name="jmeno" autocomplete="name"
+                 placeholder="Jméno a příjmení" aria-label="Vaše jméno a příjmení" required />
+          <input class="field" type="email" name="email" autocomplete="email"
+                 placeholder="E-mail" aria-label="Váš e-mail" required />
+          <input class="field" type="tel" name="telefon" autocomplete="tel"
+                 placeholder="Telefon" aria-label="Váš telefon" />
+          <input class="field" type="text" name="mesto" autocomplete="address-level2"
+                 placeholder="Město" aria-label="Město" />
+        </div>
+        <textarea class="field" name="zprava" style="margin-top:14px;min-height:90px"
+                  placeholder="Poznámka (skupina, dárkový poukaz, cokoliv)" aria-label="Poznámka"></textarea>
+
+        <div class="souhlasy">
+          ${souhlas('vop', souhlasy.vop, souhlasy.vopOdkaz)}
+          ${souhlas('gdpr', souhlasy.gdpr, null)}
+          ${souhlas('zdravi', souhlasy.zdravi, null)}
+        </div>
+
+        <!-- Past na roboty: člověk pole nevidí, robot ho vyplní. -->
+        <input class="past" type="text" name="web" tabindex="-1" autocomplete="off" aria-hidden="true" />
+
+        <div style="margin-top:20px">
+          <button class="btn btn--primary" type="submit" data-odeslat>Odeslat přihlášku</button>
+        </div>
+        <p class="poptavka__stav" data-stav role="status"></p>
+      </form>
+    </section>`;
+}
+
+// ---------------------------------------------- přihláška pro účastníka
+
+// GET /prihlaska/:kod?t=token
+//
+// Odkaz z potvrzovacího e-mailu. Bez tokenu 404 - z odpovědi nemá jít
+// poznat, jestli takové číslo přihlášky existuje.
+router.get(
+  '/prihlaska/:kod',
+  asyncHandler(async (req, res) => {
+    const p = await nactiPrihlaskuPodleKodu(String(req.params.kod));
+    if (!p || p.verejny_token !== String(req.query.t ?? '')) {
+      return res.status(404).type('html').send(await strankaNenalezeno());
+    }
+
+    const radek = (popisek, hodnota) =>
+      `<div class="variant"><div class="variant__row">
+         <span class="variant__title">${escHtml(popisek)}</span>
+         <span class="variant__price">${escHtml(hodnota)}</span>
+       </div></div>`;
+
+    const obsah = `
+      <div class="container container--narrow section--first">
+        <p class="eyebrow">Přihláška ${escHtml(p.kod)}</p>
+        <h1 class="display" style="margin-bottom:18px">${escHtml(p.produkt_nazev)}</h1>
+        ${p.stav === 'storno'
+          ? `<p class="lead">Tahle přihláška je stornovaná.${
+              p.storno_duvod ? ` Důvod: ${escHtml(p.storno_duvod)}` : ''
+            }</p>`
+          : `<p class="lead">${
+              p.stav === 'nova'
+                ? 'Přihlášku máme. Ozveme se vám s potvrzením.'
+                : 'Přihláška je potvrzená. Těšíme se na vás.'
+            }</p>`}
+
+        <div class="panel" style="margin-top:28px">
+          ${radek('Termín', popisTerminu(p))}
+          ${p.misto_nazev ? radek('Místo', p.misto_nazev) : ''}
+          ${radek('Počet osob', String(p.pocet_osob))}
+          ${radek('Cena', p.cena_hal ? koruny(p.cena_hal) : 'domluvíme')}
+          ${radek('Stav', STAV_PRIHLASKY[p.stav] ?? p.stav)}
+        </div>
+
+        <h2 class="subhead">Účastníci</h2>
+        <div class="termlist">
+          ${p.ucastnici
+            .map(
+              (u) => `<div class="termrow">
+                <span class="termrow__date">${escHtml(u.jmeno)}</span>
+                <span><span class="termrow__type">${
+                  [u.vek != null ? `${u.vek} let` : '', u.vaha_kg ? `${u.vaha_kg} kg` : '']
+                    .filter(Boolean).map(escHtml).join(' · ')
+                }</span></span>
+                <span class="termrow__spots">${
+                  u.varovani.length ? escHtml(u.varovani.join('; ')) : ''
+                }</span>
+                <span class="termrow__cta"></span>
+              </div>`
+            )
+            .join('')}
+        </div>
+
+        <p class="prose" style="margin-top:26px">
+          Potřebujete něco změnit? Napište nám a uveďte číslo přihlášky ${escHtml(p.kod)}.
+        </p>
+        <a class="btn btn--outline" href="/kurz/${escHtml(p.produkt_slug)}">Zpátky na kurz</a>
+      </div>`;
+
+    res.type('html').send(
+      await stranka({
+        stranka: 'prihlaska',
+        cesta: `/prihlaska/${p.kod}`,
+        titulek: `Přihláška ${p.kod} — LSD`,
+        popis: 'Stav vaší přihlášky na kurz.',
+        obsah,
+      })
+    );
+  })
+);
+
+const STAV_PRIHLASKY = {
+  nova: 'přijatá, čeká na potvrzení',
+  potvrzena: 'potvrzená',
+  zaplacena: 'zaplacená',
+  probehla: 'proběhla',
+  storno: 'stornovaná',
+  presunuta: 'přesunutá na jiný termín',
+  no_show: 'nedorazil',
+};
 
 export default router;
