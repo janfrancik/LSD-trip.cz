@@ -317,7 +317,7 @@ router.get(
       res,
       `soupiska-${soupiska.termin.datum}.csv`,
       ['Jméno', 'Věk', 'Váha kg', 'Telefon', 'E-mail', 'Stav', 'Zaplaceno',
-        'Prohlídka doložena', 'Souhlas zástupce', 'Mimo limit', 'Poznámka'],
+        'Prohlídka doložena', 'Souhlas zástupce', 'Souhlasy', 'Mimo limit', 'Poznámka'],
       soupiska.ucastnici.map((u) => [
         u.jmeno,
         u.vek ?? '',
@@ -328,6 +328,7 @@ router.get(
         anoNe(u.zaplaceno),
         anoNe(u.doklada_prohlidku),
         anoNe(u.zajisti_souhlas_zastupce),
+        u.souhlasy_online ? 'online' : 'podepíše na místě',
         u.varovani.join('; '),
         u.poznamka ?? '',
       ])

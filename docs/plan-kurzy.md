@@ -309,6 +309,13 @@ COMMIT;
 | 9 | Jiné druhy kurzů | Nejsou — všechny se vejdou do schématu výše. Nový kurz = řádek v `produkty`, žádná změna kódu. |
 | 10 | Titulka | Vyřešena samostatnou dávkou před E1 (proběhlé termíny, průvodce končící poptávkou, čitelný eyebrow). |
 
+### Předání testerům a spuštění
+
+Zadání akceptačních testů pro modul je v [docs/akceptace/kurzy-1.yml](akceptace/kurzy-1.yml)
+(19 úkolů rozdělených podle rolí: majitelka, provoz, zákazník). Co doplnit před
+ostrým spuštěním a co udělat na serveru při přechodu na `main`, je
+v [docs/checklist-kurzy-spusteni.md](checklist-kurzy-spusteni.md).
+
 ### Co je potřeba od majitelky
 - **Fotka kurzu IAFF** místo `carousel/1652266303_1_image_28350.jpg` — ta dnešní má
   v sobě vypálenou cenu „13.500,-“, zatímco karta vedle říká „Cena na dotaz“.

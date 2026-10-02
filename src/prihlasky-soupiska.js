@@ -53,6 +53,7 @@ export async function nactiSoupisku(terminId) {
     `SELECT u.id, u.jmeno, u.datum_narozeni, u.vaha_kg, u.telefon, u.email,
             u.doklada_prohlidku, u.zajisti_souhlas_zastupce, u.dorazil, u.poznamka,
             r.id AS rezervace_id, r.kod, r.stav, r.uhrazeno_hal, r.k_uhrade_hal,
+            r.zdroj, r.souhlas_vop_at, r.souhlas_zdravi_at,
             z.jmeno AS zakaznik_jmeno, z.telefon AS zakaznik_telefon, z.email AS zakaznik_email
        FROM rezervace_ucastnici u
        JOIN rezervace r ON r.id = u.rezervace_id
@@ -79,6 +80,10 @@ export async function nactiSoupisku(terminId) {
     doklada_prohlidku: Boolean(u.doklada_prohlidku),
     zajisti_souhlas_zastupce: Boolean(u.zajisti_souhlas_zastupce),
     dorazil: Boolean(u.dorazil),
+    // Přihláška po telefonu nemá odklikané souhlasy - papír se podepisuje
+    // na místě a provoz to musí vidět dřív, než člověk nastoupí do letadla.
+    souhlasy_online: Boolean(u.souhlas_vop_at && u.souhlas_zdravi_at),
+    zdroj: u.zdroj,
     poznamka: u.poznamka,
     prihlasil: u.zakaznik_jmeno,
     varovani: varovaniKUcastnikovi(
@@ -115,6 +120,7 @@ export async function nactiSoupisku(terminId) {
     pocty: {
       prihlaseno: radky.length,
       zaplaceno: radky.filter((u) => u.zaplaceno).length,
+      bez_souhlasu: radky.filter((u) => !u.souhlasy_online).length,
       mimo_limit: radky.filter((u) => u.varovani.length).length,
       volno: termin.kapacita_mist > 0 ? Math.max(0, termin.kapacita_mist - radky.length) : null,
     },

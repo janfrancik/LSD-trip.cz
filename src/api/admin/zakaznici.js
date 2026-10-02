@@ -15,7 +15,7 @@ import { z } from 'zod';
 import pool from '../../db.js';
 import { asyncHandler, chybaNenalezeno, chybaKonflikt } from '../../chyby.js';
 import { zvaliduj, schemaSeznam } from '../../validace.js';
-import { vyzaduje } from '../../auth/opravneni.js';
+import { vyzaduje, jenSpravce } from '../../auth/opravneni.js';
 import { zapisAudit } from '../../audit.js';
 
 const router = express.Router();
@@ -124,8 +124,10 @@ router.patch(
 // POST /api/admin/zakaznici/:id/anonymizovat
 router.post(
   '/:id(\\d+)/anonymizovat',
-  // Anonymizace je nevratná, proto ji smí jen ten, kdo smí zákazníky měnit.
+  // Anonymizace je nevratná a je to zásah do dat, za která se ručí navenek.
+  // Proto jen správce - zákazníky sice smí měnit i provoz, ale tohle ne.
   vyzaduje('zakaznici', 'menit'),
+  jenSpravce,
   asyncHandler(async (req, res) => {
     const id = Number(req.params.id);
     const zakaznik = await nactiZakaznika(id);

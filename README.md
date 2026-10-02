@@ -51,6 +51,7 @@ src/akceptace/               modul „Ke schválení“ — import zadání, př
 src/email/                   odesílání přes Resend, šablony a přílohy
 
 docs/akceptace/*.yml         zadání akceptačních testů (importuje se při nasazení)
+docs/checklist-kurzy-spusteni.md  co doplnit a co udělat na serveru před spuštěním kurzů
 
 scripts/migrate.js           spouštěč migrací, stav v tabulce _migrace
 scripts/vytvor-uzivatele.js  založení uživatele administrace

@@ -191,6 +191,11 @@ router.get(
 // ------------------------------------------------------------------- zápis
 
 // POST /api/admin/rezervace - přihláška po telefonu
+//
+// Souhlasy se tudy **nezaznamenávají**: po telefonu je nikdo neodklikne
+// a tvrdit, že je zákazník potvrdil, by bylo doložitelné jen těžko.
+// Papír se podepisuje na místě a soupiska na to u takové přihlášky
+// upozorní (viz src/prihlasky-soupiska.js).
 router.post(
   '/',
   vyzaduje('rezervace', 'menit'),
@@ -201,10 +206,20 @@ router.post(
         jmeno: schemaJmeno,
         email: schemaEmail,
         telefon: schemaTelefon,
-        pocet_osob: z.coerce.number().int().min(1).max(10).default(1),
+        ucastnici: z.array(
+          z.object({
+            jmeno: z.string().trim().min(2, 'Jméno účastníka je povinné.').max(160),
+            datum_narozeni: z.string().trim()
+              .regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum narození zadej jako 1990-05-17.')
+              .nullable().optional().or(z.literal('')).transform((v) => (v ? v : null)),
+            vaha_kg: z.coerce.number().int().min(20).max(300).nullable().optional(),
+            telefon: z.string().trim().max(40).nullable().optional().or(z.literal(''))
+              .transform((v) => (v ? v : null)),
+            poznamka: z.string().trim().max(500).nullable().optional().or(z.literal(''))
+              .transform((v) => (v ? v : null)),
+          })
+        ).min(1, 'Přidej aspoň jednoho účastníka.').max(10),
         zprava: z.string().trim().max(2000).nullable().optional(),
-        // Souhlasy po telefonu: provoz potvrzuje, že je přečetl nahlas.
-        souhlasy_potvrzeny: z.coerce.boolean().default(false),
         poslat_email: z.coerce.boolean().default(false),
       }),
       req.body ?? {}
@@ -213,16 +228,8 @@ router.post(
     const vysledek = await zapisPrihlasku({
       terminId: vstup.termin_id,
       kontakt: { jmeno: vstup.jmeno, email: vstup.email, telefon: vstup.telefon },
-      // Jméno účastníka se doplní v detailu; po telefonu se často zapisuje
-      // jen kontakt a jména dojdou e-mailem.
-      ucastnici: Array.from({ length: vstup.pocet_osob }, (_, i) => ({
-        jmeno: i === 0 ? vstup.jmeno : `Účastník ${i + 1}`,
-      })),
-      souhlasy: {
-        vop: vstup.souhlasy_potvrzeny,
-        gdpr: vstup.souhlasy_potvrzeny,
-        zdravi: vstup.souhlasy_potvrzeny,
-      },
+      ucastnici: vstup.ucastnici,
+      souhlasy: { vop: false, gdpr: false, zdravi: false },
       zprava: vstup.zprava ?? null,
       zdroj: 'telefon',
       uzivatelId: req.uzivatel.id,
@@ -239,7 +246,20 @@ router.post(
       req, akce: 'vytvoreni', entita: 'rezervace', entitaId: prihlaska.id,
       popis: popisProAudit(prihlaska), po: proAudit(prihlaska),
     });
-    res.status(201).json(prihlaska);
+    // Odpověď na akci je schválně úzká, ne celá přihláška: `zprava` je
+    // u přihlášky vzkaz od zákazníka a zároveň zvyklost pro hlášku v
+    // administraci. Smíchané do jednoho objektu by jedno přepsalo druhé.
+    res.status(201).json({
+      ok: true,
+      id: prihlaska.id,
+      kod: prihlaska.kod,
+      zdroj: prihlaska.zdroj,
+      pocet_osob: prihlaska.pocet_osob,
+      varovani: vysledek.varovani,
+      zprava:
+        'Přihláška je zapsaná. Souhlasy chybí — papír se podepisuje na místě, ' +
+        'soupiska na to upozorní.',
+    });
   })
 );
 
@@ -411,7 +431,14 @@ router.post(
       pred: { stav: pred.stav }, po: { stav: vstup.stav, email: Boolean(email) },
     });
 
-    res.json({ ...po, email_odeslan: Boolean(email), email_do_schranky: email?.doSchranky ?? false });
+    res.json({
+      ok: true,
+      id: po.id,
+      kod: po.kod,
+      stav: po.stav,
+      email_odeslan: Boolean(email),
+      email_do_schranky: email?.doSchranky ?? false,
+    });
   })
 );
 
@@ -469,7 +496,10 @@ router.post(
     });
 
     res.json({
-      ...po,
+      ok: true,
+      id: po.id,
+      kod: po.kod,
+      stav: po.stav,
       email_odeslan: Boolean(email),
       email_do_schranky: email?.doSchranky ?? false,
       zprava: 'Přihláška je stornovaná, místo na termínu se uvolnilo.',

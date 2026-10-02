@@ -111,3 +111,19 @@ export function vyzaduje(oblast, uroven = 'cist') {
     return next();
   };
 }
+
+/**
+ * Jen pro správce, bez ohledu na oblasti.
+ *
+ * Pro nevratné zásahy, u kterých nestačí "má právo na tuhle oblast":
+ * anonymizace zákazníka se nedá vrátit a má ji dělat ten, kdo za data ručí.
+ * Nejdřív se kontroluje oblast (vyzaduje), pak tohle - pořadí je schválně,
+ * ať se nikdo nedozví o existenci akce, na kterou stejně nemá právo.
+ */
+export function jenSpravce(req, res, next) {
+  if (!req.uzivatel) return next(chybaNeprihlasen());
+  if (req.uzivatel.role !== 'admin') {
+    return next(chybaBezOpravneni('Tohle může udělat jen správce.'));
+  }
+  return next();
+}

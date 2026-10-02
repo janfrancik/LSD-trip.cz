@@ -1,0 +1,351 @@
+# Zadání akceptačních testů pro modul Kurzy.
+#
+# Soubor se při nasazení na test naimportuje do administrace (modul
+# „Ke schválení“). Párování je podle `kod` - kód úkolu se proto nikdy nemění,
+# i když se přepíše text. Když se text změní, administrace to testerovi ukáže
+# jako „zadání se od tvého testu změnilo“.
+#
+# Úkoly se píšou pro člověka, který nezná kód: konkrétní hodnoty, krok za krokem,
+# a co má na konci vidět.
+#
+# Role u úkolu říká, komu se ukáže:
+#   role: admin          — práce majitelky (kurzy, texty, fotky, šablony)
+#   role: admin, provoz  — denní provoz (přihlášky, soupiska, termíny)
+#   bez role             — každý; používá se pro pohled zákazníka na web
+
+verze:
+  kod: kurzy-1
+  nazev: Kurzy — od založení kurzu po přihlášku na letišti
+  poradi: 2
+  popis: >-
+    Celý modul kurzů: založení kurzu v administraci, fotky, termíny, přihláška
+    z webu, stavy přihlášek, soupiska na letiště a e-maily.
+
+    Testuje se na testovacím webu. Nic z toho, co tady uděláte, se neukáže
+    zákazníkům a **žádný e-mail zákazníkovi neodejde** — všechno skončí
+    v Testovací schránce v administraci.
+
+    Projděte úkoly v pořadí, jak jdou za sebou: kurz, který založíte na začátku,
+    budete potřebovat i v dalších úkolech. Kdyby cokoli nesedělo, použijte
+    vlaječku „Nahlásit problém“ vpravo nahoře — připojí k hlášení i to, na které
+    obrazovce jste byli.
+
+ukoly:
+  # ============================================================== majitelka
+  - kod: kurz-zalozeni
+    nazev: Založení kurzu
+    oblast: kurzy
+    role: admin
+    odkaz: /admin/kurzy
+    postup: |
+      1. V menu otevřete Kurzy a klikněte na Nový kurz.
+      2. Napište název „Zkušební kurz“ a potvrďte Založit.
+      3. Na kartě kurzu vyplňte v sekci Texty krátký popis (dvě věty)
+         a podrobný popis (dva odstavce oddělené prázdným řádkem).
+      4. V sekci Cena a DPH zadejte cenu 4900.
+      5. Dole klikněte na Uložit změny.
+    vysledek: |
+      Nahoře se objeví hláška, že je kurz uložený. V hlavičce karty svítí
+      název, cena 4 900 Kč, sazba DPH a adresa kurzu na webu
+      (/kurz/zkusebni-kurz). Napravo (na mobilu nahoře) je náhled karty,
+      jak bude kurz vypadat na webu — a mění se už při psaní.
+
+  - kod: kurz-pozadavky-prubeh
+    nazev: Požadavky na účastníka a průběh kurzu
+    oblast: kurzy
+    role: admin
+    odkaz: /admin/kurzy
+    postup: |
+      1. Otevřete Zkušební kurz.
+      2. V sekci Požadavky na účastníka zadejte nejnižší věk 15, nejvyšší
+         hmotnost 95 a souhlas zástupce do 18 let. Zapněte „vyžaduje lékařskou
+         prohlídku“.
+      3. V sekci Co si vzít přidejte tři odrážky (třeba „sportovní obuv nad
+         kotník“). Jednu posuňte šipkou nahoru a jednu smažte křížkem.
+      4. V sekci Jak kurz probíhá přidejte dva kroky s nadpisem a textem.
+      5. Uložte.
+    vysledek: |
+      Odrážky i kroky zůstanou v pořadí, v jakém jste je nechala, a po uložení
+      a návratu na kartu jsou pořád tam. Kroky jsou očíslované samy.
+
+  - kod: kurz-fotky
+    nazev: Fotky kurzu z mobilu
+    oblast: kurzy
+    role: admin
+    odkaz: /admin/kurzy
+    postup: |
+      1. Otevřete Zkušební kurz na **telefonu**.
+      2. V sekci Fotky klepněte na „+ Přidat fotku“ a vyfoťte cokoli
+         (nebo vyberte fotku z galerie). Přidejte takhle dvě fotky.
+      3. U první fotky vyplňte popis („Co je na fotce“).
+      4. Šipkami prohoďte pořadí fotek.
+      5. Zkuste nahrát tutéž fotku ještě jednou.
+    vysledek: |
+      První fotka v pořadí má oranžový rám a odznak „Titulní“ — a ukáže se
+      v náhledu karty vpravo. U fotky bez popisu svítí oranžová poznámka, že
+      popis chybí. Pod každou fotkou je napsáno, jak je velká; u fotky
+      z telefonu je vidět, že se pro web zmenšila (třeba „1600 × 1067 px,
+      480 kB (zmenšeno z 3,8 MB)“). Nahrání téže fotky podruhé se odmítne
+      hláškou „Tuhle fotku už kurz má.“
+
+  - kod: kurz-zverejneni
+    nazev: Zveřejnění kurzu a jeho stránka na webu
+    oblast: kurzy
+    role: admin
+    odkaz: /admin/kurzy
+    postup: |
+      1. Na kartě Zkušebního kurzu v sekci Zveřejnění zapněte „Zveřejnit kurz
+         na webu“ a uložte.
+      2. V hlavičce karty si přečtěte adresu kurzu a otevřete ji ve webu
+         (adresa testovacího webu + /kurz/zkusebni-kurz).
+      3. Vraťte se do administrace, kurz zase vypněte, uložte a stránku ve webu
+         obnovte.
+    vysledek: |
+      Zveřejněný kurz má na webu vlastní stránku s fotkou, popisem, průběhem
+      i požadavky a objeví se i na /kurzy a na titulní straně v sekci
+      „Co u nás můžeš skočit“. Po vypnutí stránka zmizí — ukáže se hláška
+      „Takový kurz tu není“, i když adresu zadáte přímo.
+
+  - kod: misto-zalozeni
+    nazev: Místo, kam se létá
+    oblast: terminy
+    role: admin, provoz
+    odkaz: /admin/terminy
+    postup: |
+      1. V menu otevřete Termíny a klikněte na Místa.
+      2. Přidejte „Letiště Jihlava — Henčov“ s adresou.
+      3. Zkuste založené místo smazat.
+    vysledek: |
+      Místo se objeví v seznamu a dá se vybrat u termínu. Smazat jde, dokud
+      na něm nevisí budoucí termín — pak se místo smazat odmítne a nabídne,
+      že ho můžete jen vypnout.
+
+  - kod: terminy-hromadne
+    nazev: Hromadné vypsání termínů
+    oblast: terminy
+    role: admin, provoz
+    odkaz: /admin/terminy
+    postup: |
+      1. V Termínech klikněte na Hromadně.
+      2. Vyberte Zkušební kurz, rozsah od dneška na dva měsíce dopředu
+         a v řádku dnů vyberte pátek a sobotu.
+      3. Zadejte sraz 8:00, místo a 6 míst. Potvrďte.
+      4. Hned potom spusťte totéž ještě jednou se stejnými hodnotami.
+    vysledek: |
+      Poprvé se založí termíny na všechny pátky a soboty v rozsahu a napíše se
+      kolik jich vzniklo. Podruhé se neobjeví žádné dvojité termíny — napíše se,
+      že nevzniklo nic nového, protože na ty dny už termín byl.
+
+  - kod: sablony-emailu
+    nazev: Texty e-mailů
+    oblast: emaily
+    role: admin
+    odkaz: /admin/sablony
+    postup: |
+      1. V menu otevřete E-maily a klikněte na Šablony e-mailů.
+      2. Otevřete „Přihláška přijatá“.
+      3. Přepište pozdrav na vlastní (třeba „Dobrý den, {{jmeno}}, moc nás těší…“).
+      4. Klikněte na některou z nabízených proměnných — vloží se tam, kde máte
+         kurzor.
+      5. Klikněte na Náhled nahoře a text si přečtěte.
+      6. Uložte šablonu.
+    vysledek: |
+      V náhledu je vidět hotový e-mail s vyplněnými ukázkovými údaji (Jana
+      Nováková, LSD-2026-0042) — žádné dvojité složené závorky tam nezůstanou.
+      Pod náhledem je poznámka, že z testovacího prostředí zákazníkovi nic
+      nedojde.
+
+  - kod: souhlasy-texty
+    nazev: Texty souhlasů v přihlášce
+    oblast: nastaveni
+    role: admin
+    odkaz: /admin/nastaveni
+    postup: |
+      1. Otevřete Nastavení a najděte skupinu „Souhlasy v přihlášce“.
+      2. Přečtěte si tři texty (podmínky, zpracování údajů, zdravotní prohlášení)
+         a upravte je tak, jak je chcete mít na webu.
+      3. Uložte a otevřete stránku zveřejněného kurzu na webu.
+    vysledek: |
+      Ve formuláři přihlášky jsou vaše texty u tří zaškrtávacích políček.
+      Co tady napíšete, se uloží ke každé přihlášce v tom znění — takže
+      za rok půjde doložit, s čím přesně člověk souhlasil.
+
+  # ================================================================= provoz
+  - kod: prihlaska-stav
+    nazev: Potvrzení přihlášky a e-mail
+    oblast: prihlasky
+    role: admin, provoz
+    odkaz: /admin/prihlasky
+    postup: |
+      1. Nejdřív si nechte z webu přijít přihlášku (úkol „Přihláška z mobilu“)
+         nebo si ji založte tlačítkem Nová přihláška.
+      2. V menu otevřete Přihlášky a přihlášku otevřete.
+      3. Klikněte na Potvrdit. V dialogu nechte zapnuté „Poslat zákazníkovi
+         e-mail“ a potvrďte.
+      4. Potom klikněte na Zaplaceno, ale přepínač e-mailu **vypněte**.
+      5. Otevřete E-maily (Testovací schránka).
+    vysledek: |
+      Stav přihlášky se mění na potvrzená a pak zaplacená. Ve schránce je
+      e-mail o potvrzení, ale **ne** o zaplacení — poslal se jen ten, u kterého
+      jste přepínač nechali zapnutý. V kartě přihlášky dole je seznam
+      odeslaných e-mailů.
+
+  - kod: prihlaska-storno
+    nazev: Storno přihlášky uvolní místo
+    oblast: prihlasky
+    role: admin, provoz
+    odkaz: /admin/prihlasky
+    postup: |
+      1. Otevřete nějakou přihlášku a podívejte se v Termínech, kolik je
+         u toho termínu volných míst.
+      2. V přihlášce klikněte na Storno, napište důvod a potvrďte.
+      3. Vraťte se na termín.
+    vysledek: |
+      Přihláška je ve stavu storno a je u ní vidět důvod. Na termínu přibylo
+      jedno volné místo. Pokud byl termín „plno“, je zase „otevřeno“.
+
+  - kod: prihlaska-telefon
+    nazev: Přihláška po telefonu
+    oblast: prihlasky
+    role: admin, provoz
+    odkaz: /admin/prihlasky
+    postup: |
+      1. V Přihláškách klikněte na Nová přihláška (totéž jde i z karty termínu).
+      2. Vyberte termín, vyplňte jméno a e-mail volajícího a telefon.
+      3. Přidejte druhého účastníka tlačítkem „+ Další účastník“ a u jednoho
+         z nich zadejte datum narození, podle kterého mu bude méně než 18 let.
+      4. Napište poznámku, co padlo po telefonu.
+      5. Přepínač „Poslat potvrzení e-mailem“ nechte vypnutý a potvrďte.
+    vysledek: |
+      Přihláška se založí a napíše se, že souhlasy chybí, protože se podepisují
+      na místě. Objeví se i upozornění, že účastník potřebuje souhlas zákonného
+      zástupce. V kartě přihlášky je v sekci Souhlasy štítek „po telefonu“
+      a vaše poznámka je u přihlášky.
+
+  - kod: soupiska-tisk
+    nazev: Soupiska na letiště a její tisk
+    oblast: terminy
+    role: admin, provoz
+    odkaz: /admin/terminy
+    postup: |
+      1. Otevřete termín, na který jsou přihlášení lidé.
+      2. Dole v sekci Soupiska si projděte tabulku.
+      3. Klikněte na Vytisknout a v náhledu tisku se podívejte, co je na papíře
+         (tisknout nemusíte, stačí náhled).
+      4. Zavřete náhled a klikněte na Stáhnout CSV. Soubor otevřete v Excelu
+         nebo v Google tabulkách.
+    vysledek: |
+      V soupisce je u každého jméno, věk ke dni termínu, váha, telefon, stav,
+      jestli je zaplaceno, jestli doloží prohlídku a souhlas zástupce.
+      Kdo je mimo limit věku nebo váhy, je podbarvený a je u něj napsáno proč.
+      U přihlášek po telefonu je ve sloupci Souhlasy „na místě“.
+      V náhledu tisku je **jen soupiska**, černá na bílém, na šířku a s místem
+      na podpis — žádné menu ani tlačítka. CSV má stejné sloupce a otevře se
+      s českou diakritikou.
+
+  - kod: termin-zruseni
+    nazev: Zrušení termínu s důvodem
+    oblast: terminy
+    role: admin, provoz
+    odkaz: /admin/terminy
+    postup: |
+      1. Otevřete termín, na který je někdo přihlášený.
+      2. Klikněte na Zrušit termín, napište důvod („Nepřeje počasí“) a nechte
+         zapnuté „Dát přihlášeným vědět e-mailem“.
+      3. Podívejte se do Přihlášek na toho člověka a pak do Testovací schránky.
+      4. Zkuste termín otevřít znovu tlačítkem Otevřít znovu.
+    vysledek: |
+      Termín je zrušený, na webu se přestane nabízet a je u něj vidět důvod.
+      Napíše se, kolik přihlášek na něm zůstalo a kolika lidem odešel e-mail.
+      **Přihláška zůstává** — nikdo ji neruší za vás, přesun domlouváte sama.
+      Po „Otevřít znovu“ se termín zase nabízí a důvod zrušení zmizí.
+
+  - kod: kapacita-plno
+    nazev: Plný termín už nikoho nepustí
+    oblast: terminy
+    role: admin, provoz
+    odkaz: /admin/terminy
+    postup: |
+      1. Založte termín s kapacitou 1 místo.
+      2. Z webu (nebo tlačítkem Nová přihláška) se na něj přihlaste.
+      3. Zkuste se na stejný termín přihlásit podruhé.
+    vysledek: |
+      Druhá přihláška se nepřijme — napíše se, že je termín plný, a nabídne
+      jiné termíny toho kurzu. V administraci je termín ve stavu „plno“.
+
+  # =============================================================== zákazník
+  - kod: web-prihlaska-mobil
+    nazev: Přihláška z webu na mobilu
+    oblast: web
+    odkaz: /kurzy
+    postup: |
+      1. Vezměte si **telefon** a otevřete testovací web, v menu Kurzy.
+      2. Otevřete Zkušební kurz a projděte stránku až dolů.
+      3. V přihlášce vyberte termín, vyplňte jméno, datum narození a váhu.
+      4. Klepněte na „+ Další účastník“ a přidejte druhého, pak ho zase odeberte.
+      5. Vyplňte kontakt na sebe a zkuste odeslat **bez** zaškrtnutých souhlasů.
+      6. Zaškrtněte všechny tři souhlasy a odešlete.
+    vysledek: |
+      Bez souhlasů to neodejde a napíše se proč. Po odeslání zůstane na stránce
+      potvrzení s číslem přihlášky (LSD-2026-…) a tlačítkem „Zobrazit přihlášku“.
+      Všechno jde ovládat jedním palcem, nikde se nemusí přibližovat.
+
+  - kod: web-stav-prihlasky
+    nazev: Stránka se stavem přihlášky
+    oblast: web
+    odkaz: /kurzy
+    postup: |
+      1. Po odeslané přihlášce klepněte na „Zobrazit přihlášku“ (nebo použijte
+         odkaz z e-mailu v Testovací schránce).
+      2. Nechte si stránku poslat sobě a otevřete ji znovu později.
+      3. Zkuste z adresy smazat část za otazníkem a stránku načíst.
+      4. Požádejte provoz, ať přihlášku potvrdí, a stránku obnovte.
+    vysledek: |
+      Na stránce je číslo přihlášky, termín, místo, počet osob, cena a stav.
+      Bez části adresy za otazníkem se stránka neotevře — ukáže se „Takový kurz
+      tu není“. Po potvrzení se stav na stránce změní.
+
+  - kod: web-limity
+    nazev: Účastník mimo limit projde, ale je o tom vědět
+    oblast: web
+    odkaz: /kurzy
+    postup: |
+      1. Na webu se přihlaste na Zkušební kurz a jako datum narození zadejte
+         někoho, komu je 14 let, a váhu 110 kg.
+      2. Přihlášku odešlete.
+      3. Podívejte se do administrace do Přihlášek a na soupisku termínu.
+    vysledek: |
+      Přihláška projde — nezamítá se sama. Hned pod potvrzením je ale napsáno,
+      co nesedí (věk, hmotnost, souhlas zástupce). V administraci je u té
+      přihlášky oranžové upozornění a na soupisce je účastník podbarvený.
+
+  - kod: web-titulka-kurzy
+    nazev: Kurzy na titulní straně
+    oblast: web
+    odkaz: /
+    postup: |
+      1. Otevřete titulní stranu testovacího webu.
+      2. Projděte sekci „Co u nás můžeš skočit“ a sekci „Nejbližší termíny“.
+      3. V administraci v Kurzech přehoďte šipkami pořadí kurzů a titulku
+         obnovte.
+    vysledek: |
+      V sekci „Co u nás můžeš skočit“ jsou za tandemovými kartami vaše kurzy
+      v tom pořadí, jaké mají v administraci — s titulní fotkou a cenou.
+      Kliknutí na kurz vede na jeho stránku. V „Nejbližších termínech“ jsou
+      i termíny kurzů, seřazené podle data.
+
+  - kod: emaily-nic-neodejde
+    nazev: Z testu zákazníkovi nic nedojde
+    oblast: emaily
+    role: admin, provoz
+    odkaz: /admin/emaily
+    postup: |
+      1. Otevřete E-maily (Testovací schránka).
+      2. Otevřete některý e-mail o přihlášce.
+      3. Podívejte se na řádek „Komu“ a na pruh nahoře.
+    vysledek: |
+      Nahoře je upozornění, že je to testovací schránka a nic neodešlo.
+      U e-mailu je vidět, komu by patřil, ale ven z testovacího prostředí
+      nic nejde. Tohle je pojistka, na kterou se dá spolehnout — kdyby
+      kdykoli při testování odešel e-mail skutečnému zákazníkovi, je to
+      chyba a nahlaste ji hned.

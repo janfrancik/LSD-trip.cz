@@ -43,6 +43,11 @@ function smiMenit() {
   return globalniStav.ja?.prava?.rezervace === 'menit';
 }
 
+// Anonymizace je nevratná, proto jen správce (server to kontroluje taky).
+function jeSpravce() {
+  return globalniStav.ja?.uzivatel?.role === 'admin';
+}
+
 function stitekStavu(p) {
   const s = STAVY[p.stav] ?? { popis: p.stav, stitek: 'stitek--spam' };
   return `<span class="stitek ${s.stitek}">${esc(s.popis)}</span>`;
@@ -68,6 +73,9 @@ async function seznam(koren) {
       <div class="hlava-akce">
         <a class="btn btn--obrys" href="/api/admin/rezervace/export.csv${esc(dotaz(filtr))}"
            download>Export CSV</a>
+        ${smiMenit()
+          ? '<button type="button" class="btn btn--hlavni" data-nova>Nová přihláška</button>'
+          : ''}
       </div>
     </div>
 
@@ -139,6 +147,10 @@ async function seznam(koren) {
 
   koren.querySelectorAll('[data-otevrit]').forEach((b) =>
     b.addEventListener('click', () => jdiNa('prihlasky/' + b.dataset.otevrit))
+  );
+
+  koren.querySelector('[data-nova]')?.addEventListener('click', () =>
+    novaPrihlaska({ poHotovu: () => seznam(koren) })
   );
 }
 
@@ -242,7 +254,7 @@ async function karta(koren, id) {
           </p>
           ${p.anonymizovano_at
             ? '<p class="sekce__udaj text-faint">Zákazník je anonymizovaný.</p>'
-            : muze
+            : muze && jeSpravce()
               ? `<button type="button" class="btn btn--obrys btn--blok" data-anonymizovat
                          style="margin-top:12px">Anonymizovat zákazníka</button>
                  <p class="sekce__napoveda">Smaže osobní údaje, přihlášky zůstanou kvůli účetnictví. Nedá se vrátit.</p>`
@@ -260,9 +272,14 @@ async function karta(koren, id) {
         `)}
 
         ${sekce('Souhlasy', 'Co a kdy odsouhlasil — v tom znění, jaké měl před očima.', `
-          ${souhlas('Provozní podmínky', p.souhlas_vop_at, p.souhlas_vop_text)}
-          ${souhlas('Zpracování osobních údajů', p.souhlas_gdpr_at, p.souhlas_gdpr_text)}
-          ${souhlas('Zdravotní prohlášení', p.souhlas_zdravi_at, p.souhlas_zdravi_text)}
+          ${p.zdroj === 'telefon' && !p.souhlas_vop_at
+            ? `<p class="sekce__udaj">
+                 <span class="stitek stitek--prubeh">po telefonu</span>
+                 Souhlasy se podepisují na místě. Na soupisce je to vidět.
+               </p>`
+            : `${souhlas('Provozní podmínky', p.souhlas_vop_at, p.souhlas_vop_text)}
+               ${souhlas('Zpracování osobních údajů', p.souhlas_gdpr_at, p.souhlas_gdpr_text)}
+               ${souhlas('Zdravotní prohlášení', p.souhlas_zdravi_at, p.souhlas_zdravi_text)}`}
         `)}
 
         ${sekce('Poznámka provozu', 'Vidíte jen vy. Na webu ani v e-mailu se neukáže.', `
@@ -476,4 +493,185 @@ async function anonymizuj(koren, p) {
   } catch (chyba) {
     hlaska(chyba.message, 'chyba');
   }
+}
+
+// ------------------------------------------------- přihláška po telefonu
+
+// Vlastní modál, ne formularModal: účastníků je proměnlivý počet a termín
+// se vybírá ze seznamu seskupeného po kurzech. Zavolá si ho i karta termínu,
+// proto je exportovaný a bere si termín jako předvyplněný.
+export async function novaPrihlaska({ terminId = null, poHotovu = null } = {}) {
+  let terminy;
+  try {
+    const data = await api.get('/terminy' + dotaz({ typ: 'kurz', na_strane: 200 }));
+    terminy = data.data.filter(
+      (t) => t.stav === 'otevreno' && (!t.kapacita_mist || t.obsazeno_mist < t.kapacita_mist)
+    );
+  } catch (chyba) {
+    hlaska(chyba.message, 'chyba');
+    return;
+  }
+
+  if (!terminy.length) {
+    await potvrd({
+      nadpis: 'Není kam přihlásit',
+      text: 'Žádný kurz nemá volný termín. Vypiš nejdřív termín v Termínech.',
+      potvrzeni: 'Rozumím', jenPotvrzeni: true, nebezpecne: false,
+    });
+    return;
+  }
+
+  // Termíny seskupené po kurzech, ať se v nich dá na telefonu vyznat.
+  const podleKurzu = new Map();
+  for (const t of terminy) {
+    const seznamTerminu = podleKurzu.get(t.produkt_nazev) ?? [];
+    seznamTerminu.push(t);
+    podleKurzu.set(t.produkt_nazev, seznamTerminu);
+  }
+
+  const nadoba = document.getElementById('modal');
+  nadoba.innerHTML = `
+    <div class="modal-pozadi" data-zavrit>
+      <form class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-nadpis">
+        <h2 class="modal__nadpis" id="modal-nadpis">Nová přihláška</h2>
+        <p class="modal__text">
+          Pro přihlášky po telefonu. Souhlasy se tudy nezaznamenávají —
+          papír se podepisuje na místě a soupiska na to upozorní.
+        </p>
+
+        <div class="pole-skupina" data-pole="termin_id">
+          <label class="pole-skupina__popisek" for="pole-termin">Termín</label>
+          <select class="pole" id="pole-termin" name="termin_id">
+            ${[...podleKurzu.entries()].map(([kurz, seznamTerminu]) => `
+              <optgroup label="${esc(kurz)}">
+                ${seznamTerminu.map((t) => `
+                  <option value="${t.id}"${String(t.id) === String(terminId) ? ' selected' : ''}>
+                    ${esc(datum(t.datum))}${t.misto_nazev ? ' · ' + esc(t.misto_nazev) : ''}${
+                      t.kapacita_mist ? ` — volno ${t.kapacita_mist - t.obsazeno_mist}` : ''
+                    }
+                  </option>`).join('')}
+              </optgroup>`).join('')}
+          </select>
+          <div class="pole-skupina__chyba" hidden></div>
+        </div>
+
+        <h3 class="pole-popisek">Kdo volá</h3>
+        ${pole({ klic: 'jmeno', popisek: 'Jméno a příjmení', povinne: true })}
+        ${pole({ klic: 'email', popisek: 'E-mail', typ: 'email', povinne: true,
+                 napoveda: 'Na tuhle adresu může odejít potvrzení.' })}
+        ${pole({ klic: 'telefon', popisek: 'Telefon', typ: 'telefon' })}
+
+        <h3 class="pole-popisek">Účastníci</h3>
+        <div class="polozky" data-ucastnici></div>
+        <button type="button" class="btn btn--obrys btn--blok" data-pridat
+                style="margin-top:10px">+ Další účastník</button>
+
+        ${pole({ klic: 'zprava', popisek: 'Poznámka', typ: 'textarea',
+                 napoveda: 'Co padlo po telefonu. Uvidíte to na kartě přihlášky.' })}
+        ${pole({ klic: 'poslat_email', popisek: 'Poslat potvrzení e-mailem', typ: 'prepinac',
+                 hodnota: false,
+                 napoveda: 'Nechte vypnuté, pokud jste se domluvili po telefonu.' })}
+
+        <div class="modal__akce">
+          <button type="button" class="btn btn--obrys" data-ne>Zrušit</button>
+          <button type="submit" class="btn btn--hlavni">Založit přihlášku</button>
+        </div>
+      </form>
+    </div>`;
+
+  const form = nadoba.querySelector('form');
+  const obalUcastniku = form.querySelector('[data-ucastnici]');
+  let ucastnici = [{ jmeno: '', datum_narozeni: '', vaha_kg: '' }];
+
+  const zavri = () => {
+    nadoba.innerHTML = '';
+    document.removeEventListener('keydown', naEsc);
+  };
+  const naEsc = (e) => { if (e.key === 'Escape') zavri(); };
+  document.addEventListener('keydown', naEsc);
+
+  function vykresli() {
+    obalUcastniku.innerHTML = ucastnici.map((u, i) => `
+        <div class="polozka">
+          <input class="pole" type="text" data-u="${i}" data-klic="jmeno" value="${esc(u.jmeno)}"
+                 placeholder="Jméno a příjmení" aria-label="Jméno účastníka ${i + 1}" />
+          <div class="mrizka mrizka--2">
+            <input class="pole" type="date" data-u="${i}" data-klic="datum_narozeni"
+                   value="${esc(u.datum_narozeni)}" aria-label="Datum narození účastníka ${i + 1}" />
+            <input class="pole" type="number" data-u="${i}" data-klic="vaha_kg" min="20" max="300"
+                   value="${esc(u.vaha_kg)}" placeholder="kg"
+                   aria-label="Hmotnost účastníka ${i + 1}" />
+          </div>
+          ${ucastnici.length > 1
+            ? `<div class="polozka__akce">
+                 <button type="button" class="btn btn--obrys btn--maly" data-pryc="${i}"
+                         aria-label="Odebrat účastníka">✕</button>
+               </div>`
+            : ''}
+        </div>`).join('');
+
+    obalUcastniku.querySelectorAll('[data-u]').forEach((prvek) =>
+      prvek.addEventListener('input', () => {
+        ucastnici[Number(prvek.dataset.u)][prvek.dataset.klic] = prvek.value;
+      })
+    );
+    obalUcastniku.querySelectorAll('[data-pryc]').forEach((b) =>
+      b.addEventListener('click', () => {
+        ucastnici.splice(Number(b.dataset.pryc), 1);
+        vykresli();
+      })
+    );
+  }
+  vykresli();
+
+  form.querySelector('[data-pridat]').addEventListener('click', () => {
+    if (ucastnici.length >= 10) {
+      hlaska('Víc než deset lidí naráz raději rozděl do dvou přihlášek.', 'chyba');
+      return;
+    }
+    ucastnici.push({ jmeno: '', datum_narozeni: '', vaha_kg: '' });
+    vykresli();
+  });
+
+  form.querySelector('[data-ne]').addEventListener('click', zavri);
+  nadoba.querySelector('[data-zavrit]').addEventListener('click', (e) => {
+    if (e.target.hasAttribute('data-zavrit')) zavri();
+  });
+
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const hodnota = (klic) => form.querySelector(`[name="${klic}"]`).value.trim();
+
+    // Jméno prvního účastníka se často shoduje s volajícím - když zůstane
+    // prázdné, doplní se, ať provoz nemusí psát totéž dvakrát.
+    if (!ucastnici[0].jmeno.trim()) ucastnici[0].jmeno = hodnota('jmeno');
+
+    try {
+      const odpoved = await api.post('/rezervace', {
+        termin_id: hodnota('termin_id'),
+        jmeno: hodnota('jmeno'),
+        email: hodnota('email'),
+        telefon: hodnota('telefon'),
+        ucastnici: ucastnici.map((u) => ({
+          jmeno: u.jmeno,
+          datum_narozeni: u.datum_narozeni || '',
+          vaha_kg: u.vaha_kg === '' ? null : Number(u.vaha_kg),
+        })),
+        zprava: hodnota('zprava'),
+        poslat_email: form.querySelector('[name="poslat_email"]').checked,
+      });
+
+      zavri();
+      hlaska(odpoved.zprava ?? 'Přihláška je zapsaná.');
+      if (odpoved.varovani?.length) {
+        hlaska(`Pozor: ${odpoved.varovani.join('; ')}`, 'chyba');
+      }
+      if (poHotovu) poHotovu();
+      else jdiNa('prihlasky/' + odpoved.id);
+    } catch (chyba) {
+      if (!ukazChybyPoli(form, chyba.detaily)) hlaska(chyba.message, 'chyba');
+    }
+  });
+
+  form.querySelector('[name="jmeno"]')?.focus();
 }

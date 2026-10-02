@@ -411,6 +411,119 @@ test('anonymizace smaže osobní údaje, přihlášku nechá', async () => {
   assert.equal((await klient.post(`/api/admin/zakaznici/${p.zakaznik_id}/anonymizovat`)).status, 409);
 });
 
+test('anonymizovat smí jen správce', async () => {
+  // Je to nevratné a je to zásah do dat, za která se ručí navenek.
+  const sefka = await prihlas('admin');
+  const { termin } = await pripravKurz(sefka);
+  const { kod } = await (await posliPrihlasku({}, termin.id)).json();
+  const [[p]] = await pool.query('SELECT zakaznik_id FROM rezervace WHERE kod = ?', [kod]);
+
+  const provoz = await prihlas('provoz');
+  const odmitnuto = await provoz.post(`/api/admin/zakaznici/${p.zakaznik_id}/anonymizovat`);
+  assert.equal(odmitnuto.status, 403);
+  assert.match(odmitnuto.data.chyba, /správce/i);
+
+  // Zákazníky provoz jinak měnit smí - omezení je jen na anonymizaci.
+  assert.equal(
+    (await provoz.patch(`/api/admin/zakaznici/${p.zakaznik_id}`, { mesto: 'Jihlava' })).status,
+    200
+  );
+
+  const [[predtim]] = await pool.query('SELECT anonymizovano_at FROM zakaznici WHERE id = ?', [
+    p.zakaznik_id,
+  ]);
+  assert.equal(predtim.anonymizovano_at, null, 'provoz nic neanonymizoval');
+
+  assert.equal((await sefka.post(`/api/admin/zakaznici/${p.zakaznik_id}/anonymizovat`)).status, 200);
+});
+
+// --------------------------------------------------- přihláška po telefonu
+
+test('přihlášku po telefonu zapíše provoz bez online souhlasů', async () => {
+  const klient = await prihlas('provoz');
+  const sefka = await prihlas('admin');
+  const { termin } = await pripravKurz(sefka);
+
+  const odpoved = await klient.post('/api/admin/rezervace', {
+    termin_id: termin.id,
+    jmeno: 'Karel Volající',
+    email: 'karel@example.invalid',
+    telefon: '606111222',
+    ucastnici: [
+      { jmeno: 'Karel Volající', datum_narozeni: '1985-02-02', vaha_kg: 88 },
+      { jmeno: 'Dcera Volající', datum_narozeni: zaDni(-12 * 365), vaha_kg: 50 },
+    ],
+    zprava: 'Volal, chce přijet s dcerou.',
+    poslat_email: false,
+  });
+
+  assert.equal(odpoved.status, 201);
+  assert.equal(odpoved.data.zdroj, 'telefon');
+  assert.equal(odpoved.data.pocet_osob, 2);
+  // Vzkaz z telefonu zůstává u přihlášky, ne v hlášce pro administraci.
+  const { data: detail } = await sefka.get(`/api/admin/rezervace/${odpoved.data.id}`);
+  assert.match(detail.zprava, /dcerou/);
+  assert.ok(odpoved.data.varovani.length, 'nezletilá je označená i tady');
+
+  // Souhlasy se po telefonu nezaznamenávají - papír se podepisuje na místě.
+  const [[p]] = await pool.query('SELECT * FROM rezervace WHERE id = ?', [odpoved.data.id]);
+  assert.equal(p.souhlas_vop_at, null);
+  assert.equal(p.souhlas_gdpr_at, null);
+  assert.equal(p.souhlas_zdravi_at, null);
+  assert.equal(p.souhlas_vop_text, null);
+
+  // Bez zaškrtnutí neodešel e-mail.
+  const [emaily] = await pool.query('SELECT COUNT(*) AS pocet FROM emaily WHERE rezervace_id = ?', [
+    odpoved.data.id,
+  ]);
+  assert.equal(emaily[0].pocet, 0);
+
+  // A na soupisce je vidět, že se souhlasy teprve podepíšou.
+  const { data: soupiska } = await sefka.get(`/api/admin/terminy/${termin.id}/soupiska`);
+  assert.equal(soupiska.pocty.bez_souhlasu, 2);
+  for (const u of soupiska.ucastnici) assert.equal(u.souhlasy_online, false);
+
+  const csv = await sefka.get(`/api/admin/terminy/${termin.id}/soupiska.csv`);
+  assert.match(csv.data, /Souhlasy/);
+  assert.match(csv.data, /podepíše na místě/);
+});
+
+test('přihláška po telefonu umí poslat potvrzení, když o to provoz stojí', async () => {
+  const klient = await prihlas();
+  const { termin } = await pripravKurz(klient);
+
+  const odpoved = await klient.post('/api/admin/rezervace', {
+    termin_id: termin.id,
+    jmeno: 'Karel Volající',
+    email: 'karel@example.invalid',
+    ucastnici: [{ jmeno: 'Karel Volající' }],
+    poslat_email: true,
+  });
+  assert.equal(odpoved.status, 201);
+
+  const [emaily] = await pool.query(
+    'SELECT sablona_klic, prijemce, prijemce_skutecny FROM emaily WHERE rezervace_id = ?',
+    [odpoved.data.id]
+  );
+  assert.equal(emaily.length, 1);
+  assert.equal(emaily[0].sablona_klic, 'prihlaska_prijata');
+  assert.equal(emaily[0].prijemce_skutecny, config.EMAIL_TEST_PRIJEMCE, 'i tudy jen na testovací adresu');
+});
+
+test('přihláška po telefonu se nevejde nad kapacitu', async () => {
+  const klient = await prihlas();
+  const { termin } = await pripravKurz(klient, { kapacita: 1 });
+
+  const odpoved = await klient.post('/api/admin/rezervace', {
+    termin_id: termin.id,
+    jmeno: 'Karel Volající',
+    email: 'karel@example.invalid',
+    ucastnici: [{ jmeno: 'Karel Volající' }, { jmeno: 'Dcera Volající' }],
+  });
+
+  assert.equal(odpoved.status, 409, 'kapacita platí i pro telefon');
+});
+
 test('přihláška ukládá jen to, co potřebuje', async () => {
   // Kdyby do tabulky někdo přidal sloupec na rodné číslo nebo diagnózu,
   // tenhle test na to upozorní dřív, než se to dostane do produkce.
@@ -490,7 +603,7 @@ test('soupiska má sloupce pro letiště a označí účastníky mimo limit', as
   const radky = csv.data.split('\r\n');
   assert.equal(
     radky[0].replace('﻿', ''),
-    'Jméno;Věk;Váha kg;Telefon;E-mail;Stav;Zaplaceno;Prohlídka doložena;Souhlas zástupce;Mimo limit;Poznámka'
+    'Jméno;Věk;Váha kg;Telefon;E-mail;Stav;Zaplaceno;Prohlídka doložena;Souhlas zástupce;Souhlasy;Mimo limit;Poznámka'
   );
   assert.match(radky[1], /^Eva Nováková;/);
   assert.match(radky[1], /;ano;/, 'doložená prohlídka je v tabulce');

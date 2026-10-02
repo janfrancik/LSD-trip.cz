@@ -14,7 +14,7 @@ import {
   esc, kc, prazdno, strankovani, hlaska, potvrd, pole, ukazChybyPoli, formularModal, sklon,
   isoDatum, denVTydnu, oDniDal,
 } from '../ui.js';
-import { omezNaTermin } from './prihlasky.js';
+import { omezNaTermin, novaPrihlaska } from './prihlasky.js';
 import { jdiNa, stav as globalniStav } from '../admin.js';
 
 const filtr = { q: '', strana: 1, produkt: '', stav: '', minule: '', smazane: '' };
@@ -545,6 +545,7 @@ async function karta(koren, id) {
         ${sekce('Soupiska', 'Papír na letiště: kdo přijede, kolik váží a co má doložit. ' +
           'Kdo je mimo limit věku nebo váhy, je zvýrazněný.', `
           <div class="soupiska-akce">
+            ${muze ? '<button type="button" class="btn btn--hlavni btn--maly" data-nova-prihlaska>Nová přihláška</button>' : ''}
             <button type="button" class="btn btn--obrys btn--maly" data-tisk>Vytisknout</button>
             <a class="btn btn--obrys btn--maly" href="/api/admin/terminy/${t.id}/soupiska.csv"
                download>Stáhnout CSV</a>
@@ -576,6 +577,11 @@ async function karta(koren, id) {
   });
 
   koren.querySelector('[data-tisk]')?.addEventListener('click', () => window.print());
+  // Přihláška po telefonu rovnou na tenhle termín - provoz ji zakládá
+  // nejčastěji ve chvíli, kdy se na termín někdo ptá.
+  koren.querySelector('[data-nova-prihlaska]')?.addEventListener('click', () =>
+    novaPrihlaska({ terminId: t.id, poHotovu: () => karta(koren, t.id) })
+  );
   koren.querySelector('[data-prihlasky]')?.addEventListener('click', () => {
     omezNaTermin(t.id);
     jdiNa('prihlasky');
@@ -954,7 +960,9 @@ function soupiskaHtml(s) {
         </p>
         <p class="soupiska-hlavicka__meta">
           Přihlášeno ${s.pocty.prihlaseno}${t.kapacita_mist ? ` z ${t.kapacita_mist}` : ''} ·
-          zaplaceno ${s.pocty.zaplaceno}${limity ? ` · limity kurzu: ${esc(limity)}` : ''}
+          zaplaceno ${s.pocty.zaplaceno}${
+            s.pocty.bez_souhlasu ? ` · souhlasy na místě: ${s.pocty.bez_souhlasu}` : ''
+          }${limity ? ` · limity kurzu: ${esc(limity)}` : ''}
           ${s.instruktori.length
             ? ` · instruktoři: ${esc(s.instruktori.map((i) => i.jmeno).join(', '))}`
             : ''}
@@ -964,7 +972,7 @@ function soupiskaHtml(s) {
       <table class="soupiska-tabulka">
         <thead><tr>
           <th>Jméno</th><th>Věk</th><th>Váha</th><th>Telefon</th><th>Stav</th>
-          <th>Zapl.</th><th>Prohlídka</th><th>Zástupce</th><th>Poznámka</th>
+          <th>Zapl.</th><th>Prohlídka</th><th>Zástupce</th><th>Souhlasy</th><th>Poznámka</th>
         </tr></thead>
         <tbody>
           ${s.ucastnici.map((u) => `
@@ -983,6 +991,7 @@ function soupiskaHtml(s) {
               <td>${u.zaplaceno ? 'ano' : 'ne'}</td>
               <td>${u.doklada_prohlidku ? 'ano' : 'ne'}</td>
               <td>${u.zajisti_souhlas_zastupce ? 'ano' : '—'}</td>
+              <td>${u.souhlasy_online ? 'online' : '<strong>na místě</strong>'}</td>
               <td>${esc(u.poznamka ?? '')}</td>
             </tr>`).join('')}
         </tbody>
