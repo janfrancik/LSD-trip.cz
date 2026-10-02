@@ -154,7 +154,6 @@ const STARY_WEB_ZATIM_POVOLENO = {
   'public/assets/js/data.js': [
     'https://www.lsd-trip.cz/image/eshop/1512969318_image_gopr3595_00_00_49_00_49.jpg',
     'https://www.lsd-trip.cz/image/eshop/1512893393_image_img_5635ab.jpeg',
-    'https://www.lsd-trip.cz/image/eshop/1512986228_image_vlcsnap-2017-04-02-20h56m57s323.png',
     'https://www.lsd-trip.cz/image/carousel/1652266303_1_image_28350.jpg',
     'https://www.lsd-trip.cz/image/carousel/1512896173_1_image_zv2.jpg',
     'https://www.lsd-trip.cz/image/gallery/',

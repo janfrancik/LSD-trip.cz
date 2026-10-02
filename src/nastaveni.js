@@ -16,6 +16,7 @@ export const SKUPINY = [
   { klic: 'rezervace', nazev: 'Rezervace a platby', popis: 'Lhůty, držení místa a storno podmínky.' },
   { klic: 'poukazy', nazev: 'Dárkové poukazy', popis: 'Platnost a texty poukazů.' },
   { klic: 'emaily', nazev: 'E-maily', popis: 'Kdy se rozesílají připomínky a jaké jsou výchozí texty.' },
+  { klic: 'web', nazev: 'Texty na webu', popis: 'Nadpisy a úvodní odstavce stránek, které nejsou obsahem kurzu.' },
 ];
 
 // typ: text | textarea | cislo | bool | datum | email | telefon
@@ -90,6 +91,22 @@ export const REGISTR = {
   'emaily.pripominka_dni_predem': {
     skupina: 'emaily', typ: 'cislo', popisek: 'Připomínka termínu kolik dní předem', vychozi: '3', min: 1, max: 30,
   },
+  // Stránka /kurzy se renderuje na serveru. Nadpis ani úvodní text proto
+  // nejsou v kódu - majitelka je mění tady, bez nasazení.
+  'web.kurzy_nadpis': {
+    skupina: 'web', typ: 'text', popisek: 'Nadpis stránky Kurzy', vychozi: 'Kurzy a výcvik',
+    max: 120, povinne: true,
+    napoveda: 'Velký nadpis nad výpisem kurzů na adrese /kurzy.',
+  },
+  'web.kurzy_uvod': {
+    skupina: 'web', typ: 'textarea', popisek: 'Úvodní odstavec stránky Kurzy',
+    vychozi:
+      'Základní kurz trvá 48 hodin a obsahuje zákonem požadovanou výuku podle osnov ' +
+      'Úřadu pro civilní letectví (V-PARA 1 a V-PARA 2) — u nás rozšířenou o praxi, ' +
+      'kterou předpis nevyžaduje.',
+    napoveda: 'Text pod nadpisem. Ukazuje se i jako popis stránky ve vyhledávačích.',
+  },
+
   'emaily.podpis': {
     skupina: 'emaily', typ: 'textarea', popisek: 'Podpis pod e-maily',
     vychozi: 'Letecká společnost dobrodruhů z.s.',

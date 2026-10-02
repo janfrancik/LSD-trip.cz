@@ -204,8 +204,8 @@ zvýraznění** — provoz to na místě musí vidět na první pohled.
 ### Veřejná část
 | Cesta | Co | Dnes |
 | --- | --- | --- |
-| `/kurzy` | přehled kurzů z API | je, ale z `data.js` |
-| `/kurz/:slug` | **detail kurzu** — popis, co je v ceně, průběh, požadavky, fotky, termíny, cena | **neexistuje** |
+| `/kurzy` | přehled kurzů z API | hotovo v E4 (ze serveru) |
+| `/kurz/:slug` | **detail kurzu** — popis, co je v ceně, průběh, požadavky, fotky, termíny, cena | hotovo v E4 (ze serveru) |
 | `/termin/:id` | detail termínu + přihláška | je, z `data.js` |
 | `/prihlaska` | formulář: účastníci, kontakt, souhlasy, rekapitulace | dnes končí poptávkou |
 
@@ -229,8 +229,23 @@ jejím potvrzení. Do `main` nic bez výslovného souhlasu.**
 | **E1** | DPH číselník + kurzy v administraci: texty, cena, DPH, požadavky, průběh, aktivní/skrytý, pořadí, historie cen. Veřejný web beze změny. | `008` |
 | **E2** | Fotky: `soubory` + `produkt_fotky`, upload z mobilu, alt texty, titulní foto. Hlídač natvrdo napsaných domén nad `public/` se **přepne z varování na tvrdý assert** — viz poznámku pod tabulkou. | `009` |
 | **E3** | Místa + termíny kurzů: kapacita, stav, hromadné vytvoření, kopie dne, zrušení s důvodem, instruktoři. Soupiska zatím prázdná. | `011` |
-| **E4** | **Veřejná část kurzů z API** + **SSR pilot** pro `/kurzy` a `/kurz/:slug` (normální URL, history API). Odstřihnutí `COURSES` a `COURSE_CHECKLIST` z `data.js`. | — |
+| **E4** | **Veřejná část kurzů z API** + **SSR pilot** pro `/kurzy` a `/kurz/:slug` (normální URL). Titulka bere kurzy z databáze. Odstřiženo `COURSES`, `COURSE_CHECKLIST` i termíny kurzů z `data.js`. | — |
 | **E5** | Přihlášky: zákazníci, transakční kapacita, veřejný formulář, e-maily, stavy, soupiska naostro, export CSV. | `012` |
+
+**SSR a poptávka (upřesněno při E4).** Stránky `/kurzy` a `/kurz/:slug` vykresluje
+server; zbytek webu zůstává na `#` adresách. Skořápka se nepíše podruhé — bere se
+`public/index.html` a server do `<html>` přidá `data-stranka`, podle čeho aplikace
+pozná, že obsah už je vykreslený, a nepřepíše ho. Odkazy jsou obyčejné odkazy, takže
+zpět, dopředu i nový panel fungují samy a není co hydratovat.
+
+Tlačítko „Mám zájem" na stránce kurzu končí **poptávkou** přímo tam, ne odskokem do
+průvodce na titulce: průvodce je stavěný na termín z `data.js` a kurz do něj nepatří.
+Do zprávy jde kurz i vybraný termín, takže provoz vidí, o co jde. Přihlášky s vlastními
+sloupci přijdou v E5.
+
+Kalendář na webu zůstává tandemový (`data.js`); termíny kurzů jsou na stránce kurzu
+a v seznamu „Nejbližší termíny" na titulce, kam se slučují s tandemovými dny. Celý
+kalendář z databáze patří k tandemovému modulu, ne do modulu kurzů.
 
 **Hlídač domén nad `public/` (upřesněno při E2).** Úplně prázdný být ještě nemůže:
 třináct zbylých adres jsou fotky na titulce (hero, produkty, aktuality, tým, galerie)

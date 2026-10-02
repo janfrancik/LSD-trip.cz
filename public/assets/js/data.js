@@ -9,7 +9,6 @@
     hero:      'https://www.lsd-trip.cz/image/eshop/1512969318_image_gopr3595_00_00_49_00_49.jpg',
     tandem:    'https://www.lsd-trip.cz/image/eshop/1512893393_image_img_5635ab.jpeg',
     tandemCam: 'https://www.lsd-trip.cz/image/eshop/1512969318_image_gopr3595_00_00_49_00_49.jpg',
-    vycvik:    'https://www.lsd-trip.cz/image/eshop/1512986228_image_vlcsnap-2017-04-02-20h56m57s323.png',
     iaff:      'https://www.lsd-trip.cz/image/carousel/1652266303_1_image_28350.jpg',
     zv:        'https://www.lsd-trip.cz/image/carousel/1512896173_1_image_zv2.jpg'
   };
@@ -28,12 +27,6 @@
   ].map(function (f) { return 'https://www.lsd-trip.cz/image/gallery/' + f; });
 
   var TERMINY = [
-    {
-      id: 904, kind: 'kurz', type: 'Parašutistický výcvik',
-      date: '4. 9. 2026', iso: '2026-09-04', day: 'pátek', time: 'teorie od 10:00',
-      place: 'Jihlava — Henčov', taken: 7, max: 10, price: 4600, img: IMG.vycvik,
-      desc: 'Zahájení základního výcviku: teorie od 10:00, první seskok v sobotu ráno. Kurz obsahuje zákonem požadovanou výuku dle osnov V-PARA 1 a V-PARA 2, rozšířenou o praktický nácvik na hangáru.'
-    },
     {
       id: 900, kind: 'tandem', type: 'Tandem',
       date: '4. 9. 2026', iso: '2026-09-04', day: 'pátek', time: 'starty od 13:30',
@@ -69,12 +62,6 @@
       date: '20. 9. 2026', iso: '2026-09-20', day: 'neděle', time: 'starty od 8:30',
       place: 'Jihlava — Henčov', taken: 12, max: 16, price: 4700, img: IMG.tandem,
       desc: 'Poslední nedělní blok v září.'
-    },
-    {
-      id: 910, kind: 'kurz', type: 'Kurz IAFF s větrným tunelem',
-      date: '2. 10. 2026', iso: '2026-10-02', day: 'pátek', time: 'start 9:00',
-      place: 'Jihlava + tunel Praha', taken: 3, max: 6, price: 0, img: IMG.iaff,
-      desc: 'Zrychlený výcvik volného pádu s přípravou ve větrném tunelu. Cena podle rozsahu tunelových minut — potvrdíme e-mailem.'
     }
   ];
 
@@ -91,9 +78,7 @@
 
   var PRODUCTS = [
     { title: 'Tandemový seskok', tag: 'Nejžádanější', short: 'Skok z 4 000 metrů připoutaný k instruktorovi. Bez tréninku, hned dnes.', price: '4 700 Kč', img: IMG.tandem, route: 'tandem' },
-    { title: 'Tandem s kamerou + foto', tag: 'S videem', short: 'Externí kameraman letí s tebou. Sestříhané video a fotky týž den.', price: '6 500 Kč', img: IMG.tandemCam, route: 'tandem' },
-    { title: 'Výcvik se 2 seskoky', tag: 'Vlastní licence', short: '48 hodin teorie a praxe podle osnov ÚCL, dva samostatné seskoky.', price: '4 600 Kč', img: IMG.vycvik, route: 'kurzy' },
-    { title: 'Kurz IAFF s tunelem', tag: 'Zrychlený výcvik', short: 'Příprava ve větrném tunelu a rychlý postup do volného pádu.', price: 'Cena na dotaz', img: IMG.iaff, route: 'kurzy' }
+    { title: 'Tandem s kamerou + foto', tag: 'S videem', short: 'Externí kameraman letí s tebou. Sestříhané video a fotky týž den.', price: '6 500 Kč', img: IMG.tandemCam, route: 'tandem' }
   ];
 
   var NEWS = [
@@ -114,19 +99,6 @@
     { title: 'Tandem klasik', price: '4 700 Kč', note: 'Seskok z 4 000 m, instruktáž, postroj, pojištění.' },
     { title: 'Tandem + kamera a foto', price: '6 500 Kč', note: 'Externí kameraman, sestříhané video a fotografie.' },
     { title: 'Skupina 5+ osob', price: '−10 %', note: 'Firemní akce a oslavy, vlastní blok na letišti.' }
-  ];
-
-  var COURSES = [
-    { title: 'Parašutistický výcvik se 2 seskoky', tag: 'Základní kurz', text: '48 hodin výuky podle osnov V-PARA 1 a V-PARA 2, rozšířených o praxi navíc. Končíš dvěma samostatnými seskoky.', dur: '48 hodin', level: 'Začátečník', price: '4 600 Kč', img: IMG.vycvik, terminId: 904 },
-    { title: 'Parašutistický výcvik s 1 seskokem', tag: 'Zkrácená verze', text: 'Stejná teorie, jeden samostatný seskok. Ideální, když si chceš vyzkoušet, jestli to je pro tebe.', dur: '48 hodin', level: 'Začátečník', price: '3 900 Kč', img: IMG.zv, terminId: 904 },
-    { title: 'Kurz IAFF s větrným tunelem', tag: 'Zrychlený výcvik', text: 'Příprava ve větrném tunelu a metodika IAFF: rychlejší postup, víc času ve volném pádu, instruktor letí s tebou.', dur: '5 dní', level: 'Pokročilý', price: 'Cena na dotaz', img: IMG.iaff, terminId: 910 }
-  ];
-
-  var COURSE_CHECKLIST = [
-    'Lékařské potvrzení o způsobilosti (stačí praktický lékař).',
-    'Sportovní obuv nad kotník a oblečení podle počasí.',
-    'U osob do 18 let písemný souhlas zákonného zástupce.',
-    'Dobrou náladu a odpočaté tělo — teorie je nabitý den.'
   ];
 
   var VOUCHERS = [
@@ -169,7 +141,7 @@
     { key: 'onsite',   label: 'Platba na letišti', note: 'Hotově nebo kartou v den seskoku' }
   ];
 
-  var FILTERS = ['Vše', 'Tandem', 'Kurzy', 'Volná místa'];
+  var FILTERS = ['Vše', 'Volná místa'];
 
   global.LSD_DATA = {
     IMG: IMG,
@@ -180,8 +152,6 @@
     NEWS: NEWS,
     TANDEM_STEPS: TANDEM_STEPS,
     TANDEM_VARIANTS: TANDEM_VARIANTS,
-    COURSES: COURSES,
-    COURSE_CHECKLIST: COURSE_CHECKLIST,
     VOUCHERS: VOUCHERS,
     TRIPS: TRIPS,
     TEAM: TEAM,

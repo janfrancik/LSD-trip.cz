@@ -16,6 +16,7 @@ import { zajistiCsrfToken } from './auth/csrf.js';
 import verejneApi from './api/verejne.js';
 import adminApi from './api/admin/index.js';
 import mediaApi from './api/media.js';
+import webKurzy from './web/kurzy.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
@@ -98,6 +99,11 @@ export function vytvorApp() {
   });
 
   // ------------------------------------------------------------- veřejný web
+
+  // Kurzy se vykreslují na serveru (SSR pilot, viz src/web/kurzy.js): mají
+  // normální adresu, obsah rovnou v HTML a strukturovaná data. Musí být nad
+  // statickým webem i nad shellem, jinak by je přebil obecný handler níž.
+  app.use(webKurzy);
 
   app.use(express.static(publicDir));
 

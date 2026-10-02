@@ -32,6 +32,42 @@ import { isoDatum } from './cas.js';
 
   function free(t) { return Math.max(0, t.max - t.taken); }
 
+  /* Kurzy přicházejí z databáze (GET /api/produkty?typ=kurz). Dokud se
+     nenačtou, drží se tu prázdné pole - sekce na titulce se pak ukáže jen
+     s tím, co je v data.js, místo aby zela prázdnem nebo blikla chybou. */
+  var kurzy = [];
+  var kurzTerminy = [];
+
+  function nactiZApi(adresa) {
+    return fetch(adresa)
+      .then(function (o) { return o.ok ? o.json() : { data: [] }; })
+      .then(function (d) { return d.data || []; })
+      .catch(function () { return []; });
+  }
+
+  function nactiKurzy() {
+    return Promise.all([
+      nactiZApi('/api/produkty?typ=kurz'),
+      nactiZApi('/api/terminy?typ=kurz')
+    ]).then(function (vysledky) {
+      kurzy = vysledky[0];
+      kurzTerminy = vysledky[1];
+    });
+  }
+
+  /* Karta kurzu pro titulku. Tvar je stejný jako u D.PRODUCTS, aby se obojí
+     vykreslilo jednou funkcí a sekce působila jako jedna, ne jako dvě slepené. */
+  function kurzNaKartu(k) {
+    return {
+      title: k.nazev,
+      tag: k.stitek || 'Kurz',
+      short: k.perex || '',
+      price: k.cena_na_dotaz || k.cena_hal == null ? 'Cena na dotaz' : czk(k.cena_hal / 100),
+      img: k.foto ? k.foto.url : null,
+      path: '/kurz/' + k.slug
+    };
+  }
+
   /* Termíny jsou zatím napevno v data.js, takže postupem času zestárnou.
      Dokud nejdou z databáze (etapa E4), web nesmí nabízet den, který už byl.
      Porovnává se ISO datum termínu s dnešním pražským dnem - oboje řetězec
@@ -91,9 +127,14 @@ import { isoDatum } from './cas.js';
   /* --------------------------------------------------------------- router */
 
   var ROUTES = {
-    'home': 1, 'tandem': 1, 'kurzy': 1, 'kalendar': 1, 'termin': 1, 'booking': 1,
+    'home': 1, 'tandem': 1, 'kalendar': 1, 'termin': 1, 'booking': 1,
     'poukaz': 1, 'expedice': 1, 'galerie': 1, 'onas': 1, 'faq': 1, 'kontakt': 1
   };
+
+  /* Stránky s normální adresou. Kurzy vykresluje server (SSR pilot), takže
+     se na ně odchází z aplikace pryč - a starý odkaz #/kurzy tam přesměruje,
+     aby nikomu nepřestal fungovat. */
+  var CESTY = { kurzy: '/kurzy' };
 
   function parseHash() {
     var h = (location.hash || '').replace(/^#\/?/, '');
@@ -104,6 +145,13 @@ import { isoDatum } from './cas.js';
   }
 
   function navigate(path, replace) {
+    var cista = String(path).replace(/^[#/]+/, '').split('/')[0];
+    if (CESTY[cista]) {
+      if (replace) location.replace(CESTY[cista]);
+      else location.assign(CESTY[cista]);
+      return;
+    }
+
     var target = '#/' + String(path).replace(/^\/+/, '');
     if (location.hash === target) { applyRoute(true); return; }
     if (replace) location.replace(target);
@@ -112,6 +160,10 @@ import { isoDatum } from './cas.js';
 
   function applyRoute(forceScroll) {
     var parsed = parseHash();
+
+    // Starý odkaz #/kurzy vede na stránku, kterou dnes vykresluje server.
+    var zbytek = (location.hash || '').replace(/^#\/?/, '').split('/')[0];
+    if (CESTY[zbytek]) { location.replace(CESTY[zbytek]); return; }
 
     if (parsed.route === 'termin') {
       var t = terminById(parsed.param);
@@ -163,9 +215,18 @@ import { isoDatum } from './cas.js';
       '</div>';
   }
 
+  /* Karta produktu. Kurzy mají vlastní stránku na normální adrese, takže
+     u nich je to odkaz - dá se otevřít v novém panelu a najde ho vyhledávač.
+     Zbytek webu zatím routuje na # a zůstává tlačítkem. */
   function productCard(p) {
-    return '<button type="button" class="card card--link" data-action="go" data-arg="' + attr(p.route) + '">' +
-      '<div class="card__media" style="background-image:url(' + attr(p.img) + ')">' +
+    var otevri = p.path
+      ? '<a class="card card--link" href="' + attr(p.path) + '">'
+      : '<button type="button" class="card card--link" data-action="go" data-arg="' + attr(p.route) + '">';
+    var zavri = p.path ? '</a>' : '</button>';
+
+    return otevri +
+      '<div class="card__media' + (p.img ? '' : ' card__media--prazdna') + '"' +
+        (p.img ? ' style="background-image:url(' + attr(p.img) + ')"' : '') + '>' +
         '<span class="card__tag">' + esc(p.tag) + '</span>' +
       '</div>' +
       '<div class="card__body">' +
@@ -176,23 +237,65 @@ import { isoDatum } from './cas.js';
           '<span class="card__cta">Detail →</span>' +
         '</div>' +
       '</div>' +
-    '</button>';
+    zavri;
   }
 
+  /* Řádek v seznamu nejbližších termínů na titulce. Chodí sem dva zdroje:
+     tandemové dny z data.js a termíny kurzů z databáze. Liší se jen tím,
+     kam vedou - u kurzu na jeho stránku, u tandemu do průvodce rezervací. */
   function terminRow(t) {
-    var f = free(t);
-    var full = f === 0;
-    var tag = full ? 'div' : 'button';
-    return '<' + tag + (full ? '' : ' type="button" data-action="termin" data-arg="' + t.id + '"') +
-      ' class="termrow' + (full ? ' termrow--full' : '') + '">' +
+    var full = t.volno === 0;
+    var obsazenost = t.kapacita
+      ? (t.kapacita - (t.volno || 0)) + ' / ' + t.kapacita + ' obsazeno'
+      : (t.volno === null ? 'bez omezení' : t.volno + ' volných míst');
+
+    var zacatek = full
+      ? '<div class="termrow termrow--full">'
+      : t.odkaz
+        ? '<a class="termrow" href="' + attr(t.odkaz) + '">'
+        : '<button type="button" class="termrow" data-action="termin" data-arg="' + attr(t.id) + '">';
+    var konec = full ? '</div>' : (t.odkaz ? '</a>' : '</button>');
+
+    return zacatek +
       '<span class="termrow__date">' + esc(t.date) + '</span>' +
       '<span>' +
         '<span class="termrow__type">' + esc(t.type) + '</span>' +
         '<span class="termrow__place">' + esc(t.place) + '</span>' +
       '</span>' +
-      '<span class="termrow__spots">' + t.taken + ' / ' + t.max + ' obsazeno</span>' +
+      '<span class="termrow__spots">' + esc(obsazenost) + '</span>' +
       '<span class="termrow__cta' + (full ? ' termrow__cta--off' : '') + '">' + (full ? 'Obsazeno' : 'Mám zájem →') + '</span>' +
-    '</' + tag + '>';
+    konec;
+  }
+
+  /* Tandemový den z data.js do společného tvaru řádku. */
+  function tandemNaRadek(t) {
+    return {
+      id: t.id, iso: t.iso, date: t.date, type: t.type, place: t.place,
+      kapacita: t.max, volno: free(t), odkaz: null
+    };
+  }
+
+  /* Termín kurzu z databáze do téhož tvaru. Vede na stránku kurzu, ne do
+     průvodce - přihlášky na kurz přijdou s etapou E5. */
+  function kurzTerminNaRadek(t) {
+    return {
+      id: 'kurz-' + t.id, iso: t.datum, date: datumCesky(t.datum), type: t.nazev,
+      place: t.misto || '', kapacita: t.kapacita, volno: t.volno,
+      odkaz: '/kurz/' + t.kurz_slug + '#terminy'
+    };
+  }
+
+  /* "2026-10-10" na "10. 10. 2026". Den na kalendáři, žádná zóna. */
+  function datumCesky(iso) {
+    var c = String(iso).slice(0, 10).split('-');
+    return Number(c[2]) + '. ' + Number(c[1]) + '. ' + c[0];
+  }
+
+  /* Nejbližší termíny napříč zdroji, seřazené podle dne. */
+  function nejblizsiTerminy() {
+    return budouciTerminy().map(tandemNaRadek)
+      .concat(kurzTerminy.map(kurzTerminNaRadek))
+      .sort(function (a, b) { return a.iso < b.iso ? -1 : a.iso > b.iso ? 1 : 0; });
   }
 
   function tableRow(t) {
@@ -226,8 +329,8 @@ import { isoDatum } from './cas.js';
   /* ------------------------------------------------------------- stránky */
 
   function viewHome() {
-    var nadchazejici = budouciTerminy();
-    var spots = nadchazejici.reduce(function (a, t) { return a + free(t); }, 0);
+    var nadchazejici = nejblizsiTerminy();
+    var spots = nadchazejici.reduce(function (a, t) { return a + (t.volno || 0); }, 0);
 
     return '' +
     '<section class="hero">' +
@@ -255,9 +358,15 @@ import { isoDatum } from './cas.js';
         : '') +
     '</div></div></div>' +
 
+    // Jedna sekce, dva zdroje: tandem zatím z data.js (vlastní modul přijde
+    // později), kurzy z databáze v pořadí, které majitelka nastavila
+    // v administraci. Když není zveřejněný ani jeden kurz, zůstanou jen
+    // tandemové karty - žádné prázdné místo, žádná dlaždice "připravujeme".
     '<section class="section container">' +
       sectionHead('Co u nás můžeš skočit', 'Všechny termíny →', 'go-kalendar') +
-      '<div class="cards">' + D.PRODUCTS.map(productCard).join('') + '</div>' +
+      '<div class="cards">' +
+        D.PRODUCTS.concat(kurzy.map(kurzNaKartu)).map(productCard).join('') +
+      '</div>' +
     '</section>' +
 
     // Mimo sezónu (nebo než majitelka vypíše nové termíny) se sekce neukáže
@@ -367,61 +476,21 @@ import { isoDatum } from './cas.js';
     '</div>';
   }
 
-  function viewKurzy() {
-    return '<div class="container section--first">' +
-      '<p class="eyebrow">Vlastní licence</p>' +
-      '<h1 class="display">Kurzy a výcvik</h1>' +
-      '<p class="lead" style="margin-bottom:44px">Základní kurz trvá 48 hodin a obsahuje standardní, zákonem požadovanou výuku podle platných osnov Úřadu pro civilní letectví (V-PARA 1 a V-PARA 2) — u nás rozšířenou o praxi, kterou předpis nevyžaduje.</p>' +
-
-      '<div class="cards">' +
-        D.COURSES.map(function (c) {
-          var t = terminById(c.terminId);
-          // Proběhlý termín není volné místo - tlačítko by vedlo do minulosti.
-          // Rozlišujeme ale "plno" od "zatím žádný termín", ať to sedí.
-          var vypsany = t && jeBudouci(t);
-          var volno = vypsany && free(t) > 0;
-          return '<article class="card">' +
-            '<div class="card__media card__media--3-2" style="background-image:url(' + attr(c.img) + ')"></div>' +
-            '<div class="card__body">' +
-              '<div class="card__kicker">' + esc(c.tag) + '</div>' +
-              '<h3 class="card__title">' + esc(c.title) + '</h3>' +
-              '<p class="card__text">' + esc(c.text) + '</p>' +
-              '<div class="card__meta"><span>' + esc(c.dur) + '</span><span>' + esc(c.level) + '</span></div>' +
-              '<div class="card__foot card__foot--plain">' +
-                '<span class="card__price card__price--lg">' + esc(c.price) + '</span>' +
-                (volno
-                  ? '<button type="button" class="btn btn--primary btn--sm" data-action="termin" data-arg="' + c.terminId + '">Mám zájem</button>'
-                  : vypsany
-                    ? '<span class="card__cta" style="color:var(--ghost)">Obsazeno</span>'
-                    : '<button type="button" class="btn btn--outline btn--sm" data-action="go" data-arg="kontakt">Zeptat se na termín</button>') +
-              '</div>' +
-            '</div>' +
-          '</article>';
-        }).join('') +
-      '</div>' +
-
-      '<div class="box" style="margin-top:56px">' +
-        '<h2 class="subhead">Co potřebuješ mít s sebou</h2>' +
-        '<div class="checklist">' +
-          D.COURSE_CHECKLIST.map(function (i) { return '<div>' + esc(i) + '</div>'; }).join('') +
-        '</div>' +
-      '</div>' +
-    '</div>';
-  }
-
   function viewKalendar() {
     // Hlavní tlačítko v heru vede sem, takže proběhlé termíny musí zmizet
     // i tady - jinak by titulka mlčela a kalendář hned vedle nabízel loňsko.
     var visible = budouciTerminy().filter(function (t) {
-      if (state.filter === 'Tandem') return t.kind === 'tandem';
-      if (state.filter === 'Kurzy') return t.kind === 'kurz';
       if (state.filter === 'Volná místa') return free(t) > 0;
       return true;
     });
 
     return '<div class="container section--first">' +
       '<p class="eyebrow">Volná místa v reálném čase</p>' +
-      '<h1 class="display" style="margin-bottom:28px">Kalendář termínů</h1>' +
+      '<h1 class="display" style="margin-bottom:12px">Kalendář termínů</h1>' +
+      // Kalendář je zatím o tandemech. Termíny kurzů mají vlastní stránku,
+      // protože u nich nejde jen o den, ale o celý kurz.
+      '<p class="prose" style="margin-bottom:28px">Tandemové dny. ' +
+        'Termíny kurzů najdeš u <a href="/kurzy">jednotlivých kurzů</a>.</p>' +
 
       '<div class="filters" role="group" aria-label="Filtr termínů">' +
         D.FILTERS.map(function (f) {
@@ -788,7 +857,7 @@ import { isoDatum } from './cas.js';
   }
 
   var VIEWS = {
-    home: viewHome, tandem: viewTandem, kurzy: viewKurzy, kalendar: viewKalendar,
+    home: viewHome, tandem: viewTandem, kalendar: viewKalendar,
     termin: viewTermin, booking: viewBooking, poukaz: viewPoukaz, expedice: viewExpedice,
     galerie: viewGalerie, onas: viewOnas, faq: viewFaq, kontakt: viewKontakt
   };
@@ -796,7 +865,6 @@ import { isoDatum } from './cas.js';
   var TITLES = {
     home: 'LSD — Letecká společnost dobrodruhů | Tandemové seskoky Jihlava',
     tandem: 'Tandemový seskok — LSD',
-    kurzy: 'Kurzy a výcvik — LSD',
     kalendar: 'Kalendář termínů — LSD',
     termin: 'Detail termínu — LSD',
     booking: 'Rezervace — LSD',
@@ -815,15 +883,19 @@ import { isoDatum } from './cas.js';
     var desktop = qs('#nav-desktop');
     var mobile = qs('#mobile-menu');
 
+    // Kurzy mají normální adresu (vykresluje je server), zbytek zatím #.
+    // Odkaz na # se obslouží v aplikaci, odkaz na cestu normálně prohlížečem.
+    function odkaz(n) { return CESTY[n.route] || ('#/' + n.route); }
+
     desktop.innerHTML = D.NAV.map(function (n) {
       var on = current === n.route;
-      return '<a class="nav__item' + (on ? ' nav__item--active' : '') + '" href="#/' + n.route + '" data-link' +
+      return '<a class="nav__item' + (on ? ' nav__item--active' : '') + '" href="' + attr(odkaz(n)) + '" data-link' +
         (on ? ' aria-current="page"' : '') + '>' + esc(n.label) + '</a>';
     }).join('');
 
     mobile.innerHTML = D.NAV.map(function (n) {
       var on = current === n.route;
-      return '<a class="mobile-menu__item' + (on ? ' mobile-menu__item--active' : '') + '" href="#/' + n.route + '" data-link' +
+      return '<a class="mobile-menu__item' + (on ? ' mobile-menu__item--active' : '') + '" href="' + attr(odkaz(n)) + '" data-link' +
         (on ? ' aria-current="page"' : '') + '>' + esc(n.label) + '</a>';
     }).join('') +
     '<a class="mobile-menu__item mobile-menu__item--accent" href="#/poukaz" data-link>Dárkový poukaz</a>';
@@ -1127,6 +1199,20 @@ import { isoDatum } from './cas.js';
 
   /* ---------------------------------------------------------------- start */
 
-  if (!location.hash) location.replace('#/');
-  applyRoute(false);
+  /* Stránku vykreslenou na serveru (/kurzy, /kurz/:slug) aplikace nepřepisuje:
+     obsah už v HTML je. Postará se jen o hlavičku a menu, aby se web choval
+     všude stejně. Pozná se to podle značky, kterou do shellu dal server. */
+  var ssrStranka = document.documentElement.getAttribute('data-stranka');
+
+  if (ssrStranka) {
+    state.route = ssrStranka === 'kurz' ? 'kurzy' : ssrStranka;
+    renderNav();
+    measureHeader();
+  } else {
+    if (!location.hash) location.replace('#/');
+    // Kurzy na titulce čekají na data z API. Kdyby se nenačetla, web se
+    // vykreslí i tak - jen bez nich (nactiKurzy chybu spolkne a nechá
+    // prázdný seznam), což je pořád lepší než prázdná stránka.
+    nactiKurzy().then(function () { applyRoute(false); });
+  }
 })(window.LSD_DATA);

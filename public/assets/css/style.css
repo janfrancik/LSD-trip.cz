@@ -2147,3 +2147,60 @@ textarea.field { min-height: 120px; resize: vertical; }
 @media (min-width: 1600px) {
   :root { --gutter: 32px; }
 }
+
+/* ==========================================================================
+   Kurzy — stránky vykreslené na serveru (/kurzy, /kurz/:slug)
+   ========================================================================== */
+
+/* Karta kurzu je odkaz, ne tlačítko: má vlastní adresu, dá se otevřít
+   v novém panelu a najde ji vyhledávač. Barvu textu ale musí držet
+   kartovou, ne odkazovou. */
+a.card { color: inherit; text-decoration: none; }
+a.card:hover { color: inherit; }
+
+/* Kurz bez fotky nemá nechat v mřížce díru — plocha zůstane, jen prázdná. */
+.card__media--prazdna {
+  background: linear-gradient(135deg, var(--panel-2) 0%, var(--row-hover) 100%);
+}
+
+.card__termin {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--faint);
+}
+
+/* Řádek termínu jako odkaz (na titulce vede na stránku kurzu). */
+a.termrow { color: inherit; text-decoration: none; }
+a.termrow:hover { color: inherit; }
+
+/* Fotky u kurzu se zatím nezvětšují — lightbox je svázaný s galerií
+   na titulce a patří k ní, ne sem. */
+.gallery__item--staticky { cursor: default; }
+
+/* Poptávka na stránce kurzu */
+.poptavka__stav {
+  margin-top: 14px;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--muted);
+}
+.poptavka__stav:empty { margin-top: 0; }
+.poptavka__stav--chyba { color: var(--accent-lite); }
+
+/* Past na roboty: člověk pole nevidí, čtečka ho přeskočí, robot ho vyplní. */
+.past {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}

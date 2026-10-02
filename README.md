@@ -11,12 +11,14 @@ Administrace na `/admin` se staví po fázích podle [docs/plan-administrace.md]
 
 Modul **Kurzy** má vlastní schválené zadání v [docs/plan-kurzy.md](docs/plan-kurzy.md)
 (datový model, API, obrazovky, etapy E1–E5, rozhodnutí). Staví se jako první nad
-modelem produktů a termínů z plánu administrace. **Hotové jsou etapy E1 až E3** — sazby DPH
+modelem produktů a termínů z plánu administrace. **Hotové jsou etapy E1 až E4** — sazby DPH
 a kurzy v administraci (`/admin/kurzy`): texty, cena, DPH, požadavky na účastníka,
 průběh kurzu, zveřejnění, pořadí, historie cen a fotky včetně titulní a popisů;
 a termíny (`/admin/terminy`): místa, kapacita, stav, hromadné zakládání, kopie dne,
 zrušení s důvodem a instruktoři. Soupiska zůstává prázdná, dokud nebudou přihlášky (E5).
-Veřejný web zatím kurzy bere z `data.js`, napojí se v E4.
+Veřejný web kurzy bere z databáze: titulka, `/kurzy` a `/kurz/:slug` (vykreslené na
+serveru). Tandem, expedice a aktuality zůstávají v `data.js`, dokud nebudou mít
+vlastní modul.
 
 ## Struktura
 
@@ -35,6 +37,8 @@ src/cas.js                   formátování data a času (Europe/Prague) — ser
 src/nastaveni.js             registr nastavení (popisy v kódu, hodnoty v databázi)
 src/soubory.js               nahrané fotky: typ z obsahu, zmenšení pro web, úklid
 src/terminy.js               dny v rozsahu pro hromadné zadání, posun proběhlých termínů
+src/kurzy.js                 kurzy pro veřejnou část (API i stránky ze serveru)
+src/web/                     stránky vykreslované na serveru (/kurzy, /kurz/:slug)
 src/audit.js                 zápis do auditu
 src/auth/                    hesla, session, CSRF, rate limit, role, 2FA
 src/api/verejne.js           veřejné API webu
@@ -201,9 +205,13 @@ středník uvnitř těla (trigger, procedura), oddělte příkazy řádkem `-- >
 | --- | --- | --- |
 | `POST` | `/api/poptavky` | Odeslání kontaktního formuláře (rate limit 5/h, past na roboty) |
 | `GET` | `/api/health` | Stav aplikace, databáze a počet migrací |
+| `GET` | `/api/produkty?typ=kurz` | Zveřejněné kurzy v pořadí z administrace, s titulní fotkou a nejbližším termínem |
+| `GET` | `/api/produkty/:slug` | Detail kurzu. Nezveřejněný vrací 404, ne 403 |
+| `GET` | `/api/terminy?typ=kurz` | Termíny kurzů pro výpisy — u termínu jen počet volných míst |
 | `GET` | `/media/:kod` | Nahraná fotka. Mimo `/api` schválně — adresa má být krátká a stálá a obrázky nesmí spadnout pod rate limit veřejného API. |
 
-Čtení obsahu z databáze (`/api/bootstrap`, produkty, termíny) přijde ve fázi 2.
+Veřejné odpovědi **nikdy nevracejí osobní údaje**: u termínu jde ven počet volných míst,
+ne jména přihlášených ani instruktorů.
 
 ### Administrace (`/api/admin/*`)
 Session cookie `lsd_admin` (httpOnly, Secure v produkci, SameSite=Strict) a u všech zápisů
@@ -443,13 +451,15 @@ Restart aplikace není potřeba kvůli kódu, jen kvůli načtení nového `.env
 
 ## Stránky webu
 
-Routování zatím běží na hashi; normální URL a serverové renderování přijdou ve fázi 2.
+Většina webu routuje na hashi. **Kurzy mají normální adresu a vykresluje je server**
+(SSR pilot, viz níž) — obsah je rovnou v HTML.
 
 | Route | Obsah |
 | --- | --- |
 | `#/` | Domů — hero, statistiky, produkty, nejbližší termíny, aktuality |
 | `#/tandem` | Tandemový seskok — průběh a ceníkové varianty |
-| `#/kurzy` | Kurzy a výcvik |
+| `/kurzy` | Kurzy a výcvik — **ze serveru**, kurzy z databáze |
+| `/kurz/:slug` | Detail kurzu — **ze serveru**: popis, co je v ceně, průběh, požadavky, fotky, termíny, poptávka |
 | `#/kalendar` | Kalendář termínů s filtrováním |
 | `#/termin/:id` | Detail termínu + výběr počtu osob |
 | `#/booking` | Poptávka na termín nebo poukaz — odesílá se na `POST /api/poptavky` |
@@ -528,6 +538,36 @@ spuštění nic nezkazí, originály zůstávají nedotčené.
 
 Limit je 10 MB na fotku — ne kvůli místu na disku, ale kvůli tomu, že obrázek chodí
 jako base64 v JSON a tělo požadavku má strop 14 MB.
+
+## Kurzy na webu (SSR pilot)
+
+`/kurzy` a `/kurz/:slug` **vykresluje server** ([src/web/](src/web/)), zbytek webu zůstává
+jednostránkovou aplikací na `#` adresách. Důvod je obsahový, ne technický: kurz za pár
+tisíc si člověk najde ve vyhledávači dřív, než přijde na letiště. Vyhledávače JavaScript
+spustí, ale AI crawlery většinou ne — a u nich rozhoduje, co je v HTML.
+
+Stránky proto mají obsah rovnou v HTML, kanonickou adresu, Open Graph a JSON-LD
+(`Course` s termíny jako `CourseInstance`). Hlídá to test, který čte čisté HTML,
+ne prohlížeč.
+
+Skořápka se needituje dvakrát: bere se `public/index.html`, tedy přesně ten shell, který
+vidí aplikace, a dovnitř se vloží obsah. Relativní adresy (`assets/…`, `#/tandem`) se
+přitom přepíšou na absolutní — na `/kurz/aff` by jinak mířily do neexistující složky.
+Server do `<html>` přidá `data-stranka`; podle toho aplikace pozná, že obsah už je
+vykreslený, a **nepřepíše ho** — postará se jen o hlavičku a menu.
+
+Odkazy mezi stránkami jsou obyčejné odkazy, žádný klientský router. Zpět, dopředu
+i otevření v novém panelu tak fungují samy a není co hydratovat.
+
+**Nezveřejněný kurz vrací 404**, a to stejnou stránku jako kurz, který nikdy neexistoval —
+z odpovědi nemá jít poznat, co je skryté. Totéž platí pro `/api/produkty/:slug`.
+
+Nadpis a úvodní text stránky `/kurzy` jsou v **nastavení** (skupina „Texty na webu"),
+ne v kódu. Texty kurzů, fotky a termíny spravuje administrace.
+
+Tlačítko „Mám zájem" končí **poptávkou** (`POST /api/poptavky`) s kurzem a vybraným
+termínem v textu zprávy — stejnou cestou jako průvodce na titulce. Přihlášky se vlastními
+sloupci přijdou v E5.
 
 ## Termíny kurzů
 
