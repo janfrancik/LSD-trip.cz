@@ -65,7 +65,7 @@ Pořadí je závazné. Nasazení na `main` se spouští až po odsouhlasení tes
    | Proměnná | Hodnota | Poznámka |
    | --- | --- | --- |
    | `PROSTREDI` | `produkce` | Podle toho se pozná produkce, ne podle `NODE_ENV`. Když zůstane výchozí `vyvoj`, aplikace **naběhne** — ale s modulem „Ke schválení“ na očích a bez indexace. |
-   | `ROBOTS` | `povolit` | Výchozí hodnota je `zakazat`. Když se nenastaví, ostrý web se **nedostane do Googlu** a nikde to nezaskřípe. |
+   | `ROBOTS` | `zakazat`, dokud jsme na `lsd.francik.eu` | Na `www.lsd-trip.cz` běží pořád starý web na jiném hostingu. Kdyby se indexovala i tahle adresa, soutěžily by v Googlu dvě kopie webu. Na `povolit` se přepne až s přechodem na `www.lsd-trip.cz` (viz „Přechod na lsd-trip.cz“ v [README](../README.md)). Pozor: `zakazat` je i výchozí hodnota, takže se na tenhle řádek nedá poznat, že je nastavený schválně. |
    | `APP_URL` | celá adresa ostrého webu | Skládají se z ní odkazy v e-mailech a kanonické adresy. |
    | `EMAIL_REZIM` | `vypnuto` (zatím) | **Tohle je ten přepínač** — viz 2.1a níž. Na `live` se přepne, až bude Resend; `schranka` produkce odmítne a nenastartuje. |
    | `RESEND_API_KEY` | — (zatím prázdné) | Povinný teprve při `live` — bez něj by aplikace s `live` nenastartovala. |
@@ -156,8 +156,11 @@ a `RESEND_API_KEY` v `.env` plus `docker compose up -d`. Žádné nasazování,
    faktor. Účty pro provoz a instruktory se pak zakládají už v administraci.
 
 7. **Ověřit po nasazení:**
-   - `/api/health` vrací `prostredi: produkce` a `migrace: 12`,
-   - `/robots.txt` má `Allow: /` (ne `Disallow`),
+   - `/api/health` vrací `prostredi: produkce` a `migrace: 12`
+     (dnes vrací jen `{"status":"ok"}` — podle toho se pozná, že je nahoře nová verze),
+   - `/robots.txt` existuje a má `Disallow: /` (dokud jsme na `lsd.francik.eu`),
+   - `/api/poptavky` **už není veřejné** — nová adresa je `/api/admin/poptavky`
+     a bez přihlášení vrací 401,
    - `/kurzy` a stránka jednoho kurzu se načtou,
    - v administraci sedí Kurzy, Termíny, Přihlášky a Šablony e-mailů,
    - v menu **není** „Ke schválení“ (v produkci se modul nezapíná),

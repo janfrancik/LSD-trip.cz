@@ -342,8 +342,34 @@ hodnota, **nenastartuje** a do logu napíše co — nikdy neběží s polovičn�
 
 ## P3. Odstranění starého volume produkce
 
-Produkční databáze je prázdná, nic se nezachovává. Starý volume proto zmizí a
-nový (`lsd_main_db`) se založí při prvním nasazení.
+Starý volume zmizí a nový (`lsd_main_db`) se založí při prvním nasazení.
+
+> **Nejdřív se přesvědč, že se opravdu nic nezahazuje.** Stará verze má
+> v migraci `001` tabulku `poptavky` a endpoint `POST /api/poptavky` byl na
+> produkci veřejný. Žádná stránka starého webu ho sice nevolala (v celém
+> `main` na něj neodkazuje jediný řádek frontendu), takže tabulka má být
+> prázdná — ale „má být“ není „je“. Jeden dotaz to rozhodne:
+
+```bash
+cd /home/deploy/apps/lsdtrip
+docker compose up -d db                   # databáze sama, bez aplikace
+docker compose exec -T db sh -c \
+  'mariadb -u root -p"$MARIADB_ROOT_PASSWORD" -e \
+   "SELECT COUNT(*) AS poptavek FROM lsdtrip.poptavky;"'
+```
+
+Vyjde-li `0`, pokračuj dál bez váhání. Vyjde-li cokoli jiného, **nemaž nic**
+a nejdřív si data vytáhni — jsou to jména, e-maily a zprávy od lidí, kteří
+čekají na odpověď:
+
+```bash
+cd /home/deploy/apps/lsdtrip && docker compose exec -T db sh -c \
+  'mariadb -u root -p"$MARIADB_ROOT_PASSWORD" --batch lsdtrip \
+   -e "SELECT * FROM poptavky ORDER BY created_at;"' > ~/poptavky-ze-stare-produkce.tsv
+```
+
+Soubor si odnes ze serveru a poptávky vyřiď ručně; do nové databáze se
+nepřenášejí (schéma je jiné a je jich málo).
 
 ```bash
 cd /home/deploy/apps/lsdtrip
