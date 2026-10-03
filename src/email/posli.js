@@ -120,6 +120,7 @@ export async function posliEmail({
   vazby = {},
   prilohy = [],
   interni = false,
+  odpovedetNa = null,
 }) {
   const kam = skutecnyPrijemce(prijemce, interni);
   const rezim = config.EMAIL_REZIM;
@@ -199,12 +200,18 @@ export async function posliEmail({
   try {
     const resendId = await odesilatel.odesli(
       {
-        from: config.EMAIL_ODESILATEL,
+        // Upozornění provozu chodí pod jménem "LSD web", ať je v poště
+        // poznat, že je to ze stránek, a ne od člověka. Adresa zůstává
+        // z EMAIL_ODESILATEL - tu určuje ověřená doména, ne my.
+        from: interni ? odesilatelProvozu() : config.EMAIL_ODESILATEL,
         to: [kam],
         subject: predmetKOdeslani,
         html: telo,
         ...(textovaVerze ? { text: textovaVerze } : {}),
         ...(prilohy.length ? { attachments: prilohy } : {}),
+        // Reply-To na zákazníka: u upozornění provozu stačí v poště kliknout
+        // na Odpovědět a odpověď jde rovnou jemu, ne na adresu odesílatele.
+        ...(odpovedetNa ? { replyTo: odpovedetNa } : {}),
       },
       klicPokusu(id, pokusu)
     );
@@ -213,6 +220,13 @@ export async function posliEmail({
       `UPDATE emaily SET resend_id = ?, stav = 'odeslano', odeslano_at = NOW(), stav_at = NOW()
         WHERE id = ?`,
       [resendId, id]
+    );
+    // Úspěch se loguje taky, jinak nejde ze serveru dohledat, co odešlo -
+    // v logu byly jen zadržené a chybné e-maily. Adresa zákazníka se maskuje,
+    // log si čte víc lidí než databázi.
+    console.log(
+      `[email] odesláno "${predmet}" -> ${maskujAdresu(kam)} ` +
+        `(log #${id}, šablona ${sablona ?? 'bez šablony'}, resend ${resendId ?? '-'})`
     );
     return { id, odeslano: true, doSchranky: false, prijemceSkutecny: kam };
   } catch (err) {
@@ -314,6 +328,35 @@ async function oznacChybu(id, chyba) {
 // neodešle druhý e-mail; vědomé odeslání znovu zvýší `pokusu` a klíč je jiný.
 function klicPokusu(id, pokusu) {
   return `email-${id}-pokus-${pokusu}`;
+}
+
+// Odesílatel interních upozornění: jiné zobrazované jméno, TÁŽ adresa.
+// Adresu určuje doména ověřená u odesílací služby, takže se měnit nesmí -
+// mění se jen to, co uvidí člověk v seznamu pošty.
+const JMENO_PROVOZ = 'LSD web';
+
+export function odesilatelProvozu() {
+  const adresa = adresaZOdesilatele(config.EMAIL_ODESILATEL);
+  return adresa ? `${JMENO_PROVOZ} <${adresa}>` : config.EMAIL_ODESILATEL;
+}
+
+// Z "LSD <rezervace@…>" vytáhne "rezervace@…". Když je v .env jen holá
+// adresa, vrátí ji beze změny.
+function adresaZOdesilatele(odesilatel) {
+  const vZavorkach = String(odesilatel ?? '').match(/<([^>]+)>/);
+  if (vZavorkach) return vZavorkach[1].trim();
+
+  const holaAdresa = String(odesilatel ?? '').trim();
+  return holaAdresa.includes('@') ? holaAdresa : null;
+}
+
+// h***@gmail.com - do logu patří tolik, aby se poznalo, o koho šlo, ne celá
+// adresa. Log čte víc lidí a zůstává v souborech dýl než data v databázi.
+export function maskujAdresu(adresa) {
+  const text = String(adresa ?? '');
+  const zavinac = text.indexOf('@');
+  if (zavinac < 1) return '***';
+  return `${text[0]}***${text.slice(zavinac)}`;
 }
 
 // Export pro testy: ověřuje se, že v testovacím režimu nikdy nevznikne

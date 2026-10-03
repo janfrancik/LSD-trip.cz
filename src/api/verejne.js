@@ -50,6 +50,30 @@ router.post(
       });
     }
 
+    // Dvojí odeslání. Člověk, kterému se nezdá, že se něco stalo, klikne
+    // znovu - a provoz pak řeší dvě stejné poptávky. Táž adresa a týž text
+    // do deseti minut se proto bere jako totéž odeslání: nic se neuloží
+    // podruhé a ven jde stejná úspěšná odpověď, aby se ani na webu nepoznal
+    // rozdíl. Delší okno by zabránilo tomu, aby někdo napsal dvakrát
+    // záměrně; kratší by dvojklik nepodchytilo.
+    const [[duplicitni]] = await pool.query(
+      `SELECT id FROM poptavky
+        WHERE email = ?
+          AND COALESCE(zprava, '') = COALESCE(?, '')
+          AND smazano_at IS NULL
+          AND created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+        ORDER BY id DESC LIMIT 1`,
+      [vstup.email, vstup.zprava ?? null]
+    );
+
+    if (duplicitni) {
+      console.log(`[poptavky] zadrženo dvojí odeslání (shoda s #${duplicitni.id})`);
+      return res.status(201).json({
+        ok: true,
+        zprava: 'Zprávu jsme dostali, ozveme se do 24 hodin.',
+      });
+    }
+
     const [vlozeno] = await pool.query(
       `INSERT INTO poptavky (jmeno, email, telefon, zprava, zdroj, ip)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -73,6 +97,8 @@ router.post(
             odkaz_admin: config.url(`/admin/poptavky/${vlozeno.insertId}`),
           },
           vazby: { poptavkaId: vlozeno.insertId },
+          // Odpovědět v poště = odpověď jde zákazníkovi, ne na adresu webu.
+          odpovedetNa: vstup.email,
         });
       }
     } catch (chyba) {
@@ -191,6 +217,19 @@ async function dalsiTerminy(produktId, kromeTerminu) {
     }));
 }
 
+// Co se napíše na web po odeslání přihlášky. Na jednom místě, protože to
+// vrací i zadržené dvojí odeslání - a kdyby se ty dvě věty rozešly, poznal
+// by člověk podle textu, že se jeho druhé kliknutí zahodilo.
+//
+// Neslibovat e-mail, který neodejde: v režimech bez odesílání zákazníkům by
+// se člověk díval do schránky na něco, co nikdy nepřijde.
+function zpravaPoPrihlasce() {
+  return config.muzeZakaznikovi
+    ? 'Přihlášku máme. Potvrzení jsme poslali e-mailem.'
+    : 'Přihlášku máme a ozveme se vám. Potvrzovací e-mail zatím neposíláme — '
+      + 'číslo přihlášky si prosím poznamenejte.';
+}
+
 // POST /api/prihlasky - přihláška na termín kurzu
 router.post(
   '/prihlasky',
@@ -209,6 +248,33 @@ router.post(
     if (!vstup.souhlas_zdravi) chybejici.push(['souhlas_zdravi', 'Bez zdravotního prohlášení to nejde.']);
     if (chybejici.length) {
       throw chybaSpatnyVstup(chybejici[0][1], Object.fromEntries(chybejici));
+    }
+
+    // Dvojí odeslání: táž adresa na týž termín do deseti minut. Kdyby se
+    // uložilo podruhé, zabralo by to druhé místo na termínu a provoz by
+    // volal kvůli přihlášce, která vznikla dvojklikem. Vrací se původní
+    // přihláška i s jejím číslem a odkazem, takže se na webu nic nepozná.
+    const [[duplicitni]] = await pool.query(
+      `SELECT r.id FROM rezervace r
+         JOIN zakaznici z ON z.id = r.zakaznik_id
+        WHERE z.email = ? AND r.termin_id = ?
+          AND r.stav <> 'storno'
+          AND r.created_at > DATE_SUB(NOW(), INTERVAL 10 MINUTE)
+        ORDER BY r.id DESC LIMIT 1`,
+      [vstup.email, vstup.termin_id]
+    );
+
+    if (duplicitni) {
+      const puvodni = await nactiPrihlasku(duplicitni.id);
+      console.log(`[prihlasky] zadrženo dvojí odeslání (shoda s ${puvodni.kod})`);
+      return res.status(201).json({
+        ok: true,
+        kod: puvodni.kod,
+        odkaz: `/prihlaska/${puvodni.kod}?t=${puvodni.verejny_token}`,
+        termin: popisTerminu(puvodni),
+        varovani: [],
+        zprava: zpravaPoPrihlasce(),
+      });
     }
 
     let vysledek;
@@ -254,13 +320,7 @@ router.post(
       termin: popisTerminu(prihlaska),
       // Účastník mimo limit se přihlásí, ale musí o tom vědět (rozhodnutí 3).
       varovani: vysledek.varovani,
-      // Neslibovat e-mail, který neodejde. V režimech bez odesílání zákazníkům
-      // by se člověk díval do schránky na něco, co nikdy nepřijde - a když se
-      // neozve ani provoz, bere to jako že se přihláška ztratila.
-      zprava: config.muzeZakaznikovi
-        ? 'Přihlášku máme. Potvrzení jsme poslali e-mailem.'
-        : 'Přihlášku máme a ozveme se vám. Potvrzovací e-mail zatím neposíláme — '
-          + 'číslo přihlášky si prosím poznamenejte.',
+      zprava: zpravaPoPrihlasce(),
     });
   })
 );

@@ -44,13 +44,18 @@ export function hlaska(text, typ = 'ok') {
   const nadoba = document.getElementById('hlasky');
   if (!nadoba) return;
 
+  // 'varovani' je pro věci, které nejsou chyba, ale ani úspěch - typicky
+  // "e-mail se neodeslal, protože se v tomhle režimu neposílá". Zelená by
+  // u toho lhala, červená by strašila.
+  const znamy = ['ok', 'chyba', 'varovani'].includes(typ) ? typ : 'ok';
+
   const prvek = document.createElement('div');
-  prvek.className = `hlaska hlaska--${typ === 'chyba' ? 'chyba' : 'ok'}`;
+  prvek.className = `hlaska hlaska--${znamy}`;
   prvek.textContent = text;
   nadoba.appendChild(prvek);
 
-  // Chybu necháme na obrazovce dýl - člověk si ji musí přečíst.
-  setTimeout(() => prvek.remove(), typ === 'chyba' ? 8000 : 4000);
+  // Co není jen potvrzení, necháme na obrazovce dýl - musí se to stihnout přečíst.
+  setTimeout(() => prvek.remove(), znamy === 'ok' ? 4000 : 8000);
 }
 
 // --------------------------------------------------------- výsledek e-mailu
@@ -66,9 +71,17 @@ export function hlaska(text, typ = 'ok') {
  * Odkaz je záměrně obyčejný (bez data-odkaz): administrace se na něm načte
  * znovu, zato spolehlivě a se zavřeným dialogem.
  */
-export function vysledekEmailu({ zprava, odeslano, email_do_schranky, email_id }) {
+export function vysledekEmailu({ zprava, odeslano, email_do_schranky, email_id, zamerne }) {
   if (odeslano) {
     hlaska(zprava, 'ok');
+    return Promise.resolve();
+  }
+
+  // Neodeslalo se, protože to tak má být (režim jen_provoz nebo vypnuto).
+  // Není to chyba a nemá kvůli tomu vyskakovat okno — obsluha o tom ví
+  // z pruhu nad formulářem a má tam rovnou tlačítka, jak odpovědět.
+  if (zamerne) {
+    hlaska(zprava, 'varovani');
     return Promise.resolve();
   }
 

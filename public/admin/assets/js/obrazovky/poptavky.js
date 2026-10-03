@@ -6,6 +6,7 @@ import {
   vysledekEmailu,
 } from '../ui.js';
 import { jdiNa, stav as globalniStav, nactiPocty } from '../admin.js';
+import { rezimEmailu, odesilaSe } from '../rezim-emailu.js';
 
 const STAVY = [
   { klic: '', popis: 'Vše' },
@@ -188,7 +189,10 @@ async function detail(koren, id) {
                   klic: 'odpoved',
                   popisek: 'Text odpovědi',
                   typ: 'textarea',
-                  napoveda: 'Pošle se e-mailem na ' + p.email + '. Původní zpráva se přiloží pod odpověď.',
+                  // Nápověda nesmí slibovat odeslání, když se neodesílá.
+                  napoveda: odesilaniVypnute()
+                    ? 'Uloží se k poptávce. Odeslat ji zákazníkovi můžete tlačítky níž.'
+                    : 'Pošle se e-mailem na ' + p.email + '. Původní zpráva se přiloží pod odpověď.',
                 })}
                 <label class="prepinac" style="margin-bottom:14px">
                   <input type="checkbox" name="oznacit" checked
@@ -198,6 +202,15 @@ async function detail(koren, id) {
                 <button type="submit" class="btn btn--hlavni">
                   ${popisekTlacitka()}
                 </button>
+                ${odesilaniVypnute()
+                  ? `<div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)">
+                       <p class="text-faint" style="margin-bottom:10px">
+                         Uložením se odpověď zapíše do historie poptávky. Zákazníkovi ji
+                         pošlete odsud ze své pošty:
+                       </p>
+                       <div data-nastroje></div>
+                     </div>`
+                  : ''}
               </form>
             </section>`
           : ''}
@@ -280,7 +293,7 @@ async function detail(koren, id) {
 
     const tlacitko = form.querySelector('button[type="submit"]');
     tlacitko.disabled = true;
-    tlacitko.textContent = 'Odesílám…';
+    tlacitko.textContent = odesilaniVypnute() ? 'Ukládám…' : 'Odesílám…';
     try {
       const vysledek = await api.post(`/poptavky/${p.id}/odpovedet`, {
         odpoved,
@@ -291,10 +304,43 @@ async function detail(koren, id) {
       detail(koren, id);
     } catch (err) {
       if (!ukazChybyPoli(form, err.detaily)) hlaska(err.message, 'chyba');
-      tlacitko.disabled = false;
-      tlacitko.textContent = popisekTlacitka();
+    } finally {
+      // Vrátit tlačítko do výchozího stavu po KAŽDÉM výsledku. Dřív se to
+      // dělalo jen ve větvi s chybou, takže po zavření okna zůstalo viset
+      // na „Odesílám…“, kdykoli se obrazovka nepřekreslila.
+      // Když se detail mezitím překreslil, tlačítko už v DOM není.
+      if (tlacitko.isConnected) {
+        tlacitko.disabled = false;
+        tlacitko.textContent = popisekTlacitka();
+      }
     }
   });
+
+  // mailto a „Zkopírovat text“ se plní z toho, co je zrovna napsané
+  // v poli — ne z prázdné šablony při vykreslení.
+  const nastroje = koren.querySelector('[data-nastroje]');
+  if (nastroje) {
+    const polePoodpovedi = koren.querySelector('#form-odpoved [name="odpoved"]');
+    const prekresli = () => {
+      nastroje.innerHTML = nastrojeMimoOdesilani(p, polePoodpovedi.value.trim());
+      nastroje.querySelector('[data-kopirovat]').addEventListener('click', async () => {
+        const text = polePoodpovedi.value.trim();
+        if (!text) return hlaska('Napište nejdřív text odpovědi.', 'varovani');
+        try {
+          await navigator.clipboard.writeText(text);
+          hlaska('Text je ve schránce.');
+        } catch {
+          // Schránka nemusí být povolená (starší prohlížeč, http). Označit
+          // text je pořád lepší než nic - zkopíruje se pak Ctrl+C.
+          polePoodpovedi.focus();
+          polePoodpovedi.select();
+          hlaska('Zkopírujte text klávesami Ctrl+C.', 'varovani');
+        }
+      });
+    };
+    prekresli();
+    polePoodpovedi.addEventListener('input', prekresli);
+  }
 
   koren.querySelector('[data-ulozit]')?.addEventListener('click', async (e) => {
     const panel = e.currentTarget.closest('.panel');
@@ -369,32 +415,41 @@ function radekEmailu(e) {
 
 // Režim odesílání hlásí server v /ja. Vypnuté odesílání není chyba, ale
 // obsluha o něm musí vědět dřív, než odpověď napíše - ne až potom.
+// Texty jsou v rezim-emailu.js, ať se nerozejdou mezi obrazovkami.
 function odesilaniVypnute() {
-  return ['vypnuto', 'schranka'].includes(globalniStav.ja?.email_rezim);
+  return !odesilaSe(globalniStav.ja?.email_rezim);
 }
 
 function popisekTlacitka() {
-  const rezim = globalniStav.ja?.email_rezim;
-  if (rezim === 'schranka') return 'Uložit odpověď do schránky';
-  if (rezim === 'vypnuto') return 'Uložit odpověď (e-mail neodejde)';
-  return 'Odeslat odpověď';
+  return rezimEmailu(globalniStav.ja?.email_rezim).tlacitko;
 }
 
 function varovaniOdesilani() {
-  const rezim = globalniStav.ja?.email_rezim;
-  if (rezim === 'live') return '';
-
-  const text =
-    rezim === 'vypnuto'
-      ? 'Odesílání e-mailů je vypnuté. Odpověď se uloží k poptávce, ale zákazníkovi ' +
-        'nikam neodejde — pošli mu ji zatím jinudy.'
-      : rezim === 'schranka'
-        ? 'Testovací schránka: odpověď se uloží do administrace (E-maily), ' +
-          'zákazníkovi nikam neodejde.'
-        : 'Testovací režim: odpověď odejde na testovací adresu, ne zákazníkovi.';
+  const { varovani } = rezimEmailu(globalniStav.ja?.email_rezim);
+  if (!varovani) return '';
 
   return `<p class="panel--tesny" style="margin-bottom:12px;border-left:3px solid var(--varovani);
             background:var(--panel-2);padding:10px 12px;color:var(--muted);font-size:14px">
-            ${text}
+            ${esc(varovani)}
           </p>`;
+}
+
+// Když e-mail stejně neodejde, je lepší dát obsluze do ruky nástroj než
+// tlačítko, které "uloží" a mlčí. mailto otevře její vlastní poštu
+// s předvyplněným příjemcem, předmětem i textem - zákazník tak dostane
+// odpověď hned a z adresy, na kterou může odpovědět.
+function nastrojeMimoOdesilani(p, text) {
+  const predmet = 'Odpověď na vaši zprávu — LSD';
+  // Adresa se v mailto nekóduje - zakódované @ některým poštovním klientům
+  // vadí. Předmět a tělo zakódované být musí, jsou to parametry v dotazu.
+  const odkaz =
+    `mailto:${p.email}` +
+    `?subject=${encodeURIComponent(predmet)}` +
+    `&body=${encodeURIComponent(text)}`;
+
+  return `
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <a class="btn btn--hlavni" href="${esc(odkaz)}" data-mailto>Odpovědět ze svého e-mailu</a>
+      <button type="button" class="btn btn--obrys" data-kopirovat>Zkopírovat text</button>
+    </div>`;
 }

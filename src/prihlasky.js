@@ -433,6 +433,9 @@ export async function posliOznameni(klic, prihlaska, extra = {}) {
 
   return posliZeSablony(klic, {
     prijemce: extra.prijemce ?? prihlaska.zakaznik_email,
+    // U upozornění provozu vede Odpovědět rovnou na zákazníka. U e-mailu
+    // zákazníkovi se Reply-To nenastavuje - tam je správně adresa spolku.
+    odpovedetNa: jeInterni(klic) ? (prihlaska.zakaznik_email ?? null) : null,
     data,
     vazby: {
       rezervaceId: prihlaska.id,

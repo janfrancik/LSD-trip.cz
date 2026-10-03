@@ -7,6 +7,7 @@
 import express from 'express';
 import { z } from 'zod';
 import pool from '../../db.js';
+import config from '../../config.js';
 import { asyncHandler, chybaNenalezeno } from '../../chyby.js';
 import { zvaliduj, schemaSeznam } from '../../validace.js';
 import { vyzaduje } from '../../auth/opravneni.js';
@@ -198,16 +199,24 @@ router.post(
       popis: `Odpověď na ${poptavka.email}`,
     });
 
+    // Neodeslalo se, ale režim to tak má: není to chyba a administrace kvůli
+    // tomu nemá otevírat okno „zkontroluj nastavení“. Nastavení je v pořádku,
+    // tohle je jeho důsledek.
+    const zamerne = !vysledek.odeslano && !vysledek.doSchranky && !config.muzeZakaznikovi;
+
     res.json({
       ok: true,
       odeslano: vysledek.odeslano,
       email_do_schranky: Boolean(vysledek.doSchranky),
+      zamerne,
       email_id: vysledek.id,
       zprava: vysledek.odeslano
         ? `Odpověď odešla na ${vysledek.prijemceSkutecny}.`
         : vysledek.doSchranky
           ? 'Odpověď je uložená v testovací schránce — zákazníkovi nic neodešlo.'
-          : 'Odpověď je uložená, ale e-mail se neodeslal — zkontroluj nastavení odesílání.',
+          : zamerne
+            ? 'Odpověď je uložená. E-mail se neposílá — pošlete ji zákazníkovi ze své pošty.'
+            : 'Odpověď je uložená, ale e-mail se neodeslal — zkontroluj nastavení odesílání.',
     });
   })
 );

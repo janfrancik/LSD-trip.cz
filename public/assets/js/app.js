@@ -103,6 +103,7 @@ import { isoDatum } from './cas.js';
     voucher: 0,
     voucherFor: '',
     contactSent: false,
+    contactSentName: '',
     contactSending: false,
     contactError: null,
     bookingSending: false,
@@ -203,9 +204,10 @@ import { isoDatum } from './cas.js';
 
   /* ------------------------------------------------------------- fragmenty */
 
-  function btn(label, cls, action, data) {
+  function btn(label, cls, action, data, disabled) {
     return '<button type="button" class="btn ' + cls + '" data-action="' + attr(action) + '"' +
-      (data ? ' data-arg="' + attr(data) + '"' : '') + '>' + esc(label) + '</button>';
+      (data ? ' data-arg="' + attr(data) + '"' : '') +
+      (disabled ? ' disabled' : '') + '>' + esc(label) + '</button>';
   }
 
   function sectionHead(title, linkLabel, linkAction) {
@@ -835,22 +837,38 @@ import { isoDatum } from './cas.js';
         '</div>' +
         '<aside class="panel">' +
           '<h2 class="panel__title" style="margin-bottom:18px">Napiš nám</h2>' +
-          '<div class="field-stack">' +
-            '<input class="field" type="text" autocomplete="name" placeholder="Jméno" aria-label="Jméno" value="' + attr(state.form.name) + '" data-form="name" />' +
-            '<input class="field" type="email" autocomplete="email" placeholder="E-mail" aria-label="E-mail" value="' + attr(state.form.email) + '" data-form="email" />' +
-            '<textarea class="field" style="min-height:130px" placeholder="Zpráva" aria-label="Zpráva" data-form="note">' + esc(state.form.note) + '</textarea>' +
-          '</div>' +
-          '<div style="margin-top:16px">' +
-            btn(
-            state.contactSent ? 'Odesláno — ozveme se do 24 h'
-              : state.contactSending ? 'Odesílám…'
-              : 'Odeslat zprávu',
-            'btn--primary btn--block', 'send-contact'
-          ) +
-          (state.contactError
-            ? '<p style="margin-top:12px;color:var(--accent-lite);font-size:14px">' + esc(state.contactError) + '</p>'
-            : '') +
-          '</div>' +
+          /* Po odeslání zmizí formulář a zůstane potvrzení. Dokud tu zůstával
+             vyplněný a měnil se jen text tlačítka, nebylo poznat, že zpráva
+             odešla - a lidi klikali podruhé. */
+          (state.contactSent
+            ? '<div class="done" style="padding:0">' +
+                '<div class="done__check" aria-hidden="true">✓</div>' +
+                '<h3 class="done__title">Zpráva odešla</h3>' +
+                '<p class="done__text">' +
+                  (state.contactSentName ? 'Děkujeme, ' + esc(state.contactSentName) + '. ' : 'Děkujeme. ') +
+                  'Ozveme se do 24 hodin.' +
+                '</p>' +
+                '<div style="margin-top:18px">' +
+                  btn('Poslat další zprávu', 'btn--outline', 'reset-contact') +
+                '</div>' +
+              '</div>'
+            : '<div class="field-stack">' +
+                '<input class="field" type="text" autocomplete="name" placeholder="Jméno" aria-label="Jméno" value="' + attr(state.form.name) + '" data-form="name" />' +
+                '<input class="field" type="email" autocomplete="email" placeholder="E-mail" aria-label="E-mail" value="' + attr(state.form.email) + '" data-form="email" />' +
+                '<textarea class="field" style="min-height:130px" placeholder="Zpráva" aria-label="Zpráva" data-form="note">' + esc(state.form.note) + '</textarea>' +
+              '</div>' +
+              '<div style="margin-top:16px">' +
+                btn(
+                  state.contactSending ? 'Odesílám…' : 'Odeslat zprávu',
+                  'btn--primary btn--block',
+                  'send-contact',
+                  null,
+                  state.contactSending
+                ) +
+                (state.contactError
+                  ? '<p style="margin-top:12px;color:var(--accent-lite);font-size:14px">' + esc(state.contactError) + '</p>'
+                  : '') +
+              '</div>') +
         '</aside>' +
       '</div>' +
     '</div>';
@@ -1112,14 +1130,29 @@ import { isoDatum } from './cas.js';
         })
         .then(function () {
           state.contactSent = true;
+          // Jméno si pamatujeme zvlášť: formulář se po odeslání vyprázdní,
+          // ale v potvrzení chceme člověka oslovit.
+          state.contactSentName = jmeno.split(' ')[0];
+          state.form.note = '';
         })
         .catch(function (chyba) {
+          // Při chybě zůstane formulář vyplněný, ať se nic nepřepisuje znovu.
           state.contactError = chyba.message + ' Zkus to prosím znovu, nebo zavolej.';
         })
         .then(function () {
           state.contactSending = false;
           render();
         });
+    },
+
+    /* Zpátky na prázdný formulář. Jméno a e-mail necháváme vyplněné -
+       kdo píše podruhé, je obvykle týž člověk. */
+    'reset-contact': function () {
+      state.contactSent = false;
+      state.contactSentName = '';
+      state.contactError = null;
+      state.form.note = '';
+      render();
     }
   };
 

@@ -320,6 +320,7 @@ select.pole { appearance: none; background-image: none; }
 }
 .hlaska--ok { border-left-color: var(--ok); }
 .hlaska--chyba { border-left-color: var(--chyba); }
+.hlaska--varovani { border-left-color: var(--varovani); }
 
 .modal-pozadi {
   position: fixed; inset: 0; z-index: 70;

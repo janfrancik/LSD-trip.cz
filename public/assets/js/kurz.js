@@ -26,6 +26,15 @@
     return prvek ? String(prvek.value || '').trim() : '';
   }
 
+  // Do innerHTML nikdy nic nevkládáme syrové, ani text ze své vlastní API.
+  function esc(text) {
+    return String(text == null ? '' : text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
   function posli(adresa, telo) {
     return fetch(adresa, {
       method: 'POST',
@@ -255,9 +264,12 @@
       '<div class="done" style="padding:0">' +
         '<div class="done__check" aria-hidden="true">✓</div>' +
         '<h3 class="done__title">Přihláška přijata</h3>' +
+        /* Co se stalo s e-mailem, ví server - podle režimu odesílání. Dřív
+           tu bylo natvrdo „Potvrzení jsme poslali e-mailem“, což v režimu
+           bez odesílání zákazníkům nebyla pravda. */
         '<p class="done__text">Číslo přihlášky <strong>' + data.kod + '</strong>. ' +
-          'Potvrzení jsme poslali e-mailem, termín ' + (data.termin || '') + ' ti držíme. ' +
-          'Nic teď neplatíš.</p>' +
+          esc(data.zprava || 'Přihlášku máme.') + ' ' +
+          'Termín ' + (data.termin || '') + ' ti držíme. Nic teď neplatíš.</p>' +
         varovani +
         (data.odkaz
           ? '<p style="margin-top:18px"><a class="btn btn--outline" href="' + data.odkaz +

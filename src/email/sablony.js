@@ -54,13 +54,41 @@ function htmlZTextu(text) {
     .join('');
 }
 
+// Řádek, jehož všechny proměnné jsou prázdné, se do e-mailu nedává.
+//
+// Bez toho chodilo provozu holé „Telefon:" u lidí, kteří telefon nevyplnili.
+// Řeší to právě tahle cesta, ne podmínky {{#if}} v šabloně: texty upravuje
+// majitelka a psát do nich programátorské konstrukce by po ní nikdo chtít
+// neměl. Napíše „Telefon: {{telefon}}" a prázdný řádek zmizí sám.
+//
+// Když má řádek proměnných víc a aspoň jedna hodnotu má, řádek zůstane -
+// jen se zahodí čárka nebo dvojtečka, která by zbyla na konci.
+function bezPrazdnychRadku(telo, data) {
+  return String(telo ?? '')
+    .split('\n')
+    .map((radek) => {
+      const promenne = [...radek.matchAll(/\{\{\s*([\w.]+)\s*\}\}/g)].map((m) => m[1]);
+      if (!promenne.length) return radek;
+
+      const maHodnotu = promenne.some((klic) => {
+        const hodnota = klic.split('.').reduce((akt, k) => (akt == null ? null : akt[k]), data);
+        return String(hodnota ?? '').trim() !== '';
+      });
+      if (!maHodnotu) return null;
+
+      return vyrenderuj(radek, data, { escapovat: false }).replace(/[\s,;:]+$/, '');
+    })
+    .filter((radek) => radek !== null)
+    .join('\n');
+}
+
 /**
  * Vyrenderuje šablonu. Vrací předmět, HTML i textovou verzi.
  */
 export async function vyrenderujSablonu(sablona, data = {}) {
   const podpis = await hodnota('emaily.podpis');
   const predmet = vyrenderuj(sablona.predmet, data, { escapovat: false });
-  const text = vyrenderuj(sablona.telo, data, { escapovat: false });
+  const text = bezPrazdnychRadku(sablona.telo, data);
 
   return {
     predmet,
@@ -81,7 +109,7 @@ export async function vyrenderujSablonu(sablona, data = {}) {
  * @param {object} p.data   proměnné do šablony
  * @param {object} [p.vazby] { rezervaceId, zakaznikId, terminId, uzivatelId }
  */
-export async function posliZeSablony(klic, { prijemce, data = {}, vazby = {} }) {
+export async function posliZeSablony(klic, { prijemce, data = {}, vazby = {}, odpovedetNa = null }) {
   if (!prijemce) return null;
 
   const sablona = await nactiSablonu(klic);
@@ -99,5 +127,6 @@ export async function posliZeSablony(klic, { prijemce, data = {}, vazby = {} }) 
     sablona: klic,
     vazby,
     interni: jeInterni(klic),
+    odpovedetNa,
   });
 }
