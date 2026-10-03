@@ -108,7 +108,11 @@ EMAIL_TEST_PRIJEMCE=lsdtrip.web@gmail.com
 
 # Bez ověřené domény smí Resend odesílat jen z onboarding@resend.dev.
 EMAIL_ODESILATEL=LSD test <onboarding@resend.dev>
-RESEND_API_KEY=<klíč z resend.com>
+# Klíč doplň z resend.com. Aplikace si při startu ověří jeho TVAR (jedno "re_",
+# bez mezer a zalomení) a s pokaženým klíčem schválně nenastartuje: klíč
+# s koncem řádku rozbije sestavení hlavičky a chyba, která z toho vypadne,
+# v sobě má jeho vlastní hodnotu. Právě tak jeden klíč unikl do logu.
+RESEND_API_KEY=
 
 # Na testu se nenastavuje: upozornění provozu se stejně přesměrují na
 # EMAIL_TEST_PRIJEMCE. Platí jen pro režim jen_provoz na produkci.

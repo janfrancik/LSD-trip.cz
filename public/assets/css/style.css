@@ -400,7 +400,15 @@ ul { margin: 0; padding: 0; list-style: none; }
   min-height: 86vh;
   min-height: 86svh;
   display: flex;
-  align-items: flex-end;
+  /* Obsah drží dole, ale přes `margin-top: auto` na .hero__content, ne přes
+     align-items: flex-end. Rozdíl je vidět, až když je obsah vyšší než hero
+     (dlouhý nadpis na úzkém displeji, nízké okno): zarovnání na konec v tu
+     chvíli vystrčí obsah NAHORU mimo hero, kde ho ukrojí overflow: hidden
+     a zakryje pevná hlavička. Automatický okraj se v té situaci srovná na
+     nulu a nadpis zůstane celý vidět. */
+  align-items: stretch;
+  /* A pod hlavičku obsah nesmí ani tak - hlavička je přes hero průhledná. */
+  padding-top: var(--header-h);
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   overflow: hidden;
 }
@@ -432,6 +440,9 @@ ul { margin: 0; padding: 0; list-style: none; }
 .hero__content {
   position: relative;
   width: 100%;
+  /* Drží obsah dole. Když se nevejde, srovná se na nulu místo přetečení
+     nahoru - viz poznámka u .hero. */
+  margin-top: auto;
   padding-top: 80px;
   padding-bottom: 64px;
   /* fotky pod textem bývají místy světlé — jemný stín drží text čitelný */

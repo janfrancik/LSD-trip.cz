@@ -137,6 +137,36 @@ import { isoDatum } from './cas.js';
      aby nikomu nepřestal fungovat. */
   var CESTY = { kurzy: '/kurzy' };
 
+  /* Trasa aplikace začíná `#/` (`#/kontakt`, `#/termin/3`). Cokoli jiného
+     je kotva na prvek v téže stránce (`#prihlaska`) a routeru do toho nic
+     není. Prázdný hash ani samotné `#` kotva nejsou. */
+  function jeKotva(hash) {
+    var h = String(hash || '');
+    return h.length > 1 && h.charAt(0) === '#' && h.charAt(1) !== '/';
+  }
+
+  /* Posun na kotvu si děláme sami, protože nad obsahem je pevná hlavička -
+     prohlížeč by odroloval tak, že by nadpis zůstal schovaný pod ní. */
+  function posunNaKotvu(hash) {
+    var id = String(hash || '').slice(1);
+    if (!id) return;
+
+    var cil = document.getElementById(id);
+    if (!cil) return;
+
+    measureHeader();
+    var hlavicka = parseInt(
+      getComputedStyle(document.documentElement).getPropertyValue('--header-h'), 10
+    ) || 0;
+
+    var y = cil.getBoundingClientRect().top + window.pageYOffset - hlavicka - 12;
+    window.scrollTo({ top: y < 0 ? 0 : y, behavior: 'smooth' });
+
+    /* Ať na kotvu navazuje i klávesnice a čtečka, ne jen pohled. */
+    if (!cil.hasAttribute('tabindex')) cil.setAttribute('tabindex', '-1');
+    cil.focus({ preventScroll: true });
+  }
+
   function parseHash() {
     var h = (location.hash || '').replace(/^#\/?/, '');
     var parts = h.split('/').filter(Boolean);
@@ -1216,7 +1246,19 @@ import { isoDatum } from './cas.js';
     if (state.menuOpen) { state.menuOpen = false; renderNav(); }
   });
 
-  window.addEventListener('hashchange', function () { applyRoute(); });
+  window.addEventListener('hashchange', function () {
+    /* Kotva není trasa. Trasy aplikace začínají `#/`, všechno ostatní
+       (`#prihlaska`) je odkaz na prvek na stránce. Bez tohohle rozlišení
+       spadl `#prihlaska` na stránce kurzu do routeru, ten ho nepoznal,
+       přepnul na titulku a přepsal serverem vykreslenou stránku - zákazník
+       se na přihlášku nedostal vůbec. */
+    if (jeKotva(location.hash)) { posunNaKotvu(location.hash); return; }
+
+    /* Stránky vykreslené serverem si aplikace nepřepisuje ani omylem. */
+    if (ssrStranka) return;
+
+    applyRoute();
+  });
 
   var resizeTimer;
   window.addEventListener('resize', function () {
@@ -1241,6 +1283,15 @@ import { isoDatum } from './cas.js';
     state.route = ssrStranka === 'kurz' ? 'kurzy' : ssrStranka;
     renderNav();
     measureHeader();
+
+    /* Přímo otevřená adresa s kotvou (`/kurz/slug#prihlaska`, třeba
+       z e-mailu). Prohlížeč odroluje sám, ale pod pevnou hlavičku -
+       a u obrázků, které se dopočítávají, i na špatné místo. */
+    if (jeKotva(location.hash)) {
+      var naKotvu = function () { posunNaKotvu(location.hash); };
+      requestAnimationFrame(naKotvu);
+      window.addEventListener('load', naKotvu);
+    }
   } else {
     if (!location.hash) location.replace('#/');
     // Kurzy na titulce čekají na data z API. Kdyby se nenačetla, web se

@@ -296,3 +296,69 @@ test('kurzy už nejsou natvrdo v data.js', async () => {
   }
   assert.doesNotMatch(data, /kind: 'kurz'/, 'termíny kurzů jsou v databázi');
 });
+
+// --------------------------------------------------- kotvy na stránce kurzu
+
+test('odkaz "Přihlásit se" vede na kotvu, kterou stránka opravdu má', async () => {
+  // Kotva `#prihlaska` spadla do hash routeru aplikace, ten ji nepoznal,
+  // přepnul na titulku a přepsal serverem vykreslenou stránku - zákazník
+  // se na přihlášku nedostal vůbec. Router teď kotvy ignoruje; tady se
+  // hlídá druhá polovina: že odkaz míří na id, které na stránce existuje.
+  const klient = await prihlas();
+  const kurz = await zalozKurz(klient, { nazev: 'Kurz s termínem' });
+  const { data: misto } = await klient.post('/api/admin/mista', { nazev: 'Letiště Jihlava' });
+  await klient.post('/api/admin/terminy', {
+    produkt_id: kurz.id, datum: zaDni(21), cas_od: '8:00',
+    misto_id: misto.id, kapacita_mist: 6,
+  });
+
+  const { stav, html } = await text(`/kurz/${kurz.slug}`);
+  assert.equal(stav, 200);
+
+  // Na co odkazy míří a co stránka nabízí.
+  const kotvy = [...html.matchAll(/href="#([a-z0-9-]+)"/g)].map((m) => m[1]);
+  assert.ok(kotvy.length, 'stránka kurzu má mít aspoň jeden odkaz na kotvu');
+
+  for (const kotva of kotvy) {
+    assert.ok(
+      html.includes(`id="${kotva}"`),
+      `odkaz #${kotva} nemá na stránce cíl - klik by nikam nevedl`
+    );
+  }
+
+  // S volným termínem se musí dát dojít na formulář přihlášky.
+  assert.ok(kotvy.includes('prihlaska'), 's volným termínem má vést odkaz na přihlášku');
+  assert.ok(html.includes('id="prihlaska"'), 'formulář přihlášky na stránce chybí');
+});
+
+test('kurz bez termínu nabízí poptávku a kotva na ni existuje', async () => {
+  const klient = await prihlas();
+  const kurz = await zalozKurz(klient, { nazev: 'Kurz bez termínu' });
+
+  const { html } = await text(`/kurz/${kurz.slug}`);
+  const kotvy = [...html.matchAll(/href="#([a-z0-9-]+)"/g)].map((m) => m[1]);
+
+  for (const kotva of kotvy) {
+    assert.ok(html.includes(`id="${kotva}"`), `odkaz #${kotva} nemá cíl`);
+  }
+  assert.ok(kotvy.includes('poptavka'), 'bez termínu má vést odkaz na poptávku');
+});
+
+test('router aplikace pouští kotvy dál a nepřepisuje SSR stránky', async () => {
+  // Kontrola zdrojáku: trasa je jen `#/…`, cokoli jiného je kotva. Kdyby
+  // se tahle podmínka ztratila, vrátí se chyba, kvůli které nešlo otevřít
+  // přihlášku - a z HTTP testu výš by to nebylo poznat.
+  const app = await readFile(new URL('../public/assets/js/app.js', import.meta.url), 'utf8');
+
+  assert.match(app, /function jeKotva/, 'router musí umět rozlišit kotvu od trasy');
+  assert.match(
+    app,
+    /if \(jeKotva\(location\.hash\)\)/,
+    'hashchange musí kotvu vyřídit dřív, než sáhne na router'
+  );
+  assert.match(
+    app,
+    /if \(ssrStranka\) return;/,
+    'stránku vykreslenou serverem aplikace nesmí přepsat'
+  );
+});

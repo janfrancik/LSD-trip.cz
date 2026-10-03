@@ -11,6 +11,7 @@
 import 'dotenv/config';
 import path from 'node:path';
 import { z } from 'zod';
+import { zkontrolujTvarKlice } from './tajemstvi.js';
 
 // Jediný seznam režimů odesílání. Ostrý režim se jmenuje 'live' - stejně
 // v .env, v návodu, v testech i ve sloupci emaily.rezim v databázi.
@@ -158,6 +159,19 @@ function zastav(zprava) {
 // Klíč k Resendu potřebuje JEN ostrý režim. Režim 'schranka' ani 'vypnuto' ven
 // nic neposílají, takže po nich klíč chtít nemá smysl - na testu žádný není
 // a mít ho tam by bylo jen riziko navíc.
+
+// Tvar klíče se kontroluje dřív než cokoli jiného. Klíč se zalomeným řádkem
+// nebo vloženy dvakrát rozbije sestavení HTTP hlavičky a chyba, která z toho
+// vypadne, v sobě má jeho vlastní hodnotu - přesně tak se jeden klíč dostal
+// do logu a musel se zneplatnit. Do hlášky se proto nikdy nevypisuje.
+const problemKlice = zkontrolujTvarKlice(env.RESEND_API_KEY);
+if (problemKlice) {
+  zastav(
+    `RESEND_API_KEY má špatný tvar: ${problemKlice}. ` +
+      'Zkopíruj klíč z resend.com znovu, celý a bez konce řádku. ' +
+      '(Hodnotu klíče tady schválně nevypisuji.)'
+  );
+}
 
 if (env.EMAIL_REZIM === 'live' && !env.RESEND_API_KEY) {
   zastav('EMAIL_REZIM=live vyžaduje RESEND_API_KEY, jinak by se e-maily tiše neodesílaly.');

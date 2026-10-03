@@ -23,12 +23,25 @@ import { Resend } from 'resend';
 import config from '../config.js';
 import pool from '../db.js';
 import { ulozPrilohuEmailu } from './prilohy.js';
+import { ocisti, ocistiChybu } from '../tajemstvi.js';
 
 let resend = null;
 function klient() {
   if (!config.RESEND_API_KEY) return null;
   if (!resend) resend = new Resend(config.RESEND_API_KEY);
   return resend;
+}
+
+// `maKlienta` nesmí nikdy vyhodit výjimku. Dřív mohla: volá se mimo try
+// a `new Resend(...)` nad pokaženým klíčem umí spadnout. Výjimka tím utekla
+// z `posliEmail` ven, záznam v `emaily` zůstal viset ve stavu 've_fronte'
+// a volající zalogoval text chyby - ve kterém byl ten klíč.
+function klientBezpecne() {
+  try {
+    return { klient: klient(), chyba: null };
+  } catch (err) {
+    return { klient: null, chyba: ocistiChybu(err) };
+  }
 }
 
 // Samotné odeslání je v jedné funkci, aby šlo v testech podstrčit. Bez toho
@@ -40,19 +53,28 @@ function klient() {
 // konfigurace a hlásí se jinou zprávou.
 const skutecnyOdesilatel = {
   maKlienta() {
-    return Boolean(klient());
+    return Boolean(klientBezpecne().klient);
   },
   async odesli(zprava, idempotencyKey) {
     // Idempotency-Key: kdyby se odpověď ztratila v síti a požadavek se
     // zopakoval, Resend druhý pokus se stejným klíčem nevyřídí znovu.
     // Bez toho by zákazník mohl dostat tentýž e-mail dvakrát i při jediném
     // kliknutí - zámek v databázi hlídá jen naši stranu, ne síť.
-    const { data, error } = await klient().emails.send(
-      zprava,
-      idempotencyKey ? { idempotencyKey } : undefined
-    );
-    if (error) throw new Error(error.message ?? String(error));
-    return data?.id ?? null;
+    // Text chyby od cizí knihovny se čistí hned tady, u zdroje - ať se
+    // neočištěný nedostane nikam dál. Právě tudy unikl klíč: chyba ze
+    // sestavení hlavičky v sobě měla hodnotu Authorization.
+    let odpoved;
+    try {
+      odpoved = await klient().emails.send(
+        zprava,
+        idempotencyKey ? { idempotencyKey } : undefined
+      );
+    } catch (err) {
+      throw new Error(ocistiChybu(err));
+    }
+
+    if (odpoved?.error) throw new Error(ocisti(odpoved.error.message ?? odpoved.error));
+    return odpoved?.data?.id ?? null;
   },
 };
 
@@ -152,11 +174,29 @@ export async function posliEmail({
   );
   const id = vysledekVlozeni.insertId;
 
+  // Od téhle chvíle existuje záznam ve stavu 've_fronte' a MUSÍ z něj něco
+  // být - odeslano, neodeslano, nebo chyba. Kdyby odsud utekla výjimka
+  // (a utíkala: `new Resend(...)` nad pokaženým klíčem), zůstal by viset
+  // ve frontě napořád a nikdo by se o něm nedozvěděl.
+  try {
+    return await rozesli();
+  } catch (err) {
+    const duvod = ocistiChybu(err).slice(0, 2000);
+    await pool
+      .query(`UPDATE emaily SET stav = 'chyba', chyba = ?, stav_at = NOW() WHERE id = ?`,
+        [duvod, id])
+      .catch(() => {}); // selhání zápisu chyby nesmí přebít původní chybu
+    console.error(`[email] neočekávaná chyba při odesílání (log #${id}):`, duvod);
+    return { id, odeslano: false, doSchranky: false, prijemceSkutecny: null };
+  }
+
+  async function rozesli() {
+
   // Přílohy se ukládají vždy - ve schránce si je má být možné stáhnout,
   // v produkci slouží jako doklad o tom, co přesně zákazník dostal.
   for (const priloha of prilohy) {
     await ulozPrilohuEmailu(id, priloha).catch((err) =>
-      console.error(`[email] přílohu se nepodařilo uložit (log #${id}):`, err.message)
+      console.error(`[email] přílohu se nepodařilo uložit (log #${id}):`, ocistiChybu(err))
     );
   }
 
@@ -183,12 +223,20 @@ export async function posliEmail({
     return { id, odeslano: false, doSchranky: false, prijemceSkutecny: null };
   }
 
+  // Rozlišujeme "klíč chybí" (konfigurace) od "klienta nejde vyrobit"
+  // (pokažený klíč). To druhé dřív uteklo jako výjimka ven a záznam zůstal
+  // viset ve stavu 've_fronte', ze kterého ho nikdo nevyhrabal.
   if (!odesilatel.maKlienta()) {
+    const { chyba } = klientBezpecne();
+    const duvod = chyba
+      ? `Odesílací službu se nepodařilo spustit: ${chyba}`
+      : 'Chybí RESEND_API_KEY.';
+
     await pool.query(
       `UPDATE emaily SET stav = 'chyba', chyba = ?, stav_at = NOW() WHERE id = ?`,
-      ['Chybí RESEND_API_KEY.', id]
+      [duvod.slice(0, 2000), id]
     );
-    console.error(`[email] chybí RESEND_API_KEY - neodeslán "${predmet}" (log #${id})`);
+    console.error(`[email] ${duvod} - neodeslán "${predmet}" (log #${id})`);
     return { id, odeslano: false, doSchranky: false, prijemceSkutecny: kam };
   }
 
@@ -232,10 +280,11 @@ export async function posliEmail({
   } catch (err) {
     await pool.query(
       `UPDATE emaily SET stav = 'chyba', chyba = ?, stav_at = NOW() WHERE id = ?`,
-      [String(err.message ?? err).slice(0, 2000), id]
+      [ocistiChybu(err).slice(0, 2000), id]
     );
-    console.error(`[email] odeslání selhalo (log #${id}):`, err.message);
+    console.error(`[email] odeslání selhalo (log #${id}):`, ocistiChybu(err));
     return { id, odeslano: false, doSchranky: false, prijemceSkutecny: kam };
+  }
   }
 }
 
@@ -311,8 +360,8 @@ export async function odesliZnovu(id) {
     // 'neodeslano'. 'Neodeslano' znamená "režim to zakázal" - úmysl. Kdyby
     // se sem psalo obojí, nešlo by na dashboardu poznat, co se opravdu
     // pokazilo, a hromadné rozeslání by selhané e-maily zkoušelo dokola.
-    await oznacChybu(id, String(err.message ?? err).slice(0, 2000));
-    console.error(`[email] opakované odeslání selhalo (log #${id}):`, err.message);
+    await oznacChybu(id, ocistiChybu(err).slice(0, 2000));
+    console.error(`[email] opakované odeslání selhalo (log #${id}):`, ocistiChybu(err));
     return { odeslano: false, duvod: 'chyba_odeslani' };
   }
 }

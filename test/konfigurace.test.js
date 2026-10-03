@@ -160,7 +160,7 @@ test('ostrý režim bez klíče aplikaci nepustí dál', () => {
 });
 
 test('ostrý režim s klíčem na testu nastartuje', () => {
-  const vysledek = spustAplikaci({ EMAIL_REZIM: 'live', RESEND_API_KEY: 're_zkouska' });
+  const vysledek = spustAplikaci({ EMAIL_REZIM: 'live', RESEND_API_KEY: 're_zkouska_1234567890abcdef' });
   assert.equal(vysledek.nastartovala, true, vysledek.vystup ?? '');
   assert.equal(vysledek.rezim, 'live');
 });
@@ -213,4 +213,26 @@ test('v repozitáři se ostrému režimu nikde neříká jinak než live', () =>
       `${soubor} používá jiný název ostrého režimu než "live"`
     );
   }
+});
+
+test('pokažený RESEND_API_KEY aplikaci nespustí a klíč nevypíše', () => {
+  // Klíč se zalomeným řádkem rozbije sestavení HTTP hlavičky a chyba, která
+  // z toho vypadne, v sobě má jeho vlastní hodnotu. Tak jeden klíč unikl do
+  // logu a musel se zneplatnit - od té doby se tvar kontroluje při startu.
+  const klic = 're_zalomeny\nre_podruhe_1234567890';
+  const vysledek = spustAplikaci({ RESEND_API_KEY: klic });
+
+  assert.equal(vysledek.nastartovala, false, 's pokaženým klíčem nemá nastartovat');
+  assert.match(vysledek.vystup, /RESEND_API_KEY má špatný tvar/);
+
+  // A hlavně: hláška nesmí obsahovat klíč.
+  assert.ok(
+    !vysledek.vystup.includes('zalomeny') && !vysledek.vystup.includes('podruhe'),
+    'hláška o špatném klíči nesmí vypsat jeho hodnotu'
+  );
+});
+
+test('správný RESEND_API_KEY start nebrzdí', () => {
+  const vysledek = spustAplikaci({ RESEND_API_KEY: 're_abcdefghij1234567890' });
+  assert.equal(vysledek.nastartovala, true, 'klíč správného tvaru musí projít');
 });
