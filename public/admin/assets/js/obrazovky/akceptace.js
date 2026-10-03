@@ -343,6 +343,30 @@ function akce(data, jeAdmin, schvalena, vidiVse, vProdukci) {
         ? `<div style="margin-top:12px">
              <div class="popisek">Ke schválení ještě chybí</div>
              <ul class="duvody">${duvody.map((d) => `<li>${esc(d)}</li>`).join('')}</ul>
+
+             ${/* Testery, kteří verzi brzdí, jde odebrat rovnou odsud - tam,
+                   kde se o překážce člověk dozví. Hledat to v „Kdo testuje“
+                   nikoho nenapadne. */''}
+             ${(data.po_testerech ?? [])
+               .filter((t) => t.neotestovano + t.k_pretestovani + t.nefunguje + t.nerozumim > 0)
+               .map(
+                 (t) => `<button type="button" class="btn btn--obrys btn--maly"
+                            style="margin:4px 4px 0 0"
+                            data-odebrat-testera="${Number(t.uzivatel.id)}"
+                            data-jmeno="${esc(t.uzivatel.jmeno)}">
+                           Odebrat ${esc(t.uzivatel.jmeno)} z testování
+                         </button>`
+               )
+               .join('')}
+
+             <div style="margin-top:10px">
+               <button type="button" class="btn btn--nebezpecny btn--maly" data-schvalit-presto>
+                 Schválit přesto…
+               </button>
+               <span class="text-faint" style="margin-left:8px">
+                 Překážky se obejdou, ale zapíší se k vydání i do auditu.
+               </span>
+             </div>
            </div>`
         : ''}
     </section>`;
@@ -692,6 +716,78 @@ function zarizeniSlovy(ua) {
 // --------------------------------------------------------------- obsluha
 
 function navazAkce(koren, data, kod) {
+  koren.querySelectorAll('[data-odebrat-testera]').forEach((tlacitko) =>
+    tlacitko.addEventListener('click', async () => {
+      const id = tlacitko.dataset.odebratTestera;
+      const jmeno = tlacitko.dataset.jmeno;
+
+      const souhlas = await potvrd({
+        nadpis: `Odebrat ${esc(jmeno)} z testování?`,
+        text:
+          `<strong>${esc(jmeno)}</strong> přestane tuhle verzi testovat a nebude blokovat
+           její schválení. Co už stihl otestovat, zůstane v historii a v přehledu
+           po testerech.<br><br>Zpátky to jde přes „Kdo testuje“.`,
+        potvrzeni: 'Odebrat',
+      });
+      if (!souhlas) return;
+
+      try {
+        const vysledek = await api.del(
+          `/akceptace/verze/${encodeURIComponent(kod)}/testeri/${encodeURIComponent(id)}`
+        );
+        hlaska(vysledek.zprava, 'ok');
+        await nactiPocty();
+        detailVerze(koren, kod);
+      } catch (err) {
+        hlaska(err.message, 'chyba');
+      }
+    })
+  );
+
+  koren.querySelector('[data-schvalit-presto]')?.addEventListener('click', async () => {
+    const vstup = await formularModal({
+      nadpis: 'Schválit přes překážky',
+      text:
+        'Překážky nezmizí — vyhodnotí se stejně, jen se místo odmítnutí zapíšou ' +
+        'k vydání a do auditu i s tím, proč se to schválilo. Za rok se tak dá ' +
+        'zjistit nejen že to prošlo, ale i co se v tu chvíli obešlo.',
+      polia: [
+        {
+          klic: 'duvod',
+          popisek: 'Důvod (povinný)',
+          typ: 'textarea',
+          napoveda: 'Například: část testů proběhla mimo tenhle modul, zbytek se řeší v další dávce.',
+          povinne: true,
+        },
+        {
+          klic: 'poznamka',
+          popisek: 'Poznámka k vydání (nepovinná)',
+          typ: 'textarea',
+        },
+      ],
+      potvrzeni: 'Schválit přesto',
+    });
+    if (!vstup) return;
+
+    if (!vstup.duvod.trim()) {
+      hlaska('Bez důvodu to schválit nejde.', 'chyba');
+      return;
+    }
+
+    try {
+      const vysledek = await api.post(`/akceptace/verze/${encodeURIComponent(kod)}/schvalit`, {
+        presto: true,
+        duvod: vstup.duvod.trim(),
+        poznamka: vstup.poznamka.trim() || undefined,
+      });
+      hlaska(vysledek.zprava, 'ok');
+      await nactiPocty();
+      detailVerze(koren, kod);
+    } catch (err) {
+      hlaska(err.message, 'chyba');
+    }
+  });
+
   koren.querySelector('[data-do-produkce]')?.addEventListener('click', async () => {
     const dnes = new Date().toISOString().slice(0, 10);
     const vstup = await formularModal({
@@ -811,9 +907,14 @@ function navazAkce(koren, data, kod) {
 
       const volba = await formularModal({
         nadpis: 'Kdo verzi testuje',
-        text: seznam.vychozi
-          ? 'Zatím platí výchozí výběr: všichni, kdo mají právo testovat. Jakmile někoho vybereš, počítá se verze jen jim.'
-          : 'Schválit verzi půjde, až budou mít všichni vybraní hotovo.',
+        text:
+          (seznam.vychozi
+            ? 'Zatím platí výchozí výběr: všichni, kdo mají právo testovat. Jakmile někoho vybereš, počítá se verze jen jim. '
+            : 'Schválit verzi půjde, až budou mít všichni vybraní hotovo. ') +
+          '<br><br>Odškrtnutím někoho z verze odebereš — schválení pak nebrzdí. ' +
+          'Co už stihl otestovat, zůstane v historii. ' +
+          '<strong>Pozor:</strong> když odškrtneš všechny, platí zase výchozí výběr, ' +
+          'tedy všichni.',
         polia: seznam.moznosti.map((m) => ({
           klic: `u${m.id}`,
           popisek: `${m.jmeno} (${m.role})`,
@@ -1094,11 +1195,11 @@ async function seznamHlaseni(koren) {
     prvek.querySelectorAll('[data-novy-stav]').forEach((tlacitko) =>
       tlacitko.addEventListener('click', async () => {
         try {
-          await api.patch(`/akceptace/hlaseni/${id}`, {
+          const vysledek = await api.patch(`/akceptace/hlaseni/${id}`, {
             stav: tlacitko.dataset.novyStav,
             odpoved: prvek.querySelector('[name="odpoved"]')?.value || undefined,
           });
-          hlaska('Uloženo.', 'ok');
+          hlaska(vysledek.zprava ?? 'Uloženo.', 'ok');
           await nactiPocty();
           seznamHlaseni(koren);
         } catch (err) {
@@ -1106,6 +1207,53 @@ async function seznamHlaseni(koren) {
         }
       })
     );
+
+    prvek.querySelector('[data-presunout]')?.addEventListener('click', async () => {
+      try {
+        // Přesunout jde jen do otevřené verze - do uzavřené by hlášení
+        // spadlo a nikdo by ho už neotevřel.
+        const seznam = await api.get('/akceptace');
+        const otevrene = seznam.verze.filter((v) => v.stav === 'otevrena');
+
+        if (!otevrene.length) {
+          hlaska('Není kam přesunout — žádná otevřená verze neexistuje.', 'varovani');
+          return;
+        }
+
+        const vstup = await formularModal({
+          nadpis: 'Přesunout hlášení do jiné verze',
+          text:
+            'Hlášení se přestane počítat téhle verzi a objeví se u vybrané. ' +
+            'Vazba na konkrétní úkol se zruší — ten patří původní verzi.',
+          polia: [
+            {
+              klic: 'verze',
+              popisek: 'Kam',
+              typ: 'vyber',
+              moznosti: otevrene.map((v) => ({ hodnota: String(v.id), popis: v.nazev })),
+            },
+            {
+              klic: 'odpoved',
+              popisek: 'Poznámka (nepovinná)',
+              typ: 'textarea',
+              napoveda: 'Proč se to stěhuje — ať je to za rok srozumitelné.',
+            },
+          ],
+          potvrzeni: 'Přesunout',
+        });
+        if (!vstup) return;
+
+        const vysledek = await api.patch(`/akceptace/hlaseni/${id}`, {
+          verze_id: Number(vstup.verze),
+          odpoved: vstup.odpoved.trim() || undefined,
+        });
+        hlaska(vysledek.zprava ?? 'Přesunuto.', 'ok');
+        await nactiPocty();
+        seznamHlaseni(koren);
+      } catch (err) {
+        hlaska(err.message, 'chyba');
+      }
+    });
   });
 }
 
@@ -1146,6 +1294,13 @@ function kartaHlaseni(h, muzeRidit) {
              <button type="button" class="btn btn--obrys btn--maly" data-novy-stav="resi_se">Řeší se</button>
              <button type="button" class="btn btn--hlavni btn--maly" data-novy-stav="vyreseno">Vyřešeno</button>
              <button type="button" class="btn btn--obrys btn--maly" data-novy-stav="zamitnuto">Zamítnout</button>
+             ${/* Hlášení často není chyba té verze, ve které vzniklo - patří
+                   do další dávky nebo do jiného modulu. Bez přesunu se kvůli
+                   němu muselo buď zamítnout něco, co platí, nebo kvůli němu
+                   nešlo schválit vydání. */''}
+             <button type="button" class="btn btn--obrys btn--maly" data-presunout>
+               Přesunout do jiné verze…
+             </button>
            </div>`
         : ''}
     </article>`;

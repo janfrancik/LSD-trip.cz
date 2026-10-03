@@ -14,7 +14,7 @@ import { z } from 'zod';
 import pool from '../../db.js';
 import config from '../../config.js';
 import {
-  asyncHandler, chybaNenalezeno, chybaKonflikt, chybaBezOpravneni,
+  asyncHandler, chybaNenalezeno, chybaKonflikt, chybaBezOpravneni, chybaSpatnyVstup,
 } from '../../chyby.js';
 import { zvaliduj } from '../../validace.js';
 import { okamzik } from '../../cas.js';
@@ -527,7 +527,18 @@ router.get(
 const schemaUpravaHlaseni = z.object({
   stav: z.enum(STAVY_HLASENI).optional(),
   odpoved: z.string().trim().max(5000).optional(),
+  // Přesun do jiné verze. Hlášení často není chyba té verze, ve které vzniklo -
+  // patří do další dávky nebo do jiného modulu. Dokud se přesunout nedalo,
+  // muselo se kvůli němu buď zamítnout něco, co platí, nebo kvůli němu
+  // nešlo schválit vydání.
+  verze_id: z.coerce.number().int().positive().optional(),
 });
+
+// Přesun do jiné verze sám o sobě hlášení neuzavírá: může se stěhovat
+// i nevyřešené. Stav se mění jen tehdy, když ho někdo poslal.
+function vstav(vstup, pred) {
+  return vstup.stav ?? pred.stav;
+}
 
 // PATCH /api/admin/akceptace/hlaseni/:id - vyřízení hlášení
 router.patch(
@@ -540,22 +551,44 @@ router.patch(
     const vstup = zvaliduj(schemaUpravaHlaseni, req.body ?? {});
 
     const [[pred]] = await pool.query(
-      'SELECT id, stav, odpoved, text FROM akceptace_hlaseni WHERE id = ?',
+      'SELECT id, stav, odpoved, text, verze_id, ukol_id FROM akceptace_hlaseni WHERE id = ?',
       [req.params.id]
     );
     if (!pred) throw chybaNenalezeno('Hlášení nenalezeno.');
 
-    const stav = vstup.stav ?? pred.stav;
+    const stav = vstav(vstup, pred);
     const vyreseno = ['vyreseno', 'zamitnuto'].includes(stav);
+
+    // Přesun do jiné verze. Vazba na úkol se ruší - úkol patří původní verzi
+    // a odkaz na něj by po přesunu ukazoval jinam, než kde hlášení leží.
+    let verzeId = pred.verze_id;
+    let novaVerze = null;
+    if (vstup.verze_id && vstup.verze_id !== pred.verze_id) {
+      const [[cil]] = await pool.query(
+        'SELECT id, kod, nazev, stav FROM akceptace_verze WHERE id = ?',
+        [vstup.verze_id]
+      );
+      if (!cil) throw chybaNenalezeno('Cílová verze neexistuje.');
+      if (cil.stav !== 'otevrena') {
+        throw chybaKonflikt(
+          `Verze „${cil.nazev}“ už je uzavřená — hlášení se dá přesunout jen do otevřené verze.`
+        );
+      }
+      verzeId = cil.id;
+      novaVerze = cil;
+    }
 
     await pool.query(
       `UPDATE akceptace_hlaseni
-          SET stav = ?, odpoved = ?,
+          SET stav = ?, odpoved = ?, verze_id = ?,
+              ukol_id = CASE WHEN ? THEN NULL ELSE ukol_id END,
               vyresil_id = ?, vyreseno_at = ?
         WHERE id = ?`,
       [
         stav,
         vstup.odpoved ?? pred.odpoved,
+        verzeId,
+        novaVerze ? 1 : 0,
         vyreseno ? req.uzivatel.id : null,
         vyreseno ? new Date() : null,
         pred.id,
@@ -564,15 +597,22 @@ router.patch(
 
     await zapisAudit({
       req,
-      akce: 'zmena',
+      akce: novaVerze ? 'akceptace_hlaseni_presun' : 'zmena',
       entita: 'akceptace_hlaseni',
       entitaId: pred.id,
-      popis: pred.text.slice(0, 120),
-      pred: { stav: pred.stav },
-      po: { stav },
+      popis: novaVerze
+        ? `${pred.text.slice(0, 90)} → ${novaVerze.nazev}`
+        : pred.text.slice(0, 120),
+      pred: { stav: pred.stav, verze_id: pred.verze_id },
+      po: { stav, verze_id: verzeId },
     });
 
-    res.json({ ok: true });
+    res.json({
+      ok: true,
+      zprava: novaVerze
+        ? `Hlášení přesunuto do verze „${novaVerze.nazev}“.`
+        : 'Hlášení je uložené.',
+    });
   })
 );
 
@@ -594,6 +634,65 @@ router.get(
     );
 
     res.json({ testeri, vychozi, moznosti });
+  })
+);
+
+// DELETE /api/admin/akceptace/verze/:klic/testeri/:uzivatelId
+//
+// Odebrat testera z verze. Vlastní cesta vedle PUT, protože ten přepisuje
+// celý seznam - a hlavně kvůli výchozímu stavu: dokud není nikdo přiřazený
+// výslovně, "testují to všichni, kdo na to mají právo". V takové verzi není
+// co smazat a člověk, který odešel nebo testovat nebude, blokuje schválení
+// napořád. Odebrání proto výchozí seznam nejdřív zhmotní a teprve z něj
+// jednoho ubere.
+//
+// Výsledky, které tester stihl zapsat, zůstávají - jsou součástí historie
+// a v přehledu po testerech je dál vidět.
+router.delete(
+  '/verze/:klic/testeri/:uzivatelId',
+  vyzaduje('akceptace', 'menit'),
+  asyncHandler(async (req, res) => {
+    jenAdmin(req);
+    const verzeId = await najdiVerzi(req.params.klic);
+    const uzivatelId = Number(req.params.uzivatelId);
+
+    const { testeri, vychozi } = await testeriVerze(verzeId);
+    const odebirany = testeri.find((t) => t.id === uzivatelId);
+    if (!odebirany) throw chybaNenalezeno('Tenhle člověk verzi netestuje.');
+
+    if (vychozi) {
+      // Zhmotnit výchozí seznam bez odebíraného. Bez toho by DELETE neudělal
+      // nic a po znovunačtení by tam byl zase.
+      for (const t of testeri) {
+        if (t.id === uzivatelId) continue;
+        await pool.query(
+          'INSERT INTO akceptace_testeri (verze_id, uzivatel_id, prirazeno_id) VALUES (?, ?, ?)',
+          [verzeId, t.id, req.uzivatel.id]
+        );
+      }
+    } else {
+      await pool.query(
+        'DELETE FROM akceptace_testeri WHERE verze_id = ? AND uzivatel_id = ?',
+        [verzeId, uzivatelId]
+      );
+    }
+
+    await zapisAudit({
+      req,
+      akce: 'akceptace_tester_odebran',
+      entita: 'akceptace_verze',
+      entitaId: verzeId,
+      popis: `${odebirany.jmeno} už verzi netestuje`,
+      po: { odebran: { id: odebirany.id, jmeno: odebirany.jmeno } },
+    });
+
+    const po = await testeriVerze(verzeId);
+    res.json({
+      ok: true,
+      testeri: po.testeri,
+      vychozi: po.vychozi,
+      zprava: `${odebirany.jmeno} už verzi netestuje. Zapsané výsledky zůstávají v historii.`,
+    });
   })
 );
 
@@ -651,6 +750,12 @@ router.put(
 
 const schemaSchvaleni = z.object({
   poznamka: z.string().trim().max(2000).optional(),
+  // Schválení přes překážky. Není to "vypnout kontrolu" - překážky se
+  // vyhodnotí stejně, jen se místo odmítnutí zapíšou do poznámky k vydání
+  // a do auditu, i s důvodem. Aby se po roce dalo zjistit nejen že se to
+  // schválilo, ale i co se v tu chvíli obešlo.
+  presto: z.boolean().optional(),
+  duvod: z.string().trim().max(2000).optional(),
 });
 
 // POST /api/admin/akceptace/verze/:klic/schvalit
@@ -659,20 +764,47 @@ router.post(
   vyzaduje('akceptace', 'menit'),
   asyncHandler(async (req, res) => {
     jenAdmin(req);
-    const { poznamka } = zvaliduj(schemaSchvaleni, req.body ?? {});
+    const { poznamka, presto, duvod } = zvaliduj(schemaSchvaleni, req.body ?? {});
     const verzeId = await najdiVerzi(req.params.klic);
     const data = await nactiVerzi(verzeId);
 
     const duvody = duvodyProtiSchvaleni(data);
-    if (duvody.length) {
-      throw chybaKonflikt('Verzi ještě nejde schválit: ' + duvody.join(' '), { duvody });
+
+    // "Už je schválená" se obejít nedá - to není překážka, to je hotová věc.
+    const jizSchvalena = data.verze.stav !== 'otevrena';
+    if (jizSchvalena) throw chybaKonflikt('Verze už je schválená.');
+
+    if (duvody.length && !presto) {
+      throw chybaKonflikt('Verzi ještě nejde schválit: ' + duvody.join(' '), {
+        duvody,
+        // Administrace podle toho nabídne „Schválit přesto".
+        lze_presto: true,
+      });
     }
+    if (duvody.length && presto && !duvod) {
+      throw chybaSpatnyVstup('Napište důvod, proč se verze schvaluje i přes překážky.', {
+        duvod: 'Důvod je povinný.',
+      });
+    }
+
+    // Co se obešlo, se zapíše do poznámky k vydání. Poznámka je to, co se
+    // čte za rok při otázce „proč to tehdy prošlo".
+    const poznamkaKUlozeni = duvody.length
+      ? [
+          poznamka,
+          `Schváleno přes překážky (${req.uzivatel.jmeno}). Důvod: ${duvod}`,
+          'Obejité překážky:',
+          ...duvody.map((d) => `- ${d}`),
+        ]
+          .filter(Boolean)
+          .join('\n')
+      : poznamka ?? null;
 
     await pool.query(
       `UPDATE akceptace_verze
           SET stav = 'schvalena', schvalil_id = ?, schvaleno_at = NOW(), schvaleni_poznamka = ?
         WHERE id = ?`,
-      [req.uzivatel.id, poznamka ?? null, verzeId]
+      [req.uzivatel.id, poznamkaKUlozeni, verzeId]
     );
 
     await zapisAudit({
@@ -685,10 +817,20 @@ router.post(
         poznamka: poznamka ?? null,
         ukolu: data.souhrn.celkem,
         hlaseni: data.souhrn.hlaseni_celkem,
+        // Co se obešlo a proč. Do auditu to patří stejně jako do poznámky —
+        // poznámku může někdo přepsat, audit ne.
+        presto: duvody.length > 0,
+        duvod: duvody.length ? duvod : undefined,
+        obejite_prekazky: duvody.length ? duvody : undefined,
       },
     });
 
-    res.json({ ok: true, zprava: `Verze „${data.verze.nazev}“ je schválená.` });
+    res.json({
+      ok: true,
+      zprava: duvody.length
+        ? `Verze „${data.verze.nazev}“ je schválená přes ${duvody.length} ${duvody.length === 1 ? 'překážku' : 'překážek'} — důvod je zapsaný u vydání.`
+        : `Verze „${data.verze.nazev}“ je schválená.`,
+    });
   })
 );
 
