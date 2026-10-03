@@ -15,6 +15,8 @@
 import express from 'express';
 import { z } from 'zod';
 import pool from '../../db.js';
+import config from '../../config.js';
+import { SABLONY_INTERNI } from '../../email/sablony.js';
 import { asyncHandler, chybaNenalezeno, chybaKonflikt } from '../../chyby.js';
 import { zvaliduj, schemaSeznam, schemaEmail, schemaJmeno, schemaTelefon } from '../../validace.js';
 import { vyzaduje } from '../../auth/opravneni.js';
@@ -179,12 +181,25 @@ router.get(
     if (!prihlaska) throw chybaNenalezeno('Přihláška nenalezena.');
 
     const [emaily] = await pool.query(
-      `SELECT id, sablona_klic, predmet, prijemce, stav, created_at
+      `SELECT id, sablona_klic, predmet, prijemce, stav, chyba, created_at
          FROM emaily WHERE rezervace_id = ? ORDER BY id DESC LIMIT 20`,
       [prihlaska.id]
     );
 
-    res.json({ ...prihlaska, emaily });
+    // Dostal zákazník vůbec něco? V režimu bez odesílání zákazníkům se
+    // přihláška uloží a vypadá hotově, ale člověk na druhé straně neví nic.
+    // Provoz to musí vidět na detailu, ne až v logu e-mailů.
+    const neodeslaneZakaznikovi = emaily.filter(
+      (e) => e.stav === 'neodeslano' && !SABLONY_INTERNI.has(e.sablona_klic)
+    ).length;
+
+    res.json({
+      ...prihlaska,
+      emaily,
+      neodeslane_zakaznikovi: neodeslaneZakaznikovi,
+      email_rezim: config.EMAIL_REZIM,
+      muze_zakaznikovi: config.muzeZakaznikovi,
+    });
   })
 );
 

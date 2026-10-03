@@ -71,7 +71,7 @@ test/                        testy (node:test) proti skutečné databázi
 | image | `ghcr.io/…:latest` | `ghcr.io/…:test` | build z repozitáře |
 | databáze | `lsdtrip` | `lsdtrip_test` | `lsdtrip` |
 | volumes | `lsd_main_*` | `lsd_test_*` | `lsd_dev_*` |
-| e-maily | `EMAIL_REZIM=live` | `EMAIL_REZIM=schranka` | `EMAIL_REZIM=vypnuto` |
+| e-maily | `EMAIL_REZIM=jen_provoz` → `live` po ověření domény | `EMAIL_REZIM=schranka` | `EMAIL_REZIM=vypnuto` |
 | indexace | `ROBOTS=povolit` | `ROBOTS=zakazat` | `ROBOTS=zakazat` |
 
 O prostředí rozhoduje **`PROSTREDI`**, nikdy `NODE_ENV`: v kontejneru je `NODE_ENV=production`
@@ -389,9 +389,32 @@ co se stane. Režim se nastavuje v `.env` a v administraci se ukazuje v sekci **
 | `EMAIL_REZIM` | Co dělá | Kde se používá |
 | --- | --- | --- |
 | `live` | posílá zákazníkům přes Resend (ostrý režim se jmenuje takhle, ne `ostry`) | produkce |
+| `jen_provoz` | **zákazníkům neposílá nic**, interní upozornění odešle na `EMAIL_PROVOZ_PRIJEMCE` | produkce, dokud není ověřená doména |
 | `schranka` | **neodesílá nic**, ukládá celý e-mail (HTML, text, přílohy) do administrace | test |
 | `test` | přepíše příjemce na `EMAIL_TEST_PRIJEMCE` a odešle | když je potřeba ověřit doručení |
-| `vypnuto` | jen záznam v logu, tělo se neukládá | výchozí, dokud se režim nenastaví |
+| `vypnuto` | neodejde nic, záznam zůstane se stavem `neodeslano` | výchozí, dokud se režim nenastaví |
+
+### Interní upozornění a režim `jen_provoz`
+
+E-maily se dělí na **zákaznické** a **interní** (upozornění pro provoz: nová přihláška,
+nová poptávka). Které šablony jsou interní, říká `SABLONY_INTERNI` v `src/email/sablony.js` —
+`posliZeSablony()` si příznak nastaví sám, takže se na to nedá zapomenout.
+
+Režim `jen_provoz` existuje kvůli Resendu bez ověřené domény: ten umí odeslat jen
+z `onboarding@resend.dev` a jen na adresu majitele účtu, na kohokoli jiného vrátí 403.
+Interní upozornění proto odcházejí (na `EMAIL_PROVOZ_PRIJEMCE`, ne na kontaktní adresu
+z nastavení — ta by 403 dostala taky) a zákaznické se jen uloží.
+
+Co neodešlo, má stav **`neodeslano`** — schválně oddělený od `chyba`. Dřív se do `chyba`
+psalo obojí, „Resend vrátil 403“ i „odesílání je vypnuté“, a nešlo ani jedno spolehlivě
+najít. Na `neodeslano` se váže **Odeslat znovu** (jeden e-mail) a **Rozeslat neodeslané**
+(hromadně, s náhledem počtu, nejvýš 50 v dávce). Obojí se nabízí jen v režimu, který umí
+odeslat zákazníkovi, a posílá **uložené znění**, ne nově vyrenderovanou šablonu.
+Dvojí odeslání hlídá podmíněný `UPDATE … WHERE stav = 'neodeslano'`, takže ani dvě
+současná kliknutí e-mail nepošlou dvakrát. Interní upozornění se nedoposílají.
+
+Chyba odesílací služby nikdy neshodí uložení přihlášky ani poptávky — zapíše se do logu
+a objeví se na přehledu.
 
 Testovací schránka (`/admin/emaily`) je plnohodnotný náhled: hledání podle adresáta,
 předmětu a šablony, přepínač HTML/text, přílohy ke stažení a vypsané odkazy z e-mailu,

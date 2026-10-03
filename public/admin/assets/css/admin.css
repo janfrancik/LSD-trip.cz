@@ -267,6 +267,13 @@ select.pole { appearance: none; background-image: none; }
 .stitek--spam    { border-color: var(--line); color: var(--ghost); }
 .stitek--chyba   { border-color: var(--chyba); color: var(--chyba); }
 
+/* Neodesláno má výplň, ne jen obrys: ve sloupci plném obrysových štítků by
+   se ztratilo, a přitom je to jediný stav, který po někom něco chce. */
+.stitek--neodeslano {
+  border-color: var(--varovani); background: var(--varovani); color: #1a1205;
+  font-weight: 600;
+}
+
 .zalozky { display: flex; gap: 4px; overflow-x: auto; margin-bottom: 14px;
   border-bottom: 1px solid var(--line-soft); }
 .zalozka {

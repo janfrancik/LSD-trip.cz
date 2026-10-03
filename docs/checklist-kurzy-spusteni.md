@@ -71,9 +71,10 @@ Pořadí je závazné. Nasazení na `main` se spouští až po odsouhlasení tes
    | `PROSTREDI` | `produkce` | Podle toho se pozná produkce, ne podle `NODE_ENV`. Když zůstane výchozí `vyvoj`, aplikace **naběhne** — ale s modulem „Ke schválení“ na očích a bez indexace. |
    | `ROBOTS` | `zakazat`, dokud jsme na `lsd.francik.eu` | Na `www.lsd-trip.cz` běží pořád starý web na jiném hostingu. Kdyby se indexovala i tahle adresa, soutěžily by v Googlu dvě kopie webu. Na `povolit` se přepne až s přechodem na `www.lsd-trip.cz` (viz „Přechod na lsd-trip.cz“ v [README](../README.md)). Pozor: `zakazat` je i výchozí hodnota, takže se na tenhle řádek nedá poznat, že je nastavený schválně. |
    | `APP_URL` | celá adresa ostrého webu | Skládají se z ní odkazy v e-mailech a kanonické adresy. |
-   | `EMAIL_REZIM` | `vypnuto` (zatím) | **Tohle je ten přepínač** — viz 2.1a níž. Na `live` se přepne, až bude Resend; `schranka` produkce odmítne a nenastartuje. |
-   | `RESEND_API_KEY` | — (zatím prázdné) | Povinný teprve při `live` — bez něj by aplikace s `live` nenastartovala. |
-   | `EMAIL_ODESILATEL` | `LSD <rezervace@…>` | Doména musí být ověřená v Resendu (až k `live`). |
+   | `EMAIL_REZIM` | `jen_provoz` (zatím) | **Tohle je ten přepínač** — viz 2.1a níž. Na `live` se přepne, až bude ověřená doména; `schranka` produkce odmítne a nenastartuje. |
+   | `RESEND_API_KEY` | klíč z Resendu | Povinný i pro `jen_provoz` — upozornění provozu se opravdu odesílají. |
+   | `EMAIL_PROVOZ_PRIJEMCE` | `lsdtrip.web@gmail.com` | Kam chodí upozornění v `jen_provoz`. Dokud není ověřená doména, musí to být **adresa majitele účtu u Resendu** — na jinou vrátí 403. |
+   | `EMAIL_ODESILATEL` | `LSD <onboarding@resend.dev>` | Bez ověřené domény jiný odesílatel neprojde. Po ověření se změní na doménu spolku. |
    | `EMAIL_TEST_PRIJEMCE` | — | V produkci se nepoužívá; nechat prázdné. |
    | `VOLUME_PREFIX` | `lsd_main` | Bez téhle (a `IMAGE_TAG=latest`, `APP_CONTAINER=lsdtrip-app`) compose schválně nenastartuje. |
    | `MOONE_BASE_URL` | `https://api-test.znpay.tech` | **Testovací brána, i v produkčním `.env`.** Platby jsou fáze 4 a zatím se nepoužívají, takže to teď nevadí — ale **před zapnutím plateb se musí přepnout na ostrou bránu** i s ostrými přístupy, jinak by zákazník platil do testovacího prostředí a peníze by nikam nedošly. |
@@ -81,46 +82,42 @@ Pořadí je závazné. Nasazení na `main` se spouští až po odsouhlasení tes
 3. **Kontaktní e-mail provozu** v Nastavení (bod 1) — jinak provoz o nových
    přihláškách neví.
 
-### 2.1a Rozhodnutí: pustit přihlášku s vypnutými e-maily, nebo počkat na Resend?
+### 2.1a Režimy odesílání a co který znamená pro zákazníka
 
-Dva návody si tady do teď protiřečily. [nasazeni-vps.md](nasazeni-vps.md) (P2)
-nechává produkci na `EMAIL_REZIM=vypnuto`, dokud není ověřená doména v Resendu;
-tenhle checklist chtěl `live`. Platí tohle:
+Resend bez ověřené domény odešle jen z `onboarding@resend.dev` a jen na adresu
+majitele účtu — na kohokoli jiného vrátí chybu 403. Režimy jsou proto čtyři:
 
-- **`EMAIL_REZIM=live`** — potřebuje hotový Resend (ověřená doména, klíč).
-  Teprve s ním má veřejná přihláška smysl: zákazník dostane potvrzení a provoz
-  upozornění.
-- **`EMAIL_REZIM=vypnuto`** — přihláška z webu **projde a uloží se**, ale
-  **nikomu nic nepřijde**: ani potvrzení zákazníkovi, ani upozornění provozu.
-  V administraci v sekci E-maily se takový e-mail objeví jako chyba
-  („Odesílání e-mailů je vypnuté“), takže se nic neztratí — ale někdo musí
-  přihlášky hlídat ručně a ozvat se telefonem.
+| Režim | Zákazníkovi | Provozu | Kdy |
+| --- | --- | --- | --- |
+| `vypnuto` | ne | ne | když se nemá odesílat vůbec nic |
+| `jen_provoz` | **ne** | **ano** | **teď** — dokud není ověřená doména |
+| `test` | přesměruje se na `EMAIL_TEST_PRIJEMCE` | totéž | jen testovací prostředí |
+| `live` | ano | ano | po ověření domény |
 
-**Rozhodnuto (3. 10. 2026):** Resend hotový není, produkce jde na
-`EMAIL_REZIM=vypnuto`, a **termíny se přesto zveřejní** — přihláška z webu
-tedy poběží bez automatických e-mailů. Je to vědomá volba majitele
-repozitáře; alternativa (zveřejnit kurzy bez termínů, takže se nejde
-přihlásit a zbyde jen poptávka) se nebere.
+**Rozhodnuto (3. 10. 2026):** Resend hotový není, produkce jede na
+`EMAIL_REZIM=jen_provoz` a **termíny se zveřejní**. Přihláška z webu tedy
+funguje celá, jen zákazníkovi zatím nechodí potvrzení.
 
-Co z toho plyne pro provoz, dokud se nepřepne na `live`:
+Co to znamená pro provoz:
 
-- **Nové přihlášky se nikam neohlásí.** Musí se hlídat v administraci
-  v sekci **Přihlášky** — e-mail provozu nepřijde. Dokud není `live`, dívejte
-  se tam každý den.
-- **Zákazník nedostane potvrzení.** Po odeslání přihlášky uvidí na webu
-  děkovnou stránku a nic víc. Ozvěte se mu telefonem nebo z vlastní pošty,
-  ať neví jen to, že „něco odeslal“.
-- **Nic se neztratí.** E-mail se uloží celý (předmět, HTML i textová verze)
-  a v sekci **E-maily** se dá otevřít a přečíst; jen má stav „chyba“
-  s důvodem „Odesílání e-mailů je vypnuté“. Co odeslat mělo, je tím pádem
-  dohledatelné.
-- **Tlačítko „odeslat znovu“ není.** Po přepnutí na `live` se staré
-  e-maily samy nerozešlou — co se v tomhle období nepošle, zůstane
-  nerozeslané a vyřídí se po telefonu.
+- **O nové přihlášce i poptávce se dozvíte e-mailem.** Upozornění chodí na
+  `EMAIL_PROVOZ_PRIJEMCE` (adresa účtu u Resendu) a je v něm kurz, termín,
+  počet osob, kontakt a odkaz rovnou na detail v administraci. Zdravotní
+  údaje ani váhu upozornění nevozí — ty jsou na detailu.
+- **Zákazník nedostane potvrzení.** Na webu mu po odeslání napíšeme, že
+  potvrzovací e-mail zatím neposíláme a ať si poznamená číslo přihlášky.
+  Ozvěte se mu telefonem.
+- **Je to vidět na přihlášce.** Na detailu přihlášky svítí „Zákazník nedostal
+  potvrzení“ a v sekci **E-maily** má takový e-mail stav **neodesláno**
+  (oranžový štítek, vlastní záložka).
+- **Nic se neztratí.** E-mail se uloží celý — předmět, HTML i text — a dá se
+  přečíst. Po přepnutí na `live` se dá rozeslat dodatečně.
 
-Až bude Resend hotový, je přepnutí na `live` změna `EMAIL_REZIM`
-a `RESEND_API_KEY` v `.env` plus `docker compose up -d`. Žádné nasazování,
-žádná migrace. Pak platí bod 8 v 2.4 (první ostrý e-mail si pošlete sama).
+**Až bude doména ověřená:** přepnout `EMAIL_REZIM` na `live`, změnit
+`EMAIL_ODESILATEL` na ověřenou doménu, restartovat — a pak v administraci
+**E-maily → Rozeslat neodeslané…** poslat zákazníkům to, co jim nedošlo.
+Celý postup je v [nasazeni-vps.md](nasazeni-vps.md) v sekci „Přepnutí na
+ostré odesílání“. Žádné nasazování ani migrace.
 
 ### 2.2 Nasazení
 
@@ -214,10 +211,11 @@ akceptaci zůstala.
 
 8. **První ostrý e-mail si pošlete sama**: založte přihlášku po telefonu na
    svůj e-mail se zapnutým přepínačem a zkontrolujte, že dorazila a vypadá,
-   jak má. Teprve pak pustíte přihlášku do oběhu. (Platí pro
-   `EMAIL_REZIM=live`; při `vypnuto` není co kontrolovat — viz 2.1a.)
+   jak má. Teprve pak pustíte přihlášku do oběhu. (Platí od chvíle, kdy je
+   `EMAIL_REZIM=live`; v `jen_provoz` zákazníkovi nic nechodí — viz 2.1a.)
 9. **Sledujte E-maily** první dny — je tam vidět, co odešlo a jestli se to
-   doručilo.
+   doručilo. V `jen_provoz` sledujte i záložku **Neodeslané**: je to seznam
+   lidí, kterým se musíte ozvat sama.
 10. **Přidat produkční řádek do cronu** pro zálohy (viz P5 v
     [nasazeni-vps.md](nasazeni-vps.md)) — bez něj se produkce nezálohuje.
 11. Na VPS běží vedle i cizí aplikace ve sdílené síti. Žádný `docker system

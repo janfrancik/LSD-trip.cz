@@ -16,7 +16,23 @@ export async function vykresli(koren) {
     );
   }
   if (d.email_rezim === 'vypnuto') {
-    upozorneni.push('Odesílání e-mailů je vypnuté — e-maily se jen zapisují do logu.');
+    upozorneni.push('Odesílání e-mailů je vypnuté — zákazníkům ani vám nechodí nic.');
+  }
+  if (d.email_rezim === 'jen_provoz') {
+    upozorneni.push(
+      'Zákazníkům se e-maily neposílají — chodí jen upozornění vám. ' +
+        'Přihlášeným se ozvěte telefonem.'
+    );
+  }
+  // Kolik lidí čeká na potvrzení, které nikdy nepřišlo. Tohle je to číslo,
+  // podle kterého se po ověření domény pozná, komu se má ještě ozvat.
+  if (d.emaily.neodeslane > 0) {
+    upozorneni.push(
+      `${d.emaily.neodeslane} ${sklon(d.emaily.neodeslane, 'zákazník nedostal e-mail', 'zákazníci nedostali e-mail', 'zákazníků nedostalo e-mail')}` +
+        (d.emaily.muze_zakaznikovi
+          ? ' — v sekci E-maily se dají rozeslat dodatečně.'
+          : '.')
+    );
   }
   if (d.emaily.chyby > 0) {
     upozorneni.push(

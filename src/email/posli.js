@@ -31,10 +31,67 @@ function klient() {
   return resend;
 }
 
+// Samotné odeslání je v jedné funkci, aby šlo v testech podstrčit. Bez toho
+// by se nedalo otestovat ani "chyba 403 neshodí přihlášku", ani "opakované
+// odeslání neodešle dvakrát" - jedině skutečným voláním Resendu, což v testech
+// nemá co dělat.
+//
+// `maKlienta` je zvlášť, protože chybějící klíč není chyba odeslání: je to
+// konfigurace a hlásí se jinou zprávou.
+const skutecnyOdesilatel = {
+  maKlienta() {
+    return Boolean(klient());
+  },
+  async odesli(zprava, idempotencyKey) {
+    // Idempotency-Key: kdyby se odpověď ztratila v síti a požadavek se
+    // zopakoval, Resend druhý pokus se stejným klíčem nevyřídí znovu.
+    // Bez toho by zákazník mohl dostat tentýž e-mail dvakrát i při jediném
+    // kliknutí - zámek v databázi hlídá jen naši stranu, ne síť.
+    const { data, error } = await klient().emails.send(
+      zprava,
+      idempotencyKey ? { idempotencyKey } : undefined
+    );
+    if (error) throw new Error(error.message ?? String(error));
+    return data?.id ?? null;
+  },
+};
+
+let odesilatel = skutecnyOdesilatel;
+
+/**
+ * Podstrčí odesílatele. **Jen pro testy.**
+ *
+ * Záměrně to není exportovaný objekt, do kterého by šlo kdykoli sáhnout:
+ * tahle funkce mimo testy vyhodí výjimku. V kontejneru je `NODE_ENV=production`
+ * i na testovacím prostředí (kvůli instalaci závislostí bez dev balíčků),
+ * takže ani na testovacím webu, ani v produkci se podstrčit NEDÁ - a není
+ * k tomu žádná proměnná v `.env` ani parametr požadavku.
+ * `NODE_ENV=test` nastavuje výhradně `test/pomocnik.js`.
+ */
+export function _podstrcOdesilatel(nahrada = null) {
+  if (process.env.NODE_ENV !== 'test') {
+    throw new Error(
+      'Odesílatele e-mailů jde podstrčit jen v testech (NODE_ENV=test). ' +
+        'Tohle je pojistka, ne nastavení.'
+    );
+  }
+  odesilatel = nahrada ?? skutecnyOdesilatel;
+}
+
 // Kam e-mail doopravdy poslat. Nikdy nevrací adresu zákazníka mimo režim live.
-function skutecnyPrijemce(prijemce) {
+//
+// `interni` = upozornění pro provoz (nová přihláška, nová poptávka), ne e-mail
+// zákazníkovi. Rozlišení existuje kvůli režimu 'jen_provoz': ten interní
+// upozornění odesílá, ale zákazníkům neposílá nic.
+function skutecnyPrijemce(prijemce, interni = false) {
   if (config.EMAIL_REZIM === 'live') return prijemce;
   if (config.EMAIL_REZIM === 'test') return config.EMAIL_TEST_PRIJEMCE;
+  if (config.EMAIL_REZIM === 'jen_provoz') {
+    // Pozor: i u interního upozornění se vrací adresa z .env, ne `prijemce`.
+    // Bez ověřené domény umí Resend odeslat jen na adresu majitele účtu,
+    // takže kontaktní e-mail z nastavení by skončil chybou 403.
+    return interni ? config.EMAIL_PROVOZ_PRIJEMCE : null;
+  }
   return null; // vypnuto i schranka - ven nejde nic
 }
 
@@ -49,6 +106,7 @@ function skutecnyPrijemce(prijemce) {
  * @param {string} [p.sablona]     klíč šablony do logu
  * @param {object} [p.vazby]       { rezervaceId, zakaznikId, terminId, poptavkaId, uzivatelId }
  * @param {Array}  [p.prilohy]     [{ filename, content }]
+ * @param {boolean} [p.interni]    upozornění pro provoz, ne e-mail zákazníkovi
  * @returns {Promise<{id:number, odeslano:boolean, prijemceSkutecny:string|null}>}
  */
 export async function posliEmail({
@@ -59,8 +117,9 @@ export async function posliEmail({
   sablona = null,
   vazby = {},
   prilohy = [],
+  interni = false,
 }) {
-  const kam = skutecnyPrijemce(prijemce);
+  const kam = skutecnyPrijemce(prijemce, interni);
   const rezim = config.EMAIL_REZIM;
   const doSchranky = rezim === 'schranka';
 
@@ -103,17 +162,25 @@ export async function posliEmail({
     return { id, odeslano: false, doSchranky: true, prijemceSkutecny: null };
   }
 
+  // Neodešlo, ale ne proto, že by se něco pokazilo - tenhle režim to tak má.
+  // Stav je proto 'neodeslano', ne 'chyba': na dashboardu to nesvítí jako
+  // problém a v administraci se na to dá pověsit "Odeslat znovu", až bude
+  // kam odesílat.
   if (!kam) {
+    const duvod =
+      rezim === 'jen_provoz'
+        ? 'Neodesláno - režim jen_provoz (zákazníkům se neposílá, dokud není ověřená doména).'
+        : `Neodesláno - odesílání e-mailů je vypnuté (EMAIL_REZIM=${rezim}).`;
+
     await pool.query(
-      `UPDATE emaily SET stav = 'chyba', chyba = ?, stav_at = NOW() WHERE id = ?`,
-      ['Odesílání e-mailů je vypnuté (EMAIL_REZIM=vypnuto).', id]
+      `UPDATE emaily SET stav = 'neodeslano', chyba = ?, stav_at = NOW() WHERE id = ?`,
+      [duvod, id]
     );
-    console.log(`[email] vypnuto - neodeslán "${predmet}" pro ${prijemce} (log #${id})`);
+    console.log(`[email] ${rezim} - neodeslán "${predmet}" pro ${prijemce} (log #${id})`);
     return { id, odeslano: false, doSchranky: false, prijemceSkutecny: null };
   }
 
-  const api = klient();
-  if (!api) {
+  if (!odesilatel.maKlienta()) {
     await pool.query(
       `UPDATE emaily SET stav = 'chyba', chyba = ?, stav_at = NOW() WHERE id = ?`,
       ['Chybí RESEND_API_KEY.', id]
@@ -122,22 +189,28 @@ export async function posliEmail({
     return { id, odeslano: false, doSchranky: false, prijemceSkutecny: kam };
   }
 
-  try {
-    const { data, error } = await api.emails.send({
-      from: config.EMAIL_ODESILATEL,
-      to: [kam],
-      subject: predmetKOdeslani,
-      html: telo,
-      ...(textovaVerze ? { text: textovaVerze } : {}),
-      ...(prilohy.length ? { attachments: prilohy } : {}),
-    });
+  // První pokus. Pořadí se zapisuje do databáze, aby `Idempotency-Key` přežil
+  // i restart aplikace uprostřed odesílání.
+  await pool.query('UPDATE emaily SET pokusu = pokusu + 1 WHERE id = ?', [id]);
+  const [[{ pokusu }]] = await pool.query('SELECT pokusu FROM emaily WHERE id = ?', [id]);
 
-    if (error) throw new Error(error.message ?? String(error));
+  try {
+    const resendId = await odesilatel.odesli(
+      {
+        from: config.EMAIL_ODESILATEL,
+        to: [kam],
+        subject: predmetKOdeslani,
+        html: telo,
+        ...(textovaVerze ? { text: textovaVerze } : {}),
+        ...(prilohy.length ? { attachments: prilohy } : {}),
+      },
+      klicPokusu(id, pokusu)
+    );
 
     await pool.query(
       `UPDATE emaily SET resend_id = ?, stav = 'odeslano', odeslano_at = NOW(), stav_at = NOW()
         WHERE id = ?`,
-      [data?.id ?? null, id]
+      [resendId, id]
     );
     return { id, odeslano: true, doSchranky: false, prijemceSkutecny: kam };
   } catch (err) {
@@ -148,6 +221,97 @@ export async function posliEmail({
     console.error(`[email] odeslání selhalo (log #${id}):`, err.message);
     return { id, odeslano: false, doSchranky: false, prijemceSkutecny: kam };
   }
+}
+
+/**
+ * Odešle znovu e-mail, který zůstal neodeslaný.
+ *
+ * Posílá se **uložené tělo**, ne nově vyrenderovaná šablona: zákazník má
+ * dostat to, co je v logu, i kdyby se text šablony mezitím změnil.
+ *
+ * Dvojí odeslání hlídá podmíněný UPDATE, ne kontrola před ním. Kdyby se
+ * kliklo dvakrát (nebo běžela hromadná akce a zároveň jedno tlačítko),
+ * stav si vezme jen jeden z nich - ten druhý dostane `duvod: 'jiz_vyrizeno'`
+ * a nic neodešle.
+ *
+ * @param {number} id
+ * @returns {Promise<{odeslano:boolean, duvod?:string, prijemceSkutecny?:string|null}>}
+ */
+export async function odesliZnovu(id) {
+  if (!config.muzeZakaznikovi) {
+    return { odeslano: false, duvod: 'rezim_nedovoluje' };
+  }
+
+  const [[email]] = await pool.query(
+    `SELECT id, prijemce, predmet, telo_snapshot, telo_text, sablona_klic
+       FROM emaily WHERE id = ?`,
+    [id]
+  );
+  if (!email) return { odeslano: false, duvod: 'nenalezeno' };
+
+  // Zabrání si řádek a zároveň zvýší pořadí pokusu - obojí jedním příkazem,
+  // ať se mezi tím nikdo nevejde. Když řádek už někdo zabral (nebo je dávno
+  // odeslaný), affectedRows je 0.
+  //
+  // Zkusit znovu jde i e-mail ve stavu 'chyba': typicky 403 od Resendu, který
+  // po ověření domény zmizí. Co je 'odeslano', se znovu neposílá.
+  const [zabrano] = await pool.query(
+    `UPDATE emaily SET stav = 've_fronte', pokusu = pokusu + 1, stav_at = NOW()
+      WHERE id = ? AND stav IN ('neodeslano', 'chyba')`,
+    [id]
+  );
+  if (!zabrano.affectedRows) return { odeslano: false, duvod: 'jiz_vyrizeno' };
+
+  const [[{ pokusu }]] = await pool.query('SELECT pokusu FROM emaily WHERE id = ?', [id]);
+  const kam = skutecnyPrijemce(email.prijemce);
+
+  if (!kam || !odesilatel.maKlienta()) {
+    await oznacChybu(id, kam ? 'Chybí RESEND_API_KEY.' : 'Režim neumí odeslat zákazníkovi.');
+    return { odeslano: false, duvod: 'nelze_odeslat' };
+  }
+
+  try {
+    const resendId = await odesilatel.odesli(
+      {
+        from: config.EMAIL_ODESILATEL,
+        to: [kam],
+        subject: config.EMAIL_REZIM === 'test' ? `[TEST] ${email.predmet}` : email.predmet,
+        html: email.telo_snapshot ?? undefined,
+        ...(email.telo_text ? { text: email.telo_text } : {}),
+      },
+      klicPokusu(id, pokusu)
+    );
+
+    await pool.query(
+      `UPDATE emaily
+          SET resend_id = ?, prijemce_skutecny = ?, stav = 'odeslano',
+              chyba = NULL, odeslano_at = NOW(), stav_at = NOW()
+        WHERE id = ?`,
+      [resendId, kam, id]
+    );
+    return { odeslano: true, prijemceSkutecny: kam };
+  } catch (err) {
+    // Skutečná chyba odesílací služby (403, 5xx, timeout) je 'chyba', ne
+    // 'neodeslano'. 'Neodeslano' znamená "režim to zakázal" - úmysl. Kdyby
+    // se sem psalo obojí, nešlo by na dashboardu poznat, co se opravdu
+    // pokazilo, a hromadné rozeslání by selhané e-maily zkoušelo dokola.
+    await oznacChybu(id, String(err.message ?? err).slice(0, 2000));
+    console.error(`[email] opakované odeslání selhalo (log #${id}):`, err.message);
+    return { odeslano: false, duvod: 'chyba_odeslani' };
+  }
+}
+
+async function oznacChybu(id, chyba) {
+  await pool.query(
+    `UPDATE emaily SET stav = 'chyba', chyba = ?, stav_at = NOW() WHERE id = ?`,
+    [chyba, id]
+  );
+}
+
+// Klíč pro Resend. Stejný pokus = stejný klíč, takže síťové zopakování
+// neodešle druhý e-mail; vědomé odeslání znovu zvýší `pokusu` a klíč je jiný.
+function klicPokusu(id, pokusu) {
+  return `email-${id}-pokus-${pokusu}`;
 }
 
 // Export pro testy: ověřuje se, že v testovacím režimu nikdy nevznikne

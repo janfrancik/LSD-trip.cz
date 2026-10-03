@@ -30,7 +30,12 @@ router.get(
       `SELECT
          SUM(stav = 'chyba') AS chyby,
          SUM(stav IN ('bounce','stiznost')) AS problemy,
-         SUM(created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)) AS za_tyden
+         SUM(created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)) AS za_tyden,
+         -- Neodeslané zákazníkům: kolik lidí nedostalo, co jim mělo přijít.
+         -- Interní upozornění se nepočítají, ta se nedoposílají.
+         SUM(stav = 'neodeslano'
+             AND (sablona_klic IS NULL OR sablona_klic NOT IN ('prihlaska_provoz','poptavka_provoz')))
+           AS neodeslane
        FROM emaily`
     );
 
@@ -67,6 +72,8 @@ router.get(
         chyby: Number(emaily.chyby ?? 0),
         problemy: Number(emaily.problemy ?? 0),
         za_tyden: Number(emaily.za_tyden ?? 0),
+        neodeslane: Number(emaily.neodeslane ?? 0),
+        muze_zakaznikovi: config.muzeZakaznikovi,
       },
       posledni_poptavky: poslednPoptavky,
       aktivita,

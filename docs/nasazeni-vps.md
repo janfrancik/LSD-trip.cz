@@ -364,16 +364,29 @@ DB_ROOT_PASSWORD=<DOPLNIT-PRODUKCE-ROOT-HESLO>
 # řádku není poznat, že je nastavený schválně.
 ROBOTS=zakazat
 
-# Produkce zůstává na "vypnuto", dokud nebude ověřená doména v Resendu.
-# Teprve pak EMAIL_REZIM=live - do té doby se e-maily jen zapisují do logu.
+# Režimy odesílání: vypnuto | jen_provoz | schranka | test | live
 #
-# POZOR: s "vypnuto" projde přihláška z webu, ale zákazníkovi ani provozu nic
-# nepřijde (v administraci je v E-mailech vidět jako chyba). Než se zveřejní
-# termíny kurzů, přečti si 2.1a v checklist-kurzy-spusteni.md - bez termínu
-# se na kurz nejde přihlásit, takže se dá nasadit i s vypnutými e-maily.
-EMAIL_REZIM=vypnuto
+#   vypnuto    - neodejde nic, ani zákazníkům, ani provozu
+#   jen_provoz - upozornění provozu odejdou, zákazníkům se neposílá nic.
+#                Tohle je stav, dokud Resend nemá ověřenou doménu.
+#   live       - ostré odesílání (až po ověření domény)
+#
+# "schranka" produkce odmítne a nenastartuje, "test" sem nepatří.
+#
+# POZOR: v "vypnuto" i "jen_provoz" projde přihláška z webu, ale zákazník
+# potvrzení NEDOSTANE. V administraci je to vidět na přihlášce i v E-mailech
+# (stav "neodesláno") a po přepnutí na live se dá rozeslat dodatečně.
+# Podrobnosti v 2.1a v checklist-kurzy-spusteni.md.
+EMAIL_REZIM=jen_provoz
 EMAIL_TEST_PRIJEMCE=
-EMAIL_ODESILATEL=LSD <rezervace@lsd.francik.eu>
+
+# Kam chodí upozornění provozu v režimu jen_provoz. Dokud není ověřená doména,
+# musí to být adresa majitele účtu u Resendu - na jinou Resend vrátí 403.
+EMAIL_PROVOZ_PRIJEMCE=lsdtrip.web@gmail.com
+# Dokud není ověřená doména, smí Resend odesílat jen z onboarding@resend.dev.
+# Po ověření domény se změní na LSD <rezervace@lsd-trip.cz> (nebo na doménu,
+# která bude ověřená) - viz "Přepnutí na ostré odesílání" níž.
+EMAIL_ODESILATEL=LSD <onboarding@resend.dev>
 RESEND_API_KEY=
 
 # POZOR: tahle adresa je TESTOVACÍ brána Mo.one, i když je v produkčním .env.
@@ -514,6 +527,44 @@ A přidej produkční řádek do cronu:
 ```
 
 ---
+
+## Přepnutí na ostré odesílání (po ověření domény)
+
+Dokud doména není ověřená, běží produkce na `EMAIL_REZIM=jen_provoz`: provoz
+dostává upozornění, zákazníci nedostávají nic. Jakmile je doména v Resendu
+ověřená, přepnutí je změna `.env` a restart — žádné nasazování ani migrace.
+
+```bash
+cd /home/deploy/apps/lsdtrip && cp -p .env ".env.pred-live-$(date +%F)" && ls -la .env*
+```
+
+V `.env` se mění tři řádky:
+
+| Řádek | Z | Na |
+| --- | --- | --- |
+| `EMAIL_REZIM` | `jen_provoz` | `live` |
+| `EMAIL_ODESILATEL` | `LSD <onboarding@resend.dev>` | `LSD <rezervace@ověřená-doména>` |
+| `EMAIL_PROVOZ_PRIJEMCE` | adresa majitele účtu | může zůstat, v `live` se nepoužívá |
+
+Pak restart a kontrola, že aplikace naběhla (bez `RESEND_API_KEY` by `live`
+schválně nenastartovalo):
+
+```bash
+cd /home/deploy/apps/lsdtrip && docker compose up -d && sleep 8 && curl -s https://lsd.francik.eu/api/health; echo
+```
+
+Teprve potom **rozeslat, co zákazníkům nedošlo**: v administraci
+**E-maily → Rozeslat neodeslané…**. Ukáže se počet a období; v jedné dávce
+jde nejvýš 50 e-mailů, takže u většího množství se akce spustí víckrát.
+Posílá se uložené znění, takže zákazník dostane přesně to, co mu tehdy mělo
+přijít. Upozornění provozu se nedoposílají.
+
+> Než to spustíte, projděte si, komu to odejde. Pokud jste se s lidmi mezitím
+> spojila telefonem, bude to pro ně druhá zpráva — u starých přihlášek může
+> být lepší nechat je být a rozeslat jen novější období.
+
+Na závěr si pošlete jeden ostrý e-mail sama (bod 8 v
+[checklist-kurzy-spusteni.md](checklist-kurzy-spusteni.md)).
 
 ## Resend na produkci
 

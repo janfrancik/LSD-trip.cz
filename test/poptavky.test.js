@@ -202,8 +202,10 @@ test('s vypnutým odesíláním administrace jasně řekne, že odpověď neode�
   ]);
   assert.match(poptavka.odpoved, /V srpnu máme volno/);
 
-  // A v detailu je vidět důvod, ne jen "chyba".
+  // A v detailu je vidět důvod. Stav je 'neodeslano', ne 'chyba': vypnuté
+  // odesílání je úmysl, ne porucha, a na dashboardu nemá svítit jako problém.
+  // Na 'neodeslano' se zároveň váže "Odeslat znovu" (migrace 013).
   const detail = await klient.get(`/api/admin/poptavky/${vysledek.insertId}`);
-  assert.equal(detail.data.emaily[0].stav, 'chyba');
+  assert.equal(detail.data.emaily[0].stav, 'neodeslano');
   assert.match(detail.data.emaily[0].chyba, /vypnut/i);
 });

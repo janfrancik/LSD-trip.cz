@@ -3,12 +3,17 @@
 // odeslaných e-mailů se stavem doručení.
 
 import { api, dotaz } from '../api.js';
-import { esc, datumCas, pred, prazdno, strankovani, hlaska } from '../ui.js';
+import {
+  esc, datumCas, pred, prazdno, strankovani, hlaska, potvrd, formularModal, sklon,
+} from '../ui.js';
 import { jdiNa } from '../admin.js';
 
 const POPIS_STAVU = {
   ve_fronte: { text: 've frontě', trida: 'stitek--prubeh' },
   ve_schrance: { text: 've schránce', trida: 'stitek--nova' },
+  // Neodesláno není chyba, ale ani hotovo - vlastní barva, ať se to nepletlo
+  // ani s jedním. U zákaznického e-maila to znamená "člověk neví nic".
+  neodeslano: { text: 'neodesláno', trida: 'stitek--neodeslano' },
   odeslano: { text: 'odesláno', trida: 'stitek--hotovo' },
   doruceno: { text: 'doručeno', trida: 'stitek--hotovo' },
   otevreno: { text: 'otevřeno', trida: 'stitek--hotovo' },
@@ -29,6 +34,63 @@ function jeSchranka(rezim) {
   return rezim === 'schranka';
 }
 
+// Pruh nad seznamem, když zákazníkům nic nechodí. Bez něj vypadá obrazovka
+// jako obyčejný log a "neodesláno" u jednoho e-mailu se dá přehlédnout -
+// přitom je to stav, kdy lidem nedochází potvrzení přihlášky.
+function upozorneniNaRezim(data) {
+  const neodeslane = data.pocty?.neodeslano ?? 0;
+
+  if (data.rezim === 'jen_provoz') {
+    return `
+      <div class="panel panel--tesny" style="border-left:3px solid var(--varovani);margin-bottom:14px">
+        <strong>Zákazníkům se neposílá — jen upozornění provozu.</strong>
+        <div class="text-faint" style="margin-top:4px">
+          Odesílací služba zatím nemá ověřenou doménu, takže z webu odejde jen
+          upozornění vám. Zákazníci potvrzení <strong>nedostávají</strong> —
+          ${neodeslane
+            ? `${sklon(neodeslane, 'čeká tu jedno', `čekají tu ${neodeslane}`, `čeká tu ${neodeslane}`)}.`
+            : 'zatím žádné nečeká.'}
+          Ozvěte se jim telefonem. Až bude doména ověřená a přepne se režim,
+          dají se neodeslané rozeslat hromadně.
+        </div>
+      </div>`;
+  }
+
+  if (data.rezim === 'vypnuto') {
+    return `
+      <div class="panel panel--tesny" style="border-left:3px solid var(--chyba);margin-bottom:14px">
+        <strong>Odesílání e-mailů je vypnuté — nechodí nic.</strong>
+        <div class="text-faint" style="margin-top:4px">
+          Ani zákazníkům, ani vám. O nových přihláškách a poptávkách se dozvíte
+          jen tady v administraci.${neodeslane ? ` Neodeslaných čeká ${neodeslane}.` : ''}
+        </div>
+      </div>`;
+  }
+
+  // Režim umí odeslat a něco tu leží z dřívějška - tohle je ta chvíle, kdy
+  // se to má rozeslat.
+  if (data.muze_zakaznikovi && neodeslane) {
+    return `
+      <div class="panel panel--tesny" style="border-left:3px solid var(--varovani);margin-bottom:14px">
+        <strong>${neodeslane} ${sklon(
+          neodeslane,
+          'e-mail zákazníkovi nikdy neodešel',
+          'e-maily zákazníkům nikdy neodešly',
+          'e-mailů zákazníkům nikdy neodešlo'
+        )}.</strong>
+        <div class="text-faint" style="margin-top:4px;margin-bottom:10px">
+          Vznikly v době, kdy bylo odesílání vypnuté. Teď už odesílat jde,
+          takže se dají poslat dodatečně.
+        </div>
+        <button type="button" class="btn btn--obrys btn--maly" data-hromadne>
+          Rozeslat neodeslané…
+        </button>
+      </div>`;
+  }
+
+  return '';
+}
+
 // ------------------------------------------------------------------ seznam
 
 async function seznam(koren) {
@@ -38,6 +100,7 @@ async function seznam(koren) {
   const zalozky = [
     { klic: '', popis: 'Vše' },
     { klic: 've_schrance', popis: 'Ve schránce' },
+    { klic: 'neodeslano', popis: 'Neodeslané' },
     { klic: 'odeslano', popis: 'Odeslané' },
     { klic: 'chyba', popis: 'Chyby' },
   ];
@@ -58,6 +121,8 @@ async function seznam(koren) {
       : `<p class="text-faint" style="margin-bottom:14px">
            Co komu odešlo a jak to dopadlo. Stav se doplňuje podle zpráv od odesílací služby.
          </p>`}
+
+    ${upozorneniNaRezim(data)}
 
     <div class="zalozky" role="tablist">
       ${zalozky
@@ -111,6 +176,7 @@ async function seznam(koren) {
     if (e.key === 'Enter') hledat();
   });
   koren.querySelector('[data-sablony]')?.addEventListener('click', () => jdiNa('sablony'));
+  koren.querySelector('[data-hromadne]')?.addEventListener('click', () => hromadne(koren));
 
   koren.querySelectorAll('[data-id]').forEach((prvek) =>
     prvek.addEventListener('click', () => jdiNa(`emaily/${prvek.dataset.id}`))
@@ -166,6 +232,8 @@ async function detail(koren, id) {
       <h1 class="nadpis">${esc(e.predmet)}</h1>
       ${stitek(e.stav)}
     </div>
+
+    ${['neodeslano', 'chyba'].includes(e.stav) ? pruhNeodeslano(e) : ''}
 
     <div class="mrizka mrizka--detail">
       <div>
@@ -293,15 +361,129 @@ async function detail(koren, id) {
       koren.querySelector('[data-nahled="text"]').hidden = pohled !== 'text';
     })
   );
+
+  koren.querySelector('[data-znovu]')?.addEventListener('click', async () => {
+    const souhlas = await potvrd({
+      nadpis: 'Odeslat e-mail znovu?',
+      text:
+        `Odejde na <strong>${esc(e.prijemce)}</strong> v tom znění, jaké je tady
+         v náhledu. Pokud jste se s ním spojila jinak, bude to druhá zpráva.`,
+      potvrzeni: 'Odeslat',
+    });
+    if (!souhlas) return;
+
+    const vysledek = await api.post(`/emaily/${encodeURIComponent(id)}/odeslat-znovu`, {});
+    hlaska(vysledek.zprava);
+    detail(koren, id);
+  });
 }
 
 function popisRezimu(rezim) {
   return {
     live: 'ostrý provoz',
+    jen_provoz: 'jen upozornění provozu (zákazníkům se neposílá)',
     test: 'testovací (přesměrováno)',
     schranka: 'testovací schránka (neodesláno)',
     vypnuto: 'odesílání vypnuté',
   }[rezim] ?? rezim;
+}
+
+// Pruh na detailu neodeslaného e-mailu. Říká tři věci: že to nedošlo, proč,
+// a co se s tím dá dělat teď.
+function pruhNeodeslano(e) {
+  const komu = e.interni ? 'provozu' : 'zákazníkovi';
+  // Dvě různé věci: "režim to zakázal" a "odeslání se nepovedlo". Pro toho,
+  // kdo to čte, je rozdíl podstatný — u chyby je potřeba zjistit proč.
+  const jeChyba = e.stav === 'chyba';
+
+  return `
+    <div class="panel panel--tesny"
+         style="border-left:3px solid var(--${jeChyba ? 'chyba' : 'varovani'});margin-bottom:14px">
+      <strong>${jeChyba
+        ? `Odeslání selhalo — ${komu} nepřišel.`
+        : `Tenhle e-mail nikdy neodešel — ${komu} nepřišel.`}</strong>
+      ${e.chyba ? `<div class="text-faint" style="margin-top:4px">${esc(e.chyba)}</div>` : ''}
+      ${e.lze_odeslat_znovu
+        ? `<div style="margin-top:10px">
+             <button type="button" class="btn btn--obrys btn--maly" data-znovu>
+               Odeslat znovu
+             </button>
+             <span class="text-faint" style="margin-left:8px">
+               Odejde v tomhle znění na ${esc(e.prijemce)}.
+             </span>
+           </div>`
+        : e.interni
+          ? `<div class="text-faint" style="margin-top:6px">
+               Upozornění provozu se nedoposílá — mělo cenu ve chvíli, kdy přišlo.
+             </div>`
+          : `<div class="text-faint" style="margin-top:6px">
+               Odeslat znovu teď nejde — zákazníkům se v tomhle nastavení neposílá.
+               Až se přepne na ostrý provoz, tlačítko se tu objeví.
+             </div>`}
+    </div>`;
+}
+
+// ------------------------------------------------- hromadné rozeslání
+
+// Dva kroky schválně: nejdřív období, pak přesný počet k odeslání. Rozesílání
+// e-mailů zákazníkům se nemá spustit jedním kliknutím bez toho, aby bylo
+// vidět, kolika lidem to odejde.
+async function hromadne(koren) {
+  const obdobi = await formularModal({
+    nadpis: 'Rozeslat neodeslané e-maily',
+    text:
+      'Pošle se to, co zákazníkům nikdy neodešlo — v tom znění, v jakém to ' +
+      'tehdy vzniklo. Období můžete nechat prázdné, pak se vezme všechno. ' +
+      'Upozornění provozu se nedoposílají.',
+    polia: [
+      { klic: 'od', popisek: 'Od data', typ: 'datum', napoveda: 'Nechte prázdné pro vše.' },
+      { klic: 'do', popisek: 'Do data', typ: 'datum', napoveda: 'Včetně tohohle dne.' },
+    ],
+    potvrzeni: 'Zobrazit počet',
+  });
+  if (!obdobi) return;
+
+  const filtrObdobi = {};
+  if (obdobi.od) filtrObdobi.od = obdobi.od;
+  if (obdobi.do) filtrObdobi.do = obdobi.do;
+
+  const nahled = await api.get('/emaily/neodeslane' + dotaz(filtrObdobi));
+
+  if (!nahled.celkem) {
+    await potvrd({
+      nadpis: 'Není co odeslat',
+      text: 'V tomhle období nezůstal žádný neodeslaný e-mail pro zákazníka.',
+      potvrzeni: 'Zavřít',
+      jenPotvrzeni: true,
+      nebezpecne: false,
+    });
+    return;
+  }
+
+  const vice = nahled.celkem > nahled.max_v_davce;
+  const kusy = sklon(nahled.davka, 'e-mail', 'e-maily', 'e-mailů');
+  const souhlas = await potvrd({
+    nadpis: `Odeslat ${nahled.davka} ${kusy}?`,
+    text:
+      `<strong>Odejde ${nahled.davka} ${kusy}</strong> skutečným zákazníkům.` +
+      (vice
+        ? ` Celkem jich čeká ${nahled.celkem}; v jedné dávce se posílá nejvýš
+           ${nahled.max_v_davce}, takže akci spusťte víckrát.`
+        : '') +
+      `<br><br>Nejstarší je z ${esc(datumCas(nahled.nejstarsi))}.
+       Pokud už jste se s lidmi spojila jinak, bude to pro ně druhá zpráva.`,
+    potvrzeni: `Odeslat ${nahled.davka}`,
+  });
+  if (!souhlas) return;
+
+  const vysledek = await api.post('/emaily/neodeslane/odeslat', filtrObdobi);
+  hlaska(
+    vysledek.chyby
+      ? `${vysledek.zprava} ${vysledek.chyby} se nepodařilo — podívejte se na jejich stav.`
+      : vysledek.zprava,
+    vysledek.chyby ? 'chyba' : 'ok'
+  );
+  seznam(koren);
 }
 
 function velikost(bajty) {

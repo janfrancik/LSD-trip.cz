@@ -248,7 +248,8 @@ test('s vypnutým odesíláním se reset hesla pozná jen z logu e-mailů', asyn
   );
   assert.equal(emaily.length, 1, 'e-mail musí být v logu, i když se neodeslal');
   assert.equal(emaily[0].prijemce, 'existuje@example.invalid');
-  assert.equal(emaily[0].stav, 'chyba');
+  // Vypnuté odesílání je úmysl, ne porucha - od migrace 013 má vlastní stav.
+  assert.equal(emaily[0].stav, 'neodeslano');
   assert.equal(emaily[0].rezim, 'vypnuto');
   assert.match(emaily[0].chyba, /vypnut/i);
 });

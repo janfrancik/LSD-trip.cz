@@ -20,6 +20,7 @@ import { limitPoptavky, limitPrihlasek } from '../auth/limit.js';
 import { nactiVerejneKurzy, nactiVerejnyKurz, nactiVerejneTerminyKurzu } from '../kurzy.js';
 import { zapisPrihlasku, nactiPrihlasku, nactiPrihlaskuPodleKodu, posliOznameni, popisTerminu } from '../prihlasky.js';
 import { hodnota } from '../nastaveni.js';
+import { posliZeSablony } from '../email/sablony.js';
 
 const router = express.Router();
 
@@ -49,11 +50,34 @@ router.post(
       });
     }
 
-    await pool.query(
+    const [vlozeno] = await pool.query(
       `INSERT INTO poptavky (jmeno, email, telefon, zprava, zdroj, ip)
        VALUES (?, ?, ?, ?, ?, ?)`,
       [vstup.jmeno, vstup.email, vstup.telefon, vstup.zprava ?? null, 'web', req.ip ?? null]
     );
+
+    // Upozornění provozu. Stejně jako u přihlášky nesmí e-mail shodit uložení:
+    // poptávka je v databázi a v administraci ji provoz uvidí i tehdy, když
+    // se odeslání nepovede. Zákazníkovi se odtud nic neposílá - odpovídá se
+    // mu ručně z administrace (Poptávky → Odpovědět).
+    try {
+      const provoz = await hodnota('provoz.email');
+      if (provoz) {
+        await posliZeSablony('poptavka_provoz', {
+          prijemce: provoz,
+          data: {
+            jmeno: vstup.jmeno,
+            email: vstup.email,
+            telefon: vstup.telefon ?? '',
+            zprava: vstup.zprava ?? '',
+            odkaz_admin: config.url(`/admin/poptavky/${vlozeno.insertId}`),
+          },
+          vazby: { poptavkaId: vlozeno.insertId },
+        });
+      }
+    } catch (chyba) {
+      console.error('[poptavky] upozornění provozu se nepodařilo odeslat:', chyba.message);
+    }
 
     // Vracíme jen potvrzení, ne uloženou poptávku - nemá cenu posílat zpátky
     // data, která už odesílatel zná, a zejména ne id a interní pole.
@@ -230,7 +254,13 @@ router.post(
       termin: popisTerminu(prihlaska),
       // Účastník mimo limit se přihlásí, ale musí o tom vědět (rozhodnutí 3).
       varovani: vysledek.varovani,
-      zprava: 'Přihlášku máme. Potvrzení jsme poslali e-mailem.',
+      // Neslibovat e-mail, který neodejde. V režimech bez odesílání zákazníkům
+      // by se člověk díval do schránky na něco, co nikdy nepřijde - a když se
+      // neozve ani provoz, bere to jako že se přihláška ztratila.
+      zprava: config.muzeZakaznikovi
+        ? 'Přihlášku máme. Potvrzení jsme poslali e-mailem.'
+        : 'Přihlášku máme a ozveme se vám. Potvrzovací e-mail zatím neposíláme — '
+          + 'číslo přihlášky si prosím poznamenejte.',
     });
   })
 );

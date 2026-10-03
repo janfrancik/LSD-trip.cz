@@ -20,7 +20,7 @@ import config from './config.js';
 import { chybaKonflikt, chybaSpatnyVstup } from './chyby.js';
 import { hodnota } from './nastaveni.js';
 import { isoDatum, datum as formatujDatum } from './cas.js';
-import { posliZeSablony } from './email/sablony.js';
+import { posliZeSablony, jeInterni } from './email/sablony.js';
 
 // Stavy, které drží místo na termínu. Storno a přesun ho uvolňují.
 export const STAVY_DRZICI_MISTO = ['nova', 'potvrzena', 'zaplacena', 'probehla'];
@@ -410,8 +410,17 @@ export async function posliOznameni(klic, prihlaska, extra = {}) {
     pocet_osob: String(prihlaska.pocet_osob),
     cena: prihlaska.cena_hal ? koruny(prihlaska.cena_hal) : 'domluvíme',
     odkaz: config.url(`/prihlaska/${prihlaska.kod}?t=${prihlaska.verejny_token}`),
+    // Odkaz do administrace patří jen do interních upozornění - provoz se
+    // z e-mailu dostane rovnou na detail a nemusí přihlášku hledat podle čísla.
+    odkaz_admin: config.url(`/admin/prihlasky/${prihlaska.id}`),
     duvod: extra.duvod ?? '',
-    ucastnici: (prihlaska.ucastnici ?? [])
+  };
+
+  // Věk, váha a varování z limitů se do interního upozornění nedávají.
+  // Upozornění má říct "ozvi se jim", ne vozit zdravotní údaje po e-mailu -
+  // provoz si je přečte na detailu, kde je k nim i kontext.
+  if (!jeInterni(klic)) {
+    data.ucastnici = (prihlaska.ucastnici ?? [])
       .map((u) => {
         const casti = [u.jmeno];
         if (u.vek != null) casti.push(`${u.vek} let`);
@@ -419,8 +428,8 @@ export async function posliOznameni(klic, prihlaska, extra = {}) {
         if (u.varovani?.length) casti.push(`POZOR: ${u.varovani.join('; ')}`);
         return `- ${casti.join(', ')}`;
       })
-      .join('\n'),
-  };
+      .join('\n');
+  }
 
   return posliZeSablony(klic, {
     prijemce: extra.prijemce ?? prihlaska.zakaznik_email,

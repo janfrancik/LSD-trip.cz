@@ -288,11 +288,31 @@ async function karta(koren, id) {
         `)}
 
         ${sekce('Odeslané e-maily', 'Co už zákazníkovi odešlo.', `
+          ${p.neodeslane_zakaznikovi
+            ? `<div class="panel panel--tesny"
+                    style="border-left:3px solid var(--varovani);margin-bottom:10px">
+                 <strong>Zákazník nedostal potvrzení.</strong>
+                 <div class="text-faint" style="margin-top:4px">
+                   ${p.neodeslane_zakaznikovi === 1
+                     ? 'Jeden e-mail'
+                     : `${p.neodeslane_zakaznikovi} e-maily`} se neodeslal${p.neodeslane_zakaznikovi === 1 ? '' : 'y'},
+                   protože odesílání zákazníkům je vypnuté. Ozvěte se telefonem.
+                   ${p.muze_zakaznikovi
+                     ? 'Odeslat dodatečně jde v sekci E-maily.'
+                     : ''}
+                 </div>
+               </div>`
+            : ''}
           ${p.emaily.length
             ? `<div class="polozky">${p.emaily.map((e) => `
                 <div class="polozka">
                   <div class="sekce__udaj">${esc(e.predmet)}</div>
-                  <div class="sekce__napoveda">${esc(datumCas(e.created_at))} · ${esc(e.stav)}</div>
+                  <div class="sekce__napoveda">
+                    ${esc(datumCas(e.created_at))} ·
+                    ${e.stav === 'neodeslano'
+                      ? '<strong style="color:var(--varovani)">neodesláno</strong>'
+                      : esc(e.stav)}
+                  </div>
                 </div>`).join('')}</div>`
             : '<p class="sekce__udaj text-faint">Zatím nic neodešlo.</p>'}
         `)}

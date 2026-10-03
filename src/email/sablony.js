@@ -16,6 +16,16 @@ import { posliEmail } from './posli.js';
 import { obalka, vyrenderuj, escapujHtml } from './sablona.js';
 import { hodnota } from '../nastaveni.js';
 
+// Šablony, které jsou upozornění pro provoz, ne e-mail zákazníkovi. Jediný
+// seznam, podle kterého se to pozná - `posliZeSablony` si příznak nastaví
+// sám, takže se na volajících nedá zapomenout. Přidání interního e-mailu je
+// tím jeden řádek tady.
+export const SABLONY_INTERNI = new Set(['prihlaska_provoz', 'poptavka_provoz']);
+
+export function jeInterni(klic) {
+  return SABLONY_INTERNI.has(klic);
+}
+
 export async function nactiSablonu(klic) {
   const [rows] = await pool.query('SELECT * FROM email_sablony WHERE klic = ? LIMIT 1', [klic]);
   return rows[0] ?? null;
@@ -88,5 +98,6 @@ export async function posliZeSablony(klic, { prijemce, data = {}, vazby = {} }) 
     textovaVerze: text,
     sablona: klic,
     vazby,
+    interni: jeInterni(klic),
   });
 }

@@ -16,6 +16,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pripravDatabazi } from './pomocnik.js';
+import { REZIMY_EMAILU } from '../src/config.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.join(__dirname, '..');
@@ -191,7 +192,15 @@ test('ostrý režim se jmenuje live a překlep to řekne', () => {
   const vysledek = spustAplikaci({ EMAIL_REZIM: 'ostry' });
 
   assert.equal(vysledek.nastartovala, false);
-  assert.match(vysledek.vystup, /EMAIL_REZIM smí být: live \| schranka \| test \| vypnuto/);
+  // Seznam režimů se bere z REZIMY_EMAILU, ne z opisu tady - jinak by test
+  // padal při každém přidání režimu a nutil opravovat sám sebe.
+  assert.match(vysledek.vystup, /EMAIL_REZIM smí být: /);
+  for (const rezim of REZIMY_EMAILU) {
+    assert.ok(
+      vysledek.vystup.includes(rezim),
+      `nápověda musí vypsat i režim "${rezim}", jinak ho člověk nenajde`
+    );
+  }
   assert.match(vysledek.vystup, /ne "ostry"/);
 });
 
