@@ -19,8 +19,8 @@ import { isoDatum } from '../cas.js';
 import { limitPoptavky, limitPrihlasek } from '../auth/limit.js';
 import { nactiVerejneKurzy, nactiVerejnyKurz, nactiVerejneTerminyKurzu } from '../kurzy.js';
 import { zapisPrihlasku, nactiPrihlasku, nactiPrihlaskuPodleKodu, posliOznameni, popisTerminu } from '../prihlasky.js';
-import { hodnota } from '../nastaveni.js';
 import { posliZeSablony } from '../email/sablony.js';
+import { adresaProvozu } from '../email/provoz.js';
 
 const router = express.Router();
 
@@ -61,7 +61,7 @@ router.post(
     // se odeslání nepovede. Zákazníkovi se odtud nic neposílá - odpovídá se
     // mu ručně z administrace (Poptávky → Odpovědět).
     try {
-      const provoz = await hodnota('provoz.email');
+      const { adresa: provoz } = await adresaProvozu();
       if (provoz) {
         await posliZeSablony('poptavka_provoz', {
           prijemce: provoz,
@@ -241,7 +241,7 @@ router.post(
     // i tehdy, když se odeslání nepovede.
     try {
       await posliOznameni('prihlaska_prijata', prihlaska);
-      const provoz = await hodnota('provoz.email');
+      const { adresa: provoz } = await adresaProvozu();
       if (provoz) await posliOznameni('prihlaska_provoz', prihlaska, { prijemce: provoz });
     } catch (chyba) {
       console.error('[prihlasky] e-mail se nepodařilo odeslat:', chyba.message);

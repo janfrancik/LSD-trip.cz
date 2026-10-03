@@ -9,6 +9,7 @@ import { asyncHandler, chybaSpatnyVstup } from '../../chyby.js';
 import { vyzaduje } from '../../auth/opravneni.js';
 import { registrProKlienta, ulozNastaveni, REGISTR, nactiNastaveni } from '../../nastaveni.js';
 import { zapisAudit, rozdil } from '../../audit.js';
+import { adresaProvozu } from '../../email/provoz.js';
 
 const router = express.Router();
 
@@ -17,7 +18,20 @@ router.get(
   '/',
   vyzaduje('nastaveni'),
   asyncHandler(async (req, res) => {
-    res.json(await registrProKlienta());
+    // Kam opravdu chodí upozornění provozu. Kontaktní e-mail z nastavení
+    // totiž nemusí platit: dokud je v .env vyplněné EMAIL_PROVOZ_PRIJEMCE,
+    // vyhrává ono. Bez téhle informace by formulář tvrdil něco jiného, než
+    // co se opravdu děje - a hledalo by se to těžko.
+    const provoz = await adresaProvozu();
+
+    res.json({
+      ...(await registrProKlienta()),
+      upozorneni_provozu: {
+        adresa: provoz.adresa,
+        zdroj: provoz.zdroj,
+        email_rezim: config.EMAIL_REZIM,
+      },
+    });
   })
 );
 

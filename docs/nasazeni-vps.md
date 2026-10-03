@@ -92,15 +92,27 @@ DB_ROOT_PASSWORD=<DOPLNIT-TEST-ROOT-HESLO>
 # Test se nesmí dostat do vyhledávačů.
 ROBOTS=zakazat
 
-# Na testu se e-maily NEODESÍLAJÍ. Ukládají se celé do administrace
-# (menu E-maily = testovací schránka), včetně odkazů, na které jde kliknout -
-# pozvánka i reset hesla se tak dají projít bez Resendu. Klíč sem nepatří.
-EMAIL_REZIM=schranka
-# Používá se jen v režimu EMAIL_REZIM=test (kdyby bylo potřeba ověřit
-# i skutečné doručení). V režimu schranka se neuplatní.
-EMAIL_TEST_PRIJEMCE=honza.francik@gmail.com
-EMAIL_ODESILATEL=LSD test <rezervace@lsd.francik.eu>
-RESEND_API_KEY=
+# Na testu se e-maily OPRAVDU ODESÍLAJÍ, ale všem se přepíše příjemce na
+# EMAIL_TEST_PRIJEMCE ještě před voláním Resendu - zákazníkovi z testu dojít
+# nemůže nic, i kdyby se v kódu spletl kdokoli. Předmět dostane předponu
+# [TEST] a do logu se uloží obojí: komu e-mail patřil i kam doopravdy šel.
+#
+# Alternativa je EMAIL_REZIM=schranka: ta neodesílá vůbec nic a e-mail jen
+# uloží do administrace. Hodí se, když na testu není Resend. Jakmile klíč je,
+# je "test" bližší produkci, protože se ověří i skutečné doručení.
+EMAIL_REZIM=test
+
+# Kam se přesměruje všechno z testu. Dokud nemá odesílací služba ověřenou
+# doménu, musí to být adresa majitele účtu - na jinou vrátí 403.
+EMAIL_TEST_PRIJEMCE=lsdtrip.web@gmail.com
+
+# Bez ověřené domény smí Resend odesílat jen z onboarding@resend.dev.
+EMAIL_ODESILATEL=LSD test <onboarding@resend.dev>
+RESEND_API_KEY=<klíč z resend.com>
+
+# Na testu se nenastavuje: upozornění provozu se stejně přesměrují na
+# EMAIL_TEST_PRIJEMCE. Platí jen pro režim jen_provoz na produkci.
+EMAIL_PROVOZ_PRIJEMCE=
 
 # Platební brána (fáze 4). Test vždy proti testovacímu prostředí Mo.one.
 MOONE_BASE_URL=https://api-test.znpay.tech
@@ -528,6 +540,32 @@ A přidej produkční řádek do cronu:
 
 ---
 
+## Kam chodí upozornění provozu
+
+Adresy jsou dvě a snadno se popletou. Platí **jedno pravidlo**:
+
+> **Je-li v `.env` vyplněné `EMAIL_PROVOZ_PRIJEMCE`, upozornění chodí tam.
+> Není-li, chodí na Kontaktní e-mail z Nastavení → Provoz.**
+> Když není vyplněné ani jedno, neodejde nikam nic.
+
+| `EMAIL_PROVOZ_PRIJEMCE` v `.env` | Kontaktní e-mail v administraci | Kam to odejde |
+| --- | --- | --- |
+| vyplněné | vyplněný | **na adresu z `.env`** |
+| vyplněné | prázdný | **na adresu z `.env`** |
+| prázdné | vyplněný | na adresu z administrace |
+| prázdné | prázdný | nikam — a administrace to u toho pole červeně řekne |
+
+Proč to tak je: Resend bez ověřené domény odešle jen na adresu majitele účtu,
+takže kontaktní adresa z administrace by skončila chybou 403.
+`EMAIL_PROVOZ_PRIJEMCE` je **dočasná objížďka, ne druhé nastavení**.
+
+**Po ověření domény se z `.env` smaže** — tím se pravidlo samo vrátí k adrese,
+kterou si spravuje majitelka. Dokud se nesmaže, administrace u toho pole
+ukazuje oranžovou poznámku, že platí adresa ze serveru, a jakou.
+
+Rozhoduje o tom jediné místo v kódu (`src/email/provoz.js`), takže se to
+nemůže rozejít mezi přihláškou a poptávkou.
+
 ## Přepnutí na ostré odesílání (po ověření domény)
 
 Dokud doména není ověřená, běží produkce na `EMAIL_REZIM=jen_provoz`: provoz
@@ -544,7 +582,12 @@ V `.env` se mění tři řádky:
 | --- | --- | --- |
 | `EMAIL_REZIM` | `jen_provoz` | `live` |
 | `EMAIL_ODESILATEL` | `LSD <onboarding@resend.dev>` | `LSD <rezervace@ověřená-doména>` |
-| `EMAIL_PROVOZ_PRIJEMCE` | adresa majitele účtu | může zůstat, v `live` se nepoužívá |
+| `EMAIL_PROVOZ_PRIJEMCE` | adresa majitele účtu | **nechat prázdné** — viz „Kam chodí upozornění provozu“ |
+
+`EMAIL_PROVOZ_PRIJEMCE` se musí **vyprázdnit**, jinak by upozornění dál chodila
+na adresu ze serveru a kontaktní e-mail, který si majitelka nastaví
+v administraci, by se neuplatnil. Administrace na to u toho pole upozorňuje,
+dokud je proměnná vyplněná.
 
 Pak restart a kontrola, že aplikace naběhla (bez `RESEND_API_KEY` by `live`
 schválně nenastartovalo):

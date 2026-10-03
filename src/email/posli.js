@@ -87,9 +87,11 @@ function skutecnyPrijemce(prijemce, interni = false) {
   if (config.EMAIL_REZIM === 'live') return prijemce;
   if (config.EMAIL_REZIM === 'test') return config.EMAIL_TEST_PRIJEMCE;
   if (config.EMAIL_REZIM === 'jen_provoz') {
-    // Pozor: i u interního upozornění se vrací adresa z .env, ne `prijemce`.
-    // Bez ověřené domény umí Resend odeslat jen na adresu majitele účtu,
-    // takže kontaktní e-mail z nastavení by skončil chybou 403.
+    // Pojistka: i kdyby se `prijemce` vzal odjinud, v tomhle režimu odejde
+    // upozornění jen na adresu z .env. Bez ověřené domény umí Resend odeslat
+    // jen na adresu majitele účtu a cokoli jiného by skončilo chybou 403.
+    // Kdo adresu vybírá, řeší src/email/provoz.js - tady je to poslední
+    // kontrola, ne druhé rozhodování.
     return interni ? config.EMAIL_PROVOZ_PRIJEMCE : null;
   }
   return null; // vypnuto i schranka - ven nejde nic

@@ -39,7 +39,7 @@ export async function vykresli(koren) {
                   min: p.min,
                   max: p.max,
                   povinne: p.povinne,
-                })
+                }) + (p.klic === 'provoz.email' ? kamChodiUpozorneni(registr.upozorneni_provozu) : '')
               )
               .join('')}
           </section>`
@@ -103,6 +103,35 @@ export async function vykresli(koren) {
       tlacitko.textContent = 'Uložit nastavení';
     }
   });
+}
+
+// Pod kontaktním e-mailem je vidět, kam upozornění opravdu chodí. Platí jedno
+// pravidlo: když je v .env vyplněné EMAIL_PROVOZ_PRIJEMCE, vyhrává ono, jinak
+// tohle pole. Bez té informace by formulář ukazoval adresu, na kterou nic
+// nechodí, a nedalo by se to poznat.
+function kamChodiUpozorneni(info) {
+  if (!info) return '';
+
+  if (!info.adresa) {
+    return `<p class="text-faint" style="margin:-8px 0 14px;border-left:3px solid var(--chyba);padding-left:10px">
+      <strong>Upozornění na nové přihlášky a poptávky teď nikam nechodí.</strong>
+      Vyplňte adresu výš — jinak se o nich dozvíte jen tady v administraci.
+    </p>`;
+  }
+
+  if (info.zdroj === 'env') {
+    return `<p class="text-faint" style="margin:-8px 0 14px;border-left:3px solid var(--varovani);padding-left:10px">
+      Upozornění teď chodí na <strong class="mono">${esc(info.adresa)}</strong> —
+      adresu ze souboru <span class="mono">.env</span> na serveru, ne z tohohle pole.
+      Je to dočasné, dokud odesílací služba nemá ověřenou doménu: na jinou adresu
+      než na účet u té služby by e-mail neodešel. Až se to spraví, adresa odtud
+      se z <span class="mono">.env</span> smaže a začne platit tohle pole.
+    </p>`;
+  }
+
+  return `<p class="text-faint" style="margin:-8px 0 14px">
+    Na tuhle adresu chodí upozornění na nové přihlášky a poptávky.
+  </p>`;
 }
 
 function radekSluzby(s) {

@@ -411,6 +411,77 @@ test('upozornění na novou přihlášku nevozí po e-mailu váhu ani varování
   });
 });
 
+// ------------------------------ kam chodí upozornění provozu (jedno pravidlo)
+
+test('EMAIL_PROVOZ_PRIJEMCE vyhrává nad kontaktním e-mailem z nastavení', async () => {
+  await nastavProvozEmail('z-administrace@example.invalid');
+
+  const { adresaProvozu } = await import('../src/email/provoz.js');
+  const puvodni = config.EMAIL_PROVOZ_PRIJEMCE;
+  config.EMAIL_PROVOZ_PRIJEMCE = 'z-env@example.invalid';
+  try {
+    assert.deepEqual(await adresaProvozu(), {
+      adresa: 'z-env@example.invalid',
+      zdroj: 'env',
+    });
+  } finally {
+    config.EMAIL_PROVOZ_PRIJEMCE = puvodni;
+  }
+});
+
+test('bez EMAIL_PROVOZ_PRIJEMCE platí kontaktní e-mail z nastavení', async () => {
+  await nastavProvozEmail('z-administrace@example.invalid');
+
+  const { adresaProvozu } = await import('../src/email/provoz.js');
+  const puvodni = config.EMAIL_PROVOZ_PRIJEMCE;
+  config.EMAIL_PROVOZ_PRIJEMCE = undefined;
+  try {
+    assert.deepEqual(await adresaProvozu(), {
+      adresa: 'z-administrace@example.invalid',
+      zdroj: 'nastaveni',
+    });
+  } finally {
+    config.EMAIL_PROVOZ_PRIJEMCE = puvodni;
+  }
+});
+
+test('upozornění odejde i když je kontaktní e-mail v nastavení prázdný', async () => {
+  // Past, kterou to dřív mělo: obě místa se ptala jen nastavení, takže
+  // s vyplněným .env a prázdným polem v administraci nevzniklo upozornění
+  // vůbec - a o nové přihlášce se nikdo nedozvěděl.
+  await nastavProvozEmail('');
+  const { terminId } = await pripravKurzSTerminem();
+
+  await vRezimu('jen_provoz', async () => {
+    const odpoved = await klient.post('/api/prihlasky', prihlaskaTelo(terminId));
+    assert.equal(odpoved.status, 201);
+
+    assert.equal(odeslane.length, 1, 'upozornění musí odejít i bez adresy v administraci');
+    assert.deepEqual(odeslane[0].to, ['provoz@example.invalid']);
+  });
+});
+
+test('když není vyplněné ani jedno, upozornění nevznikne a přihláška projde', async () => {
+  await nastavProvozEmail('');
+  const { terminId } = await pripravKurzSTerminem();
+
+  const puvodni = config.EMAIL_PROVOZ_PRIJEMCE;
+  try {
+    await vRezimu('vypnuto', async () => {
+      config.EMAIL_PROVOZ_PRIJEMCE = undefined;
+      const odpoved = await klient.post('/api/prihlasky', prihlaskaTelo(terminId));
+      assert.equal(odpoved.status, 201, 'přihláška se musí uložit tak jako tak');
+    });
+
+    const [provozni] = await pool.query(
+      `SELECT id FROM emaily WHERE sablona_klic = 'prihlaska_provoz'`
+    );
+    assert.equal(provozni.length, 0, 'bez adresy se upozornění nezakládá');
+  } finally {
+    config.EMAIL_PROVOZ_PRIJEMCE = puvodni;
+  }
+});
+
 // ------------------------------------------- pojistky kolem odesílání
 
 test('odesílatele nejde podstrčit mimo testy', async () => {
