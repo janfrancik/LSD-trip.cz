@@ -48,19 +48,23 @@ Pořadí je závazné. Nasazení na `main` se spouští až po odsouhlasení tes
 > statický web a kostra aplikace s migrací `001`. Administrace, uživatelé,
 > poptávky ani kurzy tam nikdy nebyly. Tenhle přechod proto nasazuje **fázi 1
 > i kurzy najednou** — a produkční `.env` i volume se musí nejdřív připravit
-> podle sekce **„Přechod main na novou verzi“ (P1–P3)** v
+> podle sekce **„Přechod main na novou verzi“ (P0–P3)** v
 > [nasazeni-vps.md](nasazeni-vps.md). Bez toho nová verze vůbec nenaběhne:
 > compose odmítne start bez `VOLUME_PREFIX`, `IMAGE_TAG` a `APP_CONTAINER`.
 
 ### 2.1 Před nasazením
 
-1. **Záloha produkční databáze.** `scripts/zaloha.sh` běží v cronu; před
-   zásahem se spustí ještě jednou ručně a ověří se, že záloha má rozumnou
-   velikost a jde rozbalit. (Produkční databáze je zatím prázdná — záloha je
-   pojistka, ne přenos dat. Starý volume se podle P3 zahazuje.)
+1. **Kontrola staré produkční databáze a záloha.** Krok **P0** v
+   [nasazeni-vps.md](nasazeni-vps.md): ověřit, že v tabulce `poptavky` nic
+   není, než se starý volume podle P3 zahodí. **Musí to proběhnout se starým
+   `.env`** — jakmile se přepíše (P2), ptal by se dotaz už nové, prázdné
+   databáze a vyšla by nula i v případě, že ve staré něco je. `scripts/zaloha.sh`
+   běží v cronu; před zásahem se spustí ještě jednou ručně a ověří se, že
+   záloha má rozumnou velikost a jde rozbalit.
 2. **Kontrola `.env` na produkci** (soubor vytváří člověk, workflow ho nikdy
-   nepřepisuje). Celý vzor je v P2 v [nasazeni-vps.md](nasazeni-vps.md), tady
-   jsou řádky, na kterých záleží nejvíc:
+   nepřepisuje). Celý vzor je v P2 v [nasazeni-vps.md](nasazeni-vps.md), kde se
+   stávající soubor nejdřív odloží do `.env.stary-<datum>`. Tady jsou řádky,
+   na kterých záleží nejvíc:
 
    | Proměnná | Hodnota | Poznámka |
    | --- | --- | --- |
@@ -72,6 +76,7 @@ Pořadí je závazné. Nasazení na `main` se spouští až po odsouhlasení tes
    | `EMAIL_ODESILATEL` | `LSD <rezervace@…>` | Doména musí být ověřená v Resendu (až k `live`). |
    | `EMAIL_TEST_PRIJEMCE` | — | V produkci se nepoužívá; nechat prázdné. |
    | `VOLUME_PREFIX` | `lsd_main` | Bez téhle (a `IMAGE_TAG=latest`, `APP_CONTAINER=lsdtrip-app`) compose schválně nenastartuje. |
+   | `MOONE_BASE_URL` | `https://api-test.znpay.tech` | **Testovací brána, i v produkčním `.env`.** Platby jsou fáze 4 a zatím se nepoužívají, takže to teď nevadí — ale **před zapnutím plateb se musí přepnout na ostrou bránu** i s ostrými přístupy, jinak by zákazník platil do testovacího prostředí a peníze by nikam nedošly. |
 
 3. **Kontaktní e-mail provozu** v Nastavení (bod 1) — jinak provoz o nových
    přihláškách neví.
@@ -120,7 +125,8 @@ a `RESEND_API_KEY` v `.env` plus `docker compose up -d`. Žádné nasazování,
 ### 2.2 Nasazení
 
 4. **Merge `test` → `main`** (jen s výslovným souhlasem majitelky repozitáře)
-   — až po P1–P3, tedy po novém `.env` a odstranění starého volume. Je to
+   — až po P0–P3, tedy po kontrole staré databáze, novém `.env` a odstranění
+   starého volume. Je to
    krok P4: `git merge --ff-only test`, žádný vlastní commit do `main`.
 5. Workflow nasadí produkci sám a v tomhle pořadí:
    - spustí **migrace 002–012** nad produkční databází (`docker compose run --rm app npm run migrate`),

@@ -278,7 +278,45 @@ je jen soubor.
 Do té doby produkce běží ve staré podobě: staré `.env`, staré volume, image `:latest`
 z posledního nasazení. Nové verze se do ní nedostanou, protože se do `main` nic nepushuje.
 
-Až přijde řada, postup je: nové `.env` → odstranění starého volume → sloučení větve.
+Až přijde řada, postup je: kontrola staré databáze → nové `.env` → odstranění
+starého volume → sloučení větve.
+
+## P0. Kontrola staré produkce
+
+**Tohle se dělá první, se starým `.env`, a nedá se to odložit na později.**
+Stará verze má v migraci `001` tabulku `poptavky` a endpoint `POST /api/poptavky`
+byl na produkci veřejný (`GET` taky — bez přihlášení vrací 200). Žádná stránka
+starého webu ho nevolá, v celém `main` na něj neodkazuje jediný řádek
+frontendu, takže tabulka **má být** prázdná. „Má být“ ale není „je“, a co se
+v P3 smaže, se nevrátí.
+
+Proč právě teď a ne až u P3: dotaz musí jít proti **starému** volume
+`lsdtrip_db_data` a se **starým** `.env`. Jakmile se `.env` přepíše (P2), má
+compose `VOLUME_PREFIX=lsd_main` — `docker compose up -d db` by založil nový,
+prázdný volume `lsd_main_db`, dotaz by se ptal té špatné databáze a vrátil by
+`0` i v případě, že ve staré něco je. Navíc by do nového volume šlo nové root
+heslo, které ke starému nepatří.
+
+```bash
+cd /home/deploy/apps/lsdtrip && docker compose up -d db && sleep 8 && docker compose exec -T db sh -c 'mariadb -u root -p"$MARIADB_ROOT_PASSWORD" -e "SELECT COUNT(*) AS poptavek FROM lsdtrip.poptavky;"'
+```
+
+Pro kontrolu, že se ptáš opravdu starého volume (má vyjít `lsdtrip_db_data`):
+
+```bash
+cd /home/deploy/apps/lsdtrip && docker inspect -f '{{range .Mounts}}{{.Name}}{{end}}' "$(docker compose ps -q db)"
+```
+
+Vyjde-li `0` poptávek, pokračuj na P1 bez váhání. Vyjde-li cokoli jiného,
+**nemaž nic** a nejdřív si data vytáhni — jsou to jména, e-maily a zprávy od
+lidí, kteří čekají na odpověď:
+
+```bash
+cd /home/deploy/apps/lsdtrip && docker compose exec -T db sh -c 'mariadb -u root -p"$MARIADB_ROOT_PASSWORD" --batch lsdtrip -e "SELECT * FROM poptavky ORDER BY created_at;"' > ~/poptavky-ze-stare-produkce.tsv
+```
+
+Soubor si odnes ze serveru a poptávky vyřiď ručně; do nové databáze se
+nepřenášejí (schéma je jiné a je jich málo).
 
 ## P1. Hesla produkce
 
@@ -290,6 +328,19 @@ echo "root: $(openssl rand -base64 24 | tr -d '/+=')"
 ```
 
 ## P2. `.env` pro produkci
+
+Teprve po P0 — dokud neproběhla kontrola staré databáze, tenhle soubor se
+nepřepisuje.
+
+Nejdřív odlož ten stávající. Jsou v něm staré přístupy k databázi, které můžou
+být potřeba, kdyby se ke starému volume ještě muselo vrátit (`-p` zachová práva,
+takže záloha nezůstane čitelná pro kohokoli):
+
+```bash
+cd /home/deploy/apps/lsdtrip && cp -p .env ".env.stary-$(date +%F)" && ls -la .env*
+```
+
+Pak nové:
 
 ```bash
 cat > /home/deploy/apps/lsdtrip/.env <<'EOF'
@@ -306,7 +357,12 @@ DB_USER=lsdtrip
 DB_PASSWORD=<DOPLNIT-PRODUKCE-DB-HESLO>
 DB_ROOT_PASSWORD=<DOPLNIT-PRODUKCE-ROOT-HESLO>
 
-ROBOTS=povolit
+# Zakázat, dokud produkce jede na lsd.francik.eu: na www.lsd-trip.cz běží pořád
+# starý web na jiném hostingu, takže by v Googlu soutěžily dvě kopie téhož webu.
+# Na "povolit" se přepne s přechodem na ostrou doménu (viz "Přechod na
+# lsd-trip.cz" v README). Pozor, "zakazat" je i výchozí hodnota - na tomhle
+# řádku není poznat, že je nastavený schválně.
+ROBOTS=zakazat
 
 # Produkce zůstává na "vypnuto", dokud nebude ověřená doména v Resendu.
 # Teprve pak EMAIL_REZIM=live - do té doby se e-maily jen zapisují do logu.
@@ -320,8 +376,11 @@ EMAIL_TEST_PRIJEMCE=
 EMAIL_ODESILATEL=LSD <rezervace@lsd.francik.eu>
 RESEND_API_KEY=
 
-# I produkce jede zatím proti testovacímu Mo.one. Přepnutí na ostrou bránu
-# je změna těchhle tří řádků a restart, žádné nasazování.
+# POZOR: tahle adresa je TESTOVACÍ brána Mo.one, i když je v produkčním .env.
+# Platby jsou fáze 4 a zatím se nepoužívají, takže to nikomu nevadí - ale až se
+# platby zapnou, MUSÍ se tyhle tři řádky přepnout na ostrou bránu i s ostrými
+# přístupy. Kdyby se to zapomnělo, zákazník by platil do testovacího prostředí
+# a peníze by nikam nedošly. Přepnutí je změna .env a restart, žádné nasazování.
 MOONE_BASE_URL=https://api-test.znpay.tech
 MOONE_CLIENT_ID=
 MOONE_CLIENT_SECRET=
@@ -335,6 +394,17 @@ COMPOSE_PROJECT_NAME=lsdtrip
 EOF
 
 chmod 600 /home/deploy/apps/lsdtrip/.env
+ls -la /home/deploy/apps/lsdtrip/.env
+```
+
+Ten `ls` není kosmetika: `.env` má mít práva `-rw-------`. Kdyby se `chmod`
+neprovedl (třeba proto, že se do terminálu nedostal celý blok), zůstane soubor
+s hesly čitelný pro kohokoli na stroji — a na VPS běží vedle i cizí aplikace.
+
+Hodnoty si ověř bez vypsání hesel:
+
+```bash
+cd /home/deploy/apps/lsdtrip && sed 's/=.*/=…/' .env
 ```
 
 Aplikace si konfiguraci při startu zkontroluje. Když něco chybí nebo zůstane výchozí
@@ -344,32 +414,10 @@ hodnota, **nenastartuje** a do logu napíše co — nikdy neběží s polovičn�
 
 Starý volume zmizí a nový (`lsd_main_db`) se založí při prvním nasazení.
 
-> **Nejdřív se přesvědč, že se opravdu nic nezahazuje.** Stará verze má
-> v migraci `001` tabulku `poptavky` a endpoint `POST /api/poptavky` byl na
-> produkci veřejný. Žádná stránka starého webu ho sice nevolala (v celém
-> `main` na něj neodkazuje jediný řádek frontendu), takže tabulka má být
-> prázdná — ale „má být“ není „je“. Jeden dotaz to rozhodne:
-
-```bash
-cd /home/deploy/apps/lsdtrip
-docker compose up -d db                   # databáze sama, bez aplikace
-docker compose exec -T db sh -c \
-  'mariadb -u root -p"$MARIADB_ROOT_PASSWORD" -e \
-   "SELECT COUNT(*) AS poptavek FROM lsdtrip.poptavky;"'
-```
-
-Vyjde-li `0`, pokračuj dál bez váhání. Vyjde-li cokoli jiného, **nemaž nic**
-a nejdřív si data vytáhni — jsou to jména, e-maily a zprávy od lidí, kteří
-čekají na odpověď:
-
-```bash
-cd /home/deploy/apps/lsdtrip && docker compose exec -T db sh -c \
-  'mariadb -u root -p"$MARIADB_ROOT_PASSWORD" --batch lsdtrip \
-   -e "SELECT * FROM poptavky ORDER BY created_at;"' > ~/poptavky-ze-stare-produkce.tsv
-```
-
-Soubor si odnes ze serveru a poptávky vyřiď ručně; do nové databáze se
-nepřenášejí (schéma je jiné a je jich málo).
+**Předpoklad: P0 proběhlo a vyšlo `0` poptávek.** Tady už se zpětně ověřit
+nedá — `.env` je nové, takže `docker compose` míří na `lsd_main_db` a starého
+volume se příkazy níž dotknou jen jménem. Pokud si nejsi jistý, že P0
+proběhlo **před** P2, nemaž nic a vrať se k P0 se zálohou `.env.stary-*`.
 
 ```bash
 cd /home/deploy/apps/lsdtrip
