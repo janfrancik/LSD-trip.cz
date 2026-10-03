@@ -56,7 +56,7 @@ Pořadí je závazné. Nasazení na `main` se spouští až po odsouhlasení tes
 
 1. **Kontrola staré produkční databáze a záloha.** Krok **P0** v
    [nasazeni-vps.md](nasazeni-vps.md): ověřit, že v tabulce `poptavky` nic
-   není, než se starý volume podle P3 zahodí. **Musí to proběhnout se starým
+   není, dokud je stará databáze ještě po ruce. **Musí to proběhnout se starým
    `.env`** — jakmile se přepíše (P2), ptal by se dotaz už nové, prázdné
    databáze a vyšla by nula i v případě, že ve staré něco je. `scripts/zaloha.sh`
    běží v cronu; před zásahem se spustí ještě jednou ručně a ověří se, že

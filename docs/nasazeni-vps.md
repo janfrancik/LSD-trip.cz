@@ -410,14 +410,15 @@ cd /home/deploy/apps/lsdtrip && sed 's/=.*/=…/' .env
 Aplikace si konfiguraci při startu zkontroluje. Když něco chybí nebo zůstane výchozí
 hodnota, **nenastartuje** a do logu napíše co — nikdy neběží s poloviční konfigurací.
 
-## P3. Odstranění starého volume produkce
+## P3. Zastavení staré produkce a záloha starého volume
 
-Starý volume zmizí a nový (`lsd_main_db`) se založí při prvním nasazení.
+Nový volume (`lsd_main_db`) se založí sám při prvním nasazení. Starý
+(`lsdtrip_db_data`) se **nemaže hned** — zůstane na stroji jako záloha, dokud
+se nová verze neosvědčí. Nic nekoliduje: nová verze na něj nesahá, protože
+compose míří na jiná jména.
 
 **Předpoklad: P0 proběhlo a vyšlo `0` poptávek.** Tady už se zpětně ověřit
-nedá — `.env` je nové, takže `docker compose` míří na `lsd_main_db` a starého
-volume se příkazy níž dotknou jen jménem. Pokud si nejsi jistý, že P0
-proběhlo **před** P2, nemaž nic a vrať se k P0 se zálohou `.env.stary-*`.
+nedá — `.env` je nové, takže `docker compose` míří na `lsd_main_db`.
 
 ```bash
 cd /home/deploy/apps/lsdtrip
@@ -425,15 +426,30 @@ docker compose down                       # zastaví kontejnery, volume nechá
 docker volume ls | grep -i lsd            # přehled, co na stroji je
 ```
 
-Zálohu si pro jistotu udělej i tak — stojí to deset vteřin:
+Záloha starého volume do souboru (ten pak přežije i smazání volume):
 
 ```bash
-docker run --rm -v lsdtrip_db_data:/data:ro -v /home/deploy:/zaloha alpine \
-  tar czf /zaloha/stary-volume-$(date +%F).tar.gz -C /data . 2>/dev/null \
+mkdir -p /home/deploy/zalohy && docker run --rm -v lsdtrip_db_data:/data:ro \
+  -v /home/deploy/zalohy:/zaloha alpine \
+  tar czf "/zaloha/stary-volume-$(date +%F).tar.gz" -C /data . 2>/dev/null \
   && echo "záloha uložena" || echo "volume neexistuje, není co zálohovat"
 ```
 
-Teprve potom:
+Ověř, že archiv není prázdný a jde rozbalit — záloha, kterou nikdo nezkusil
+otevřít, je jen soubor:
+
+```bash
+ls -la /home/deploy/zalohy/ && tar tzf /home/deploy/zalohy/stary-volume-*.tar.gz | head -5
+```
+
+### Smazání starého volume (až později)
+
+**Provedeno 3. 10. 2026:** stará aplikace zastavená, volume zazálohovaný do
+`/home/deploy/zalohy/` a **ponechaný**. Smaže se ručně, až nová verze
+odběhne týden v provozu — tedy **po 10. 10. 2026**.
+
+Do té doby starý volume zabírá místo a nic nedělá; to je záměr, ne nedodělek.
+Až přijde čas:
 
 ```bash
 docker volume rm lsdtrip_db_data lsdtrip_uploads
@@ -449,6 +465,9 @@ Kdyby `docker volume rm` hlásil, že je volume používaný, běží ještě n�
 docker ps -a --filter volume=lsdtrip_db_data
 docker rm -f <jméno kontejneru>
 ```
+
+Po smazání zůstává záloha v `/home/deploy/zalohy/` — tu zahoď teprve tehdy,
+až bude jasné, že ze staré produkce nic nikdo nechce.
 
 ## P4. Sloučení test → main
 
