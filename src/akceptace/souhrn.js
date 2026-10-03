@@ -98,9 +98,10 @@ export async function testeriVerze(verzeId) {
  */
 export async function nactiVerzi(verzeId) {
   const [[verze]] = await pool.query(
-    `SELECT v.*, u.jmeno AS schvalil_jmeno
+    `SELECT v.*, u.jmeno AS schvalil_jmeno, n.jmeno AS nasadil_jmeno
        FROM akceptace_verze v
        LEFT JOIN uzivatele u ON u.id = v.schvalil_id
+       LEFT JOIN uzivatele n ON n.id = v.nasadil_id
       WHERE v.id = ?`,
     [verzeId]
   );

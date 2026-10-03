@@ -85,6 +85,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const [verze] = await pool.query(
       `SELECT v.id, v.kod, v.nazev, v.popis, v.stav, v.poradi, v.schvaleno_at, v.oznameno_at,
+              v.nasazeno_at, v.nasazeni_odkaz,
               u.jmeno AS schvalil_jmeno,
               (SELECT COUNT(*) FROM akceptace_ukoly k WHERE k.verze_id = v.id AND k.aktivni = 1) AS ukolu,
               (SELECT COUNT(*) FROM akceptace_ukoly k
@@ -102,7 +103,8 @@ router.get(
                 WHERE h.verze_id = v.id AND h.stav IN ('nove','resi_se')) AS hlaseni_otevrena
          FROM akceptace_verze v
          LEFT JOIN uzivatele u ON u.id = v.schvalil_id
-        ORDER BY v.stav = 'schvalena', v.poradi, v.id`,
+        -- Hotové verze (schválené i nasazené) dolů, rozpracované nahoru.
+        ORDER BY v.stav <> 'otevrena', v.poradi, v.id`,
       [req.uzivatel.id, req.uzivatel.role, req.uzivatel.role, req.uzivatel.id]
     );
 
@@ -687,6 +689,75 @@ router.post(
     });
 
     res.json({ ok: true, zprava: `Verze „${data.verze.nazev}“ je schválená.` });
+  })
+);
+
+const schemaNasazeni = z.object({
+  odkaz: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .refine((v) => !v || /^https?:\/\//.test(v), 'Odkaz musí začínat http:// nebo https://'),
+  nasazeno: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, 'Datum ve formátu RRRR-MM-DD.')
+    .optional(),
+  poznamka: z.string().trim().max(2000).optional(),
+});
+
+// POST /api/admin/akceptace/verze/:klic/do-produkce
+//
+// Mezi „testeři to odsouhlasili" a „běží to zákazníkům" je rozdíl, který se
+// v praxi pletl: schválená verze mohla týden čekat na nasazení a nikdo
+// nepoznal, jestli to, co je na ostrém webu, je zrovna ona.
+router.post(
+  '/verze/:klic/do-produkce',
+  vyzaduje('akceptace', 'menit'),
+  asyncHandler(async (req, res) => {
+    jenAdmin(req);
+    const vstup = zvaliduj(schemaNasazeni, req.body ?? {});
+    const verzeId = await najdiVerzi(req.params.klic);
+    const data = await nactiVerzi(verzeId);
+
+    // Do produkce jen to, co prošlo schválením. Opačné pořadí by znamenalo,
+    // že je na ostrém webu něco, co nikdo neodsouhlasil.
+    if (data.verze.stav === 'otevrena') {
+      throw chybaKonflikt(
+        'Verzi nejde označit za nasazenou, dokud není schválená. Nejdřív ji schvalte.'
+      );
+    }
+    if (data.verze.stav === 'v_produkci') {
+      throw chybaKonflikt('Verze už je označená jako nasazená v produkci.');
+    }
+
+    await pool.query(
+      `UPDATE akceptace_verze
+          SET stav = 'v_produkci',
+              nasazeno_at = COALESCE(?, NOW()),
+              nasazeni_odkaz = ?,
+              nasadil_id = ?,
+              schvaleni_poznamka = COALESCE(NULLIF(?, ''), schvaleni_poznamka)
+        WHERE id = ?`,
+      [
+        vstup.nasazeno ? `${vstup.nasazeno} 12:00:00` : null,
+        vstup.odkaz ?? null,
+        req.uzivatel.id,
+        vstup.poznamka ?? '',
+        verzeId,
+      ]
+    );
+
+    await zapisAudit({
+      req,
+      akce: 'akceptace_nasazeni',
+      entita: 'akceptace_verze',
+      entitaId: verzeId,
+      popis: data.verze.nazev,
+      po: { odkaz: vstup.odkaz ?? null, nasazeno: vstup.nasazeno ?? 'dnes' },
+    });
+
+    res.json({ ok: true, zprava: `Verze „${data.verze.nazev}“ je označená jako nasazená.` });
   })
 );
 

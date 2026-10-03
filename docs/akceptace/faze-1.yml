@@ -83,9 +83,21 @@ ukoly:
          a zprávu „Chtěla bych tandem v srpnu, je ještě volno?“.
       3. Odešlete a vraťte se do administrace na Poptávky.
     vysledek: |
-      Poptávka je v seznamu jako první, se štítkem „nová“, a je u ní vidět
-      jméno, e-mail, telefon i začátek zprávy. V menu u Poptávek svítí číslo
-      s počtem nových.
+      Na webu formulář zmizí a místo něj se objeví potvrzení „Zpráva odešla“
+      i s vaším jménem a tlačítkem „Poslat další zprávu“. (ZMĚNĚNO V DÁVCE 2 —
+      dřív se měnil jen text tlačítka a nebylo poznat, že se něco stalo.)
+
+      Poptávka je v administraci v seznamu jako první, se štítkem „nová“,
+      a je u ní vidět jméno, e-mail, telefon i začátek zprávy. V menu
+      u Poptávek svítí číslo s počtem nových.
+
+      Zkuste pak odeslat tutéž zprávu ještě jednou: web se zachová stejně
+      (zase poděkuje), ale v administraci žádná druhá poptávka nepřibude.
+      (ZMĚNĚNO V DÁVCE 2 — ochrana proti dvojímu odeslání.)
+
+      Pokud je v Nastavení → Provoz vyplněný kontaktní e-mail, přijde na něj
+      upozornění „[LSD] Nová poptávka: …“ s odkazem rovnou do administrace.
+      (ZMĚNĚNO V DÁVCE 1 — dřív se o poptávce e-mailem nedozvěděl nikdo.)
 
   - kod: poptavka-odpoved
     nazev: Odpověď na poptávku
@@ -93,19 +105,31 @@ ukoly:
     odkaz: /admin/poptavky
     postup: |
       1. Klikněte na poptávku „Zkouška Martina“.
-      2. Do pole „Text odpovědi“ napište „Dobrý den, v srpnu máme volno
+      2. Všimněte si pruhu nad polem — říká, co se s odpovědí stane
+         v nastavení, které zrovna běží.
+      3. Do pole „Text odpovědi“ napište „Dobrý den, v srpnu máme volno
          14. a 21. Ozvěte se na telefon, domluvíme čas.“
-      3. Nechte zaškrtnuté „Označit poptávku jako vyřízenou“ a odešlete.
+      4. Odešlete (nebo uložte — podle toho, co je na tlačítku).
     vysledek: |
-      Dole se objeví hláška, že odpověď odešla (na testu do testovací schránky,
-      ne zákazníkovi). Poptávka má štítek „vyřízeno“, text odpovědi je vidět
-      v detailu a v části „Odeslané e-maily“ je záznam s časem a poznámkou,
-      že byl v testu přesměrovaný.
+      Pruh nad polem i text tlačítka odpovídají tomu, co se opravdu stane.
+      (ZMĚNĚNO V DÁVCE 2 — dřív se u některých nastavení ukazovalo
+      „Testovací režim: odpověď odejde na testovací adresu“ i tam, kde se
+      nikam nic nepřeposílalo. K PŘETESTOVÁNÍ.)
 
-      Na testovacím webu se e-maily neodesílají, takže administrace napíše
-      dopředu (žlutá poznámka nad polem, tlačítko „Uložit odpověď do schránky“)
-      i potom: okno s odkazem „Zobrazit e-mail“. Po kliknutí se otevře celý
-      e-mail tak, jak by přišel zákazníkovi. Zákazníkovi nic nedorazí.
+      Odpověď je uložená a vidíte ji v detailu v části „Naše odpověď“.
+      Tlačítko se vrátí do původního stavu — nezůstane viset na „Odesílám…“.
+
+      Co dál, podle nastavení odesílání:
+
+      - Když se e-maily zákazníkům posílají, dole se objeví hláška, že
+        odpověď odešla, a v „Odeslané e-maily“ přibude záznam.
+      - Když se neposílají, **nevyskočí žádné chybové okno** (není to chyba,
+        je to nastavení) a pod formulářem jsou tlačítka „Odpovědět ze svého
+        e-mailu“ a „Zkopírovat text“. První otevře vaši poštu s vyplněným
+        příjemcem, předmětem i textem. (ZMĚNĚNO V DÁVCE 2.)
+
+      Zákazníkovi z testovacího webu nedorazí nic — všechno končí
+      u testovací adresy nebo v administraci.
 
   - kod: poptavka-stav-poznamka
     nazev: Stav a interní poznámka u poptávky
@@ -243,9 +267,14 @@ ukoly:
     postup: |
       1. Otevřete testovací web bez /admin.
       2. Projděte hlavní stránku, fotky, ceny a kontaktní formulář.
+      3. V menu zkuste Tandem, Kalendář, Galerie, Kontakt — a pak tlačítko
+         „Zpět“ v prohlížeči.
     vysledek: |
       Web vypadá a chová se stejně jako předtím, nic nechybí a nikde
-      nesvítí chyba.
+      nesvítí chyba. Přepínání v menu i tlačítko „Zpět“ fungují.
+
+      Kontaktní formulář po odeslání zmizí a zůstane po něm poděkování
+      s tlačítkem „Poslat další zprávu“. (ZMĚNĚNO V DÁVCE 2 — K PŘETESTOVÁNÍ.)
 
   # ------------------------------ modul Ke schválení (tenhle modul samotný)
   - kod: akceptace-vysledek
@@ -394,10 +423,22 @@ ukoly:
       4. Přepněte mezi HTML a Text.
       5. Zkuste vyhledat e-mail podle adresáta (napište část adresy do hledání).
     vysledek: |
-      Nahoře je upozornění „Testovací schránka — nic neodešlo“. Seznam ukazuje
-      komu, co a kdy. V detailu vypadá e-mail stejně, jako by přišel do pošty:
-      barvy, logo, tlačítko. Přepnutí na Text ukáže holou textovou verzi.
-      Hledání najde e-mail podle adresáta i podle předmětu.
+      Seznam ukazuje komu, co a kdy. V detailu vypadá e-mail stejně, jako by
+      přišel do pošty: barvy, logo, tlačítko. Přepnutí na Text ukáže holou
+      textovou verzi. Hledání najde e-mail podle adresáta i podle předmětu.
+
+      Co je nahoře, závisí na nastavení odesílání — a ať je tam cokoli, musí
+      to odpovídat skutečnosti (ZMĚNĚNO V DÁVCE 2 — přibyly režimy a záložka
+      „Neodeslané“, K PŘETESTOVÁNÍ):
+
+      - **testovací schránka** → „Testovací schránka — nic neodešlo“,
+        e-maily mají stav „ve schránce“;
+      - **testovací odesílání** → žádný pruh, e-maily mají stav „odesláno“
+        a doopravdy dojdou na testovací adresu;
+      - **jen upozornění provozu** → oranžový pruh, že zákazníkům se neposílá,
+        a zákaznické e-maily mají oranžový štítek „neodesláno“.
+
+      Žádný e-mail nesmí zůstat ve stavu „ve frontě“.
 
   - kod: schranka-na-mobilu
     nazev: Schránka na mobilu

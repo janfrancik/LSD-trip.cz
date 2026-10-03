@@ -6,13 +6,27 @@
 
 import { api } from '../api.js';
 import {
-  esc, datumCas, pred, prazdno, hlaska, potvrd, formularModal,
+  esc, datum, datumCas, pred, prazdno, hlaska, potvrd, formularModal,
 } from '../ui.js';
 import {
   nahrajObrazek, nahled, pripojPretazeni, pripojVkladani, NAPOVEDA_VLOZENI,
 } from '../obrazky.js';
 import { otevriHlaseni } from '../hlaseni.js';
 import { jdiNa, stav as globalniStav, nactiPocty } from '../admin.js';
+
+// Stavy vydání. „V produkci" je víc než „schválená": mezi odsouhlasením
+// testery a tím, že to opravdu běží zákazníkům, bývá i týden.
+const POPIS_STAVU_VERZE = {
+  otevrena: 'otevřená',
+  schvalena: 'schválená',
+  v_produkci: 'v produkci',
+};
+
+const TRIDA_STAVU_VERZE = {
+  otevrena: 'stitek--nova',
+  schvalena: 'stitek--hotovo',
+  v_produkci: 'stitek--hotovo',
+};
 
 const STITEK = {
   funguje: 'stitek--hotovo',
@@ -147,8 +161,8 @@ function kartaVerze(v) {
   return `<button type="button" class="radek" data-verze="${esc(v.kod)}">
       <div class="radek__hlava">
         <span class="radek__nazev">${esc(v.nazev)}</span>
-        <span class="stitek ${v.stav === 'schvalena' ? 'stitek--hotovo' : 'stitek--nova'}">
-          ${v.stav === 'schvalena' ? 'schválená' : 'otevřená'}
+        <span class="stitek ${TRIDA_STAVU_VERZE[v.stav] ?? 'stitek--nova'}">
+          ${v.stav === 'v_produkci' ? '✓ v produkci' : POPIS_STAVU_VERZE[v.stav] ?? 'otevřená'}
         </span>
       </div>
       <div class="radek__meta">
@@ -157,9 +171,11 @@ function kartaVerze(v) {
         ${Number(v.hlaseni_otevrena) > 0
           ? ` · ${v.hlaseni_otevrena} ${sklonHlaseni(Number(v.hlaseni_otevrena))}`
           : ''}
-        ${v.stav === 'schvalena' && v.schvaleno_at
-          ? ` · schváleno ${esc(datumCas(v.schvaleno_at))}${v.schvalil_jmeno ? `, ${esc(v.schvalil_jmeno)}` : ''}`
-          : ''}
+        ${v.stav === 'v_produkci' && v.nasazeno_at
+          ? ` · nasazeno ${esc(datum(v.nasazeno_at))}`
+          : v.stav === 'schvalena' && v.schvaleno_at
+            ? ` · schváleno ${esc(datumCas(v.schvaleno_at))}${v.schvalil_jmeno ? `, ${esc(v.schvalil_jmeno)}` : ''}`
+            : ''}
       </div>
     </button>`;
 }
@@ -190,7 +206,10 @@ async function detailVerze(koren, kod) {
   const { verze, souhrn, ukoly } = data;
   const jeAdmin = data.muzu_schvalovat;
   const vidiVse = Array.isArray(data.po_testerech);
-  const schvalena = verze.stav === 'schvalena';
+  const vProdukci = verze.stav === 'v_produkci';
+  // „Uzavřená" = schválená i nasazená. Na většině míst jde o to, že se do ní
+  // už nepíšou výsledky; nasazení je navíc.
+  const schvalena = verze.stav === 'schvalena' || vProdukci;
   const moje = data.muj_souhrn;
   const hotovoProcent = moje?.celkem ? Math.round((moje.hotovo / moje.celkem) * 100) : 0;
 
@@ -201,8 +220,8 @@ async function detailVerze(koren, kod) {
 
     <div class="panel__hlava" style="margin-bottom:10px">
       <h1 class="nadpis">${esc(verze.nazev)}</h1>
-      <span class="stitek ${schvalena ? 'stitek--hotovo' : 'stitek--nova'}">
-        ${schvalena ? 'schválená' : 'otevřená'}
+      <span class="stitek ${TRIDA_STAVU_VERZE[verze.stav] ?? 'stitek--nova'}">
+        ${vProdukci ? '✓ v produkci' : POPIS_STAVU_VERZE[verze.stav] ?? 'otevřená'}
       </span>
     </div>
 
@@ -212,7 +231,18 @@ async function detailVerze(koren, kod) {
 
     ${schvalena
       ? `<div class="panel panel--tesny" style="border-left:3px solid var(--ok)">
-           Schváleno ${esc(datumCas(verze.schvaleno_at))}${verze.schvalil_jmeno ? `, ${esc(verze.schvalil_jmeno)}` : ''}.
+           ${verze.schvaleno_at
+             ? `Schváleno ${esc(datumCas(verze.schvaleno_at))}${verze.schvalil_jmeno ? `, ${esc(verze.schvalil_jmeno)}` : ''}.`
+             : ''}
+           ${vProdukci
+             ? `<div style="margin-top:6px">
+                  <strong>✓ Nasazeno v produkci</strong>
+                  ${verze.nasazeno_at ? ` ${esc(datum(verze.nasazeno_at))}` : ''}${verze.nasadil_jmeno ? `, zapsal ${esc(verze.nasadil_jmeno)}` : ''}.
+                  ${verze.nasazeni_odkaz
+                    ? ` <a href="${esc(verze.nasazeni_odkaz)}" target="_blank" rel="noopener">commit / nasazení →</a>`
+                    : ''}
+                </div>`
+             : ''}
            ${verze.schvaleni_poznamka ? `<div class="text-faint" style="margin-top:6px">${esc(verze.schvaleni_poznamka)}</div>` : ''}
          </div>`
       : ''}
@@ -246,7 +276,7 @@ async function detailVerze(koren, kod) {
          </div>`
       : ''}
 
-    ${akce(data, jeAdmin, schvalena, vidiVse)}
+    ${akce(data, jeAdmin, schvalena, vidiVse, vProdukci)}
 
     ${vidiVse
       ? `<div class="zalozky" role="tablist" style="margin-top:18px">
@@ -282,13 +312,16 @@ function karta(cislo, popis, pozor = false) {
     </div>`;
 }
 
-function akce(data, jeAdmin, schvalena, vidiVse) {
+function akce(data, jeAdmin, schvalena, vidiVse, vProdukci) {
   const duvody = data.duvody_proti_schvaleni ?? [];
 
   return `<section class="panel">
       <div style="display:flex;flex-wrap:wrap;gap:8px">
         ${jeAdmin && !schvalena
           ? '<button type="button" class="btn btn--hlavni btn--maly" data-schvalit>Schválit verzi</button>'
+          : ''}
+        ${jeAdmin && schvalena && !vProdukci
+          ? '<button type="button" class="btn btn--hlavni btn--maly" data-do-produkce>Označit jako nasazené</button>'
           : ''}
         <button type="button" class="btn btn--obrys btn--maly" data-export>Stáhnout souhrn</button>
         ${vidiVse && !schvalena
@@ -659,6 +692,44 @@ function zarizeniSlovy(ua) {
 // --------------------------------------------------------------- obsluha
 
 function navazAkce(koren, data, kod) {
+  koren.querySelector('[data-do-produkce]')?.addEventListener('click', async () => {
+    const dnes = new Date().toISOString().slice(0, 10);
+    const vstup = await formularModal({
+      nadpis: 'Označit verzi jako nasazenou',
+      text:
+        'Tohle jen zapisuje skutečnost — že tahle verze už běží zákazníkům. ' +
+        'Nic se tím nenasazuje.',
+      polia: [
+        { klic: 'nasazeno', popisek: 'Datum nasazení', typ: 'datum', hodnota: dnes },
+        {
+          klic: 'odkaz',
+          popisek: 'Odkaz na commit nebo nasazení (nepovinný)',
+          napoveda: 'Například adresa commitu na GitHubu nebo běhu workflow.',
+        },
+        {
+          klic: 'poznamka',
+          popisek: 'Poznámka k vydání (nepovinná)',
+          typ: 'textarea',
+          napoveda: 'Připíše se k verzi — třeba kdo schvaloval a za jakých okolností.',
+        },
+      ],
+      potvrzeni: 'Označit jako nasazené',
+    });
+    if (!vstup) return;
+
+    try {
+      const vysledek = await api.post(`/akceptace/verze/${encodeURIComponent(kod)}/do-produkce`, {
+        nasazeno: vstup.nasazeno || undefined,
+        odkaz: vstup.odkaz.trim() || undefined,
+        poznamka: vstup.poznamka.trim() || undefined,
+      });
+      hlaska(vysledek.zprava, 'ok');
+      detailVerze(koren, kod);
+    } catch (err) {
+      hlaska(err.message, 'chyba');
+    }
+  });
+
   koren.querySelector('[data-schvalit]')?.addEventListener('click', async () => {
     const vstup = await formularModal({
       nadpis: 'Schválit verzi',
