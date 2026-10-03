@@ -82,9 +82,13 @@ const AI_CRAWLERY = [
 export function robotsTxt(req, res) {
   res.type('text/plain; charset=utf-8');
 
+  // ROBOTS=zakazat není jen pro test: produkce s ním jede taky, dokud běží na
+  // přechodné adrese (lsd.francik.eu) a ostrá doména ukazuje ještě někam jinam.
+  // Hláška proto nesmí tvrdit, že jde o testovací prostředí - na produkci to
+  // byla lež, která svádí k závěru, že je něco špatně nastavené.
   if (config.ROBOTS === 'zakazat') {
     return res.send(
-      ['# Testovací prostředí - nic z něj nesmí do vyhledávačů.', 'User-agent: *', 'Disallow: /', ''].join('\n')
+      ['# Indexace je vypnutá (ROBOTS=zakazat).', 'User-agent: *', 'Disallow: /', ''].join('\n')
     );
   }
 
