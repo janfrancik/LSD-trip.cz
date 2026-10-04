@@ -323,12 +323,21 @@ export async function exportMarkdown(verzeId) {
   const radky = [];
   radky.push(`# Akceptace: ${verze.nazev}`, '');
   radky.push(`- Kód verze: \`${verze.kod}\``);
+  // Stav se vypisuje ze seznamu, ne přes "schvalena ? : otevřená" - při
+  // přidání stavu v_produkci by se jinak nasazená verze tvářila jako otevřená.
   radky.push(
-    `- Stav: ${verze.stav === 'schvalena' ? 'schválená' : 'otevřená'}` +
-      (verze.stav === 'schvalena'
-        ? ` (${datumCas(verze.schvaleno_at)}, schválil/a ${verze.schvalil_jmeno ?? '—'})`
+    `- Stav: ${POPIS_STAVU_VERZE[verze.stav] ?? verze.stav}` +
+      (verze.schvaleno_at
+        ? ` (schváleno ${datumCas(verze.schvaleno_at)}, ${verze.schvalil_jmeno ?? '—'})`
         : '')
   );
+  if (verze.stav === 'v_produkci') {
+    radky.push(
+      `- Nasazeno: ${verze.nasazeno_at ? datumCas(verze.nasazeno_at) : '—'}` +
+        (verze.nasadil_jmeno ? `, zapsal/a ${verze.nasadil_jmeno}` : '') +
+        (verze.nasazeni_odkaz ? ` — ${verze.nasazeni_odkaz}` : '')
+    );
+  }
   if (verze.schvaleni_poznamka) radky.push(`- Poznámka ke schválení: ${verze.schvaleni_poznamka}`);
   radky.push(`- Úkolů: ${souhrn.celkem}`);
   radky.push(`- Hlášení: ${souhrn.hlaseni_celkem} (nevyřešená ${souhrn.hlaseni_otevrena})`);
@@ -401,6 +410,12 @@ export async function exportMarkdown(verzeId) {
 
   return radky.join('\n');
 }
+
+export const POPIS_STAVU_VERZE = {
+  otevrena: 'otevřená',
+  schvalena: 'schválená',
+  v_produkci: 'v produkci',
+};
 
 export const POPIS_HLASENI = {
   nove: 'nové',
