@@ -520,7 +520,27 @@ function matice(data) {
           </div>`
         )
         .join('')}
+      ${/* Kdo testoval bez přiřazení. Bez tohohle řádku jeho práce z přehledu
+            úplně zmizí - stálo tam 0/19, jako by netestoval nikdo. */''}
+      ${(data.mimo_testery ?? [])
+        .map(
+          (t) => `<div class="souhrn-testeru__polozka">
+            <span class="souhrn-testeru__jmeno">
+              ${esc(t.uzivatel.jmeno)}
+              <span class="text-faint" style="font-weight:400"> · bez přiřazení</span>
+            </span>
+            <span class="souhrn-testeru__cislo">${t.hotovo}/${t.celkem}</span>
+          </div>`
+        )
+        .join('')}
     </div>
+
+    ${(data.mimo_testery ?? []).length
+      ? `<p class="text-faint" style="margin-top:8px">
+           Kdo testoval bez přiřazení, se do schvalování nepočítá — jeho výsledky
+           ale platí. Přidej ho přes „Kdo testuje“, ať je po něm stopa i v souhrnu.
+         </p>`
+      : ''}
 
     <div class="hledani" style="margin-top:12px">
       <select class="pole" data-filtr-tester aria-label="Filtrovat podle testera">

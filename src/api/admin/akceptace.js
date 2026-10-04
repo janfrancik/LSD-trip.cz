@@ -154,6 +154,8 @@ router.get(
       testeri: vidiVse ? data.testeri : undefined,
       testeri_vychozi: vidiVse ? data.testeriVychozi : undefined,
       po_testerech: vidiVse ? data.poTesterech : undefined,
+      // Kdo testoval bez přiřazení. Schválení nebrzdí, ale vidět být musí.
+      mimo_testery: vidiVse ? data.mimoTestery : undefined,
       znacky: ZNACKA_STAVU,
       hlaseni: vidiVse
         ? data.hlaseni

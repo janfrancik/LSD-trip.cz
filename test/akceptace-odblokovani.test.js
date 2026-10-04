@@ -295,3 +295,33 @@ test('schválenou verzi jde označit jako nasazenou, otevřenou ne', async () =>
   const znovu = await sef.post('/api/admin/akceptace/verze/zkouska/do-produkce', {});
   assert.equal(znovu.status, 409, 'podruhé už ne');
 });
+
+test('kdo testoval bez přiřazení, je vidět v přehledu i v exportu', async () => {
+  await naimportuj(await zadani([{ kod: 'ukol-a', nazev: 'Úkol A' }]));
+  const sef = await prihlas('admin');
+  const honza = await prihlas('provoz', 'honza@example.invalid', 'Honza Admin');
+
+  // Verzi testuje jen Šéfka; Honza k ní přiřazený není.
+  const [[sefId]] = await pool.query("SELECT id FROM uzivatele WHERE email = 'sef@example.invalid'");
+  await sef.put('/api/admin/akceptace/verze/zkouska/testeri', { uzivatele: [sefId.id] });
+
+  // Přesto úkol otestuje.
+  const [[ukol]] = await pool.query("SELECT id FROM akceptace_ukoly WHERE kod = 'ukol-a'");
+  await honza.put(`/api/admin/akceptace/ukoly/${ukol.id}/vysledek`, { stav: 'funguje' });
+
+  const detail = await sef.get('/api/admin/akceptace/verze/zkouska');
+  const mimo = detail.data.mimo_testery ?? [];
+  assert.equal(mimo.length, 1, 'kdo testoval bez přiřazení, musí být vidět');
+  assert.equal(mimo[0].uzivatel.jmeno, 'Honza Admin');
+  assert.equal(mimo[0].hotovo, 1, 'a musí být vidět, kolik toho udělal');
+
+  // Schválení ale nebrzdí - není komu co dokončovat.
+  assert.ok(
+    !detail.data.duvody_proti_schvaleni.some((d) => d.includes('Honza')),
+    'kdo není přiřazený, nemůže blokovat schválení'
+  );
+
+  const exportMd = await sef.get('/api/admin/akceptace/verze/zkouska/export');
+  assert.match(exportMd.data.obsah, /Honza Admin/, 'v souhrnu nesmí jeho práce chybět');
+  assert.match(exportMd.data.obsah, /bez přiřazení/);
+});

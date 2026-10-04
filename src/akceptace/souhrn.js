@@ -172,6 +172,20 @@ export async function nactiVerzi(verzeId) {
   const { testeri, vychozi } = await testeriVerze(verzeId);
   const aktivniUkoly = sUkoly.filter((u) => u.aktivni);
 
+  // Lidé, kteří verzi testovali, ale nejsou mezi přiřazenými testery.
+  //
+  // Stávalo se to a bylo to zrádné: patnáct úkolů otestoval člověk, který
+  // k verzi nebyl přiřazený, a v přehledu „kdo kolik otestoval" po něm
+  // nezůstala ani stopa - stálo tam 0/19, jako by netestoval nikdo.
+  // Výsledky se přitom do souhrnu úkolů počítaly. Schválení ale brzdit
+  // nemůžou: kdo není přiřazený, nemá co dokončovat.
+  const idTesteru = new Set(testeri.map((t) => t.id));
+  const mimoSeznam = new Map();
+  for (const v of vysledky) {
+    if (idTesteru.has(v.uzivatel_id) || mimoSeznam.has(v.uzivatel_id)) continue;
+    mimoSeznam.set(v.uzivatel_id, { id: v.uzivatel_id, jmeno: v.kdo, role: v.role_kdo });
+  }
+
   return {
     verze,
     ukoly: sUkoly,
@@ -180,6 +194,12 @@ export async function nactiVerzi(verzeId) {
     testeriVychozi: vychozi,
     // Průběh každého testera zvlášť - podle tohohle se verze schvaluje.
     poTesterech: testeri.map((t) => souhrnTestera(aktivniUkoly, t)),
+    // Totéž za ty, kdo testovali bez přiřazení. Do schvalování nevstupují,
+    // ale musí být vidět - jinak se jejich práce ztratí.
+    mimoTestery: [...mimoSeznam.values()].map((t) => ({
+      ...souhrnTestera(aktivniUkoly, t),
+      mimo_seznam: true,
+    })),
     souhrn: {
       ...souhrnUkolu(aktivniUkoly),
       hlaseni_celkem: hlaseni.length,
@@ -318,7 +338,7 @@ export async function kartaNaPrehled(uzivatel) {
 export async function exportMarkdown(verzeId) {
   const data = await nactiVerzi(verzeId);
   if (!data) return null;
-  const { verze, ukoly, hlaseni, souhrn, testeri, poTesterech } = data;
+  const { verze, ukoly, hlaseni, souhrn, testeri, poTesterech, mimoTestery } = data;
 
   const radky = [];
   radky.push(`# Akceptace: ${verze.nazev}`, '');
@@ -353,19 +373,38 @@ export async function exportMarkdown(verzeId) {
         (t.neotestovano ? `, neotestováno ${t.neotestovano}` : '')
     );
   }
+  for (const t of mimoTestery ?? []) {
+    radky.push(
+      `- **${t.uzivatel.jmeno}** (${t.uzivatel.role}): ${t.hotovo}/${t.celkem}` +
+        (t.nefunguje ? `, nefunguje ${t.nefunguje}` : '') +
+        (t.nerozumim ? `, nejasné zadání ${t.nerozumim}` : '') +
+        ' _(testoval bez přiřazení — schválení nebrzdí)_'
+    );
+  }
   radky.push('');
 
   // Tabulka úkoly × testeři - na jeden pohled, kde je díra.
   radky.push('## Přehled úkoly × testeři', '');
-  radky.push(`| Úkol | ${testeri.map((t) => t.jmeno).join(' | ')} |`);
-  radky.push(`| --- | ${testeri.map(() => '---').join(' | ')} |`);
+  // Do tabulky patří i ti, kdo testovali bez přiřazení - jinak by sloupec
+  // s jejich prací chyběl a tabulka by tvrdila, že se netestovalo.
+  const sloupce = [
+    ...testeri,
+    ...(mimoTestery ?? []).map((t) => ({ ...t.uzivatel, mimoSeznam: true })),
+  ];
+  radky.push(
+    `| Úkol | ${sloupce.map((t) => t.jmeno + (t.mimoSeznam ? ' *' : '')).join(' | ')} |`
+  );
+  radky.push(`| --- | ${sloupce.map(() => '---').join(' | ')} |`);
   for (const u of ukoly.filter((x) => x.aktivni)) {
-    const bunky = testeri.map((t) => {
+    const bunky = sloupce.map((t) => {
       if (!ukolPatriUzivateli(u, t)) return '–';
       const vysledek = u.vysledky.find((v) => v.uzivatel_id === t.id);
       return ZNACKA_STAVU[vysledek?.stav ?? 'neotestovano'];
     });
     radky.push(`| ${u.nazev} | ${bunky.join(' | ')} |`);
+  }
+  if ((mimoTestery ?? []).length) {
+    radky.push('', '\\* testoval bez přiřazení k verzi');
   }
   radky.push('', '(✓ funguje · ✕ nefunguje · ? nejasné zadání · ↻ k přetestování · · neotestováno · – netýká se)', '');
 
